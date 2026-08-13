@@ -1,7 +1,17 @@
+import { appDataDir, join } from "@tauri-apps/api/path";
 import Database from "@tauri-apps/plugin-sql";
 
 /** El mismo nombre que registra las migraciones en `src-tauri/src/db.rs`. */
 const URL = "sqlite:riel.db";
+const FILE = "riel.db";
+
+/**
+ * La ruta absoluta del archivo, para el enlace a los datos en Finder (spec 8). El plugin
+ * resuelve `sqlite:riel.db` contra el directorio de datos de la app, así que se arma igual.
+ */
+export function dbPath(): Promise<string> {
+  return appDataDir().then((dir) => join(dir, FILE));
+}
 
 let connection: Promise<Database> | null = null;
 

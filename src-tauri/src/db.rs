@@ -12,10 +12,18 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 pub const URL: &str = "sqlite:riel.db";
 
 pub fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "esquema inicial",
-        sql: include_str!("../migrations/001_initial.sql"),
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "esquema inicial",
+            sql: include_str!("../migrations/001_initial.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "ajustes",
+            sql: include_str!("../migrations/002_settings.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
 }

@@ -1,6 +1,6 @@
 import { execute, placeholders, select } from "./db";
 import { STEP, between, needsRenumber } from "./position";
-import { localIso } from "./time";
+import { dayOf, localIso } from "./time";
 import type { Between, Completion, NewTask, Priority, Task, TaskPatch, TaskTree } from "./types";
 
 interface Row {
@@ -109,6 +109,27 @@ export async function withSubtasks(tasks: Task[]): Promise<TaskTree[]> {
 }
 
 /**
+ * Todo lo que hay, para la búsqueda. A diferencia de las vistas, esta sí trae las completadas
+ * y las subtareas: buscar algo y que no aparezca porque ya lo terminaste —o porque es la
+ * subtarea de otra cosa— es lo que hace que un buscador deje de servir.
+ *
+ * Se lee entero y se filtra en memoria. `LIKE` no sabe hacer coincidencia difusa, y una base
+ * local con unos miles de filas cabe de sobra.
+ */
+export function allTasks(): Promise<Task[]> {
+  return query("1 = 1");
+}
+
+/**
+ * Cuántas tareas hay en total, completadas incluidas. Sirve para una sola cosa: distinguir el
+ * primer arranque, que trae su propio texto en el campo de captura (spec 3.7).
+ */
+export async function countTasks(): Promise<number> {
+  const rows = await select<{ total: number }>(`SELECT COUNT(*) AS total FROM tasks`);
+  return rows[0]?.total ?? 0;
+}
+
+/**
  * Pendientes por proyecto, para el conteo del tooltip del riel (spec 3.4). Cuenta tareas
  * raíz: las subtareas ya están representadas por la suya.
  */
@@ -122,7 +143,56 @@ export async function pendingCountByProject(): Promise<Map<string | null, number
   return new Map(rows.map((row) => [row.project_id, row.total]));
 }
 
+/**
+ * Lo que hace falta notificar en una ventana (spec 7): solo lo que tiene hora, sin completar,
+ * y en el tramo pedido.
+ *
+ * Las subtareas quedan fuera. No dibujan fecha propia en la lista (spec 3.5), así que una
+ * notificación suya avisaría de algo que en la app no se ve por ningún lado.
+ */
+export function tasksWithTimeBetween(from: string, to: string): Promise<Task[]> {
+  return query(
+    "completed_at IS NULL AND parent_id IS NULL AND has_time = 1 AND due_at >= $1 AND due_at <= $2",
+    [from, to],
+    "ORDER BY due_at",
+  );
+}
+
+/**
+ * Si hay algo vencido, que es lo que decide el peso del glifo de la barra (spec 4).
+ *
+ * Los dos casos no se miden igual: con hora, vencido es que haya pasado el instante; sin
+ * hora, `due_at` representa el día entero, así que no vence hasta que el día queda atrás.
+ * Medirlos con la misma vara pondría en rojo a las 00:01 todo lo de hoy sin hora.
+ */
+export async function hasOverdue(now: string): Promise<boolean> {
+  const rows = await select<{ total: number }>(
+    `SELECT COUNT(*) AS total
+       FROM tasks
+      WHERE completed_at IS NULL
+        AND due_at IS NOT NULL
+        AND ((has_time = 1 AND due_at < $1) OR (has_time = 0 AND substr(due_at, 1, 10) < $2))`,
+    [now, dayOf(now)],
+  );
+  return (rows[0]?.total ?? 0) > 0;
+}
+
 // ── Escritura ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * El barrido de completadas del arranque (spec 8). Devuelve cuántas raíces se llevó.
+ *
+ * Borra solo tareas raíz: una subtarea completada hace dos meses cuya madre sigue pendiente
+ * es una línea viva de una tarea viva, y hacerla desaparecer sería editar la tarea de alguien
+ * a sus espaldas. Las hijas de una raíz barrida se van con ella por el `ON DELETE CASCADE`.
+ */
+export async function sweepCompleted(days: number): Promise<number> {
+  const cutoff = localIso(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+  return execute(
+    "DELETE FROM tasks WHERE parent_id IS NULL AND completed_at IS NOT NULL AND completed_at < $1",
+    [cutoff],
+  );
+}
 
 /**
  * La tarea nueva va al final de sus hermanas: al final de la lista si es raíz, al final de

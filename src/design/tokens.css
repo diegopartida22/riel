@@ -1,0 +1,92 @@
+/* Los tokens de las secciones 3.2 y 3.3 del spec. Nada de esto se repite en otro archivo:
+   si un color o un tamaño aparece escrito a mano en un componente, es un error.
+
+   Casi todo lleva alfa a propósito. El vidrio lo pinta el sistema por debajo del webview, y
+   una capa opaca encima lo apaga: lo que va aquí son veladuras, no fondos. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Tinta */
+  --ink-primary: rgb(28 28 30 / 92%);
+  --ink-secondary: rgb(28 28 30 / 55%);
+  --ink-tertiary: rgb(28 28 30 / 32%);
+  --ink-accent: #3a3a3c;
+  /* La tinta que se dibuja *encima* del acento — la palomita de una casilla llena. El acento
+     neutro es oscuro en claro y claro en oscuro, así que su contraria se invierte con él: sin
+     esto, una tarea sin proyecto llena la casilla de casi blanco y le dibuja encima una
+     palomita blanca (1.22:1, invisible). */
+  --on-accent: #ffffff;
+
+  /* Veladuras sobre el vidrio */
+  --layer-hover: rgb(0 0 0 / 5%);
+  --layer-selected: rgb(0 0 0 / 9%);
+  --hairline: rgb(0 0 0 / 10%);
+  --field-bg: rgb(255 255 255 / 55%);
+
+  --danger: #c4483c;
+
+  /* La superficie del menú de la fila. No está en el spec y es la única excepción a la regla
+     de «todo son veladuras»: un menú flota sobre la lista, y con alfa se leerían los dos
+     textos superpuestos. macOS hace lo mismo — sus menús son un material propio, no una
+     veladura de la ventana que los abre. */
+  --menu-bg: #f7f7f8;
+  --menu-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+
+  /* La app no tiene acento propio (sección 3.1): el acento es el grafito neutro salvo
+     dentro de la vista de un proyecto, que lo sobreescribe con el suyo. */
+  --accent: var(--ink-accent);
+
+  /* Tipografía. Dos roles: la del sistema para la interfaz, mono para los datos — fechas,
+     horas, contadores, encabezados de grupo — para que las columnas no bailen. */
+  --font-ui: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-data: ui-monospace, "SF Mono", monospace;
+
+  --text-title: 13px;
+  --text-subtitle: 12px;
+  --text-meta: 11px;
+  --text-group: 10px;
+
+  /* Geometría recurrente */
+  --row-radius: 6px;
+  --checkbox-size: 15px;
+  --dot-size: 6px;
+  --subtask-indent: 22px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink-primary: rgb(255 255 255 / 92%);
+    --ink-secondary: rgb(255 255 255 / 58%);
+    --ink-tertiary: rgb(255 255 255 / 36%);
+    --ink-accent: #e8e8ea;
+    --on-accent: #1c1c1e;
+
+    --layer-hover: rgb(255 255 255 / 7%);
+    --layer-selected: rgb(255 255 255 / 12%);
+    --hairline: rgb(255 255 255 / 12%);
+    --field-bg: rgb(0 0 0 / 22%);
+
+    --danger: #e8695c;
+
+    --menu-bg: #2c2c2e;
+    --menu-shadow: 0 8px 24px rgb(0 0 0 / 44%);
+  }
+}
+
+/* El color de un proyecto viene en pareja: la versión clara se apaga sobre vidrio oscuro, así
+   que en oscuro se usa la aclarada. Quien pinte con color de proyecto lleva esta clase y
+   declara las dos variantes en línea; el modo decide cuál gana, sin JavaScript de por medio
+   — que es lo que hace que cambiar de claro a oscuro con el panel abierto no parpadee. */
+.tinted {
+  --project: var(--project-light, var(--ink-accent));
+  /* Sin proyecto el color es el acento neutro, así que la palomita usa su contraria. Con
+     proyecto, `tint()` la sobreescribe en línea. */
+  --on-project: var(--on-accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tinted {
+    --project: var(--project-dark, var(--ink-accent));
+  }
+}

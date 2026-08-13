@@ -20,6 +20,12 @@ tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-ap
 tauri-plugin-opener = "2"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+# Solo por el panel de guardar nativo del exportador. El archivo lo escribe un comando
+# nuestro y no `tauri-plugin-fs`: así la app no se lleva permiso para leer el disco entero,
+# que en una app que presume de no salir a la red es justo lo que no hay que pedir.
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

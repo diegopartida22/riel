@@ -1,0 +1,162 @@
+/* El riel de la sección 3.4: 44px colapsado, 148px expandido. Es el elemento firma de la app,
+   así que en reposo no dibuja nada más que los discos. */
+
+.rail {
+  flex: 0 0 var(--rail-width);
+  width: var(--rail-width);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 6px 8px;
+  border-right: 1px solid var(--hairline);
+  overflow: hidden;
+  transition:
+    flex-basis 160ms ease-out,
+    width 160ms ease-out;
+}
+
+.rail__group {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Los proyectos son los que pueden crecer, así que son los que se desplazan. */
+.rail__group--projects {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* La hairline que separa las cuatro vistas del sistema de los proyectos (spec 3.4). */
+.rail__rule {
+  flex: 0 0 auto;
+  height: 1px;
+  margin: 6px 6px;
+  background: var(--hairline);
+}
+
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-subtitle);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.rail__item:hover {
+  background: var(--layer-hover);
+}
+
+.rail__item.is-selected {
+  background: var(--layer-selected);
+  color: var(--ink-primary);
+}
+
+/* «Nuevo proyecto» no compite con los proyectos: se queda en tinta terciaria aunque se pose
+   el puntero encima. */
+.rail__item--quiet {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.rail__mark {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.rail__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* El disco del proyecto: más grande que el punto de 6px de una fila, porque aquí es lo único
+   que hay para reconocerlo. */
+.rail__dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--project);
+}
+
+/* ── Colapsado ───────────────────────────────────────────────────────────────────────── */
+
+/* El nombre se quita del flujo en vez de desvanecerse: durante los 160ms de la transición,
+   un texto a media opacidad dentro de una columna de 44px se lee como un error. */
+.panel:not(.is-rail-expanded) .rail__item {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.panel:not(.is-rail-expanded) .rail__label {
+  display: none;
+}
+
+/* ── El pie del riel ─────────────────────────────────────────────────────────────────── */
+
+/* La celda vacía bajo el riel en el mockup de la sección 3.4. Es el sitio del interruptor:
+   no se mueve al expandir y deja el riel para lo que importa. */
+/* La manija se queda en la fila del campo aunque el pie crezca con los chips: centrada en un
+   pie de 72px se despegaría del renglón al que pertenece. */
+.foot__rail {
+  flex: 0 0 var(--rail-width);
+  width: var(--rail-width);
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8px;
+  border-right: 1px solid var(--hairline);
+  transition:
+    flex-basis 160ms ease-out,
+    width 160ms ease-out;
+}
+
+.foot__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.foot__toggle:hover {
+  background: var(--layer-hover);
+  color: var(--ink-secondary);
+}
+
+/* ── Movimiento reducido ─────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .foot__rail {
+    transition: none;
+  }
+}

@@ -10,7 +10,6 @@ use tauri_plugin_positioner::{Position, WindowExt};
 /// porque abrirla le quita el foco a la ventana y el panel se cerraría solo.
 static KEEP_OPEN: AtomicBool = AtomicBool::new(false);
 
-#[allow(dead_code)] // lo usan los diálogos y el selector de fecha, todavía no construidos
 pub fn set_keep_open(value: bool) {
     KEEP_OPEN.store(value, Ordering::SeqCst);
 }

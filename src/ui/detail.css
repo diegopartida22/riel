@@ -1,0 +1,204 @@
+/* El detalle de una tarea. Ocupa el área de contenido, como el editor de proyecto. */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 14px 16px;
+  /* Aquí el contexto es una sola tarea, así que el acento del anillo de foco es el de su
+     proyecto (spec 3.1). Sin proyecto, `--project` ya cae al grafito neutro por sí solo. */
+  --accent: var(--project);
+}
+
+.detail__back {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.detail__back:hover {
+  color: var(--ink-primary);
+  background: var(--layer-hover);
+}
+
+.detail__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Ni el título ni las notas se recortan aquí: este sitio existe justamente para leer entero
+   lo que en la lista va a una línea con elipsis. Sin caja ni borde — el fondo lo pone el
+   vidrio, y encuadrar dos bloques de texto que ocupan casi todo el panel lo apagaría. */
+.detail__title,
+.detail__notes {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  color: var(--ink-primary);
+  resize: none;
+  overflow: hidden;
+}
+
+.detail__title {
+  /* El alto de línea de la fila, para que la casilla quede centrada en el primer renglón. */
+  font-size: var(--text-title);
+  line-height: 1.35;
+  font-weight: 400;
+}
+
+.detail__title.is-completed {
+  text-decoration: line-through;
+  color: var(--ink-secondary);
+}
+
+/* A 11px —el tamaño que la nota tiene en la fila— un párrafo de seis renglones se lee mal, y
+   leerlo es justamente para lo que existe esta pantalla. En la lista la nota es un metadato y
+   va a 11px; aquí es el contenido, así que sube al cuerpo de 12px con más interlínea. El
+   color secundario se queda: es lo que la mantiene por debajo del título. */
+.detail__notes {
+  min-height: calc(var(--text-subtitle) * 1.55);
+  font-size: var(--text-subtitle);
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+
+/* La fecha larga en mono, como todo dato de la sección 3.3. */
+.detail__due {
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.detail__title::placeholder,
+.detail__notes::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.detail__title:focus-visible,
+.detail__notes:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Eliminar no puede quedar pegado al último campo: a 12px de distancia se lee como si fuera
+   parte de él, y no lo es. */
+.detail .editor__destroy {
+  margin-top: 8px;
+}
+
+.detail__label {
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.detail__none {
+  font-size: var(--text-meta);
+  color: var(--ink-tertiary);
+}
+
+.detail__subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail__subtasks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.detail__subtasks li.is-completed {
+  opacity: 0.45;
+}
+
+.detail__subtasks .task-row__title {
+  font-size: var(--text-subtitle);
+  /* Aquí sí se envuelve: el detalle es donde el texto se lee completo. */
+  white-space: normal;
+  overflow: visible;
+}
+
+/* ── Chips de proyecto y prioridad ───────────────────────────────────────────────────── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.chip:hover {
+  background: var(--layer-hover);
+}
+
+/* El elegido se marca con el color en contexto: el del proyecto si el chip es un proyecto, y
+   el grafito neutro si es una prioridad, que no tiene color propio. */
+.chip.is-selected {
+  border-color: transparent;
+  background: var(--project);
+  color: var(--on-project);
+}
+
+.chip.is-selected:hover {
+  background: var(--project);
+  opacity: 0.88;
+}
+
+.chip__dot {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 50%;
+  background: var(--project);
+}
+
+/* Ya seleccionado, el disco va sobre el propio color y desaparecería; se pinta con la tinta
+   que contrasta, la misma que usa la palomita. */
+.chip.is-selected .chip__dot {
+  background: var(--on-project);
+}

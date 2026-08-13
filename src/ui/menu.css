@@ -1,0 +1,127 @@
+/* El menú del `⋯` de la fila (spec 3.5).
+   Es lo único de la app que se dibuja encima de otra cosa, y por eso es lo único que necesita
+   una superficie propia: sobre el vidrio, una capa con alfa dejaría leer la lista a través de
+   los renglones del menú. macOS resuelve esto igual — sus menús son un material aparte, no
+   una veladura del panel que los abre. Los dos tokens de abajo no están en el spec; salen de
+   aquí. */
+
+/* La superficie la comparten el menú de la fila, el popover de ajustes y el autocompletado del
+   `#`: los tres son lo mismo —algo pequeño colgado de otra cosa— y darles materiales distintos
+   sería inventar tres gramáticas para un solo gesto. Lo único que cambia es de dónde cuelgan. */
+.menu,
+.hashes {
+  z-index: 40;
+  padding: 4px;
+  border: 0.5px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--menu-bg);
+  box-shadow: var(--menu-shadow);
+}
+
+.menu {
+  position: fixed;
+  min-width: 176px;
+}
+
+.menu:focus-visible {
+  outline: none;
+}
+
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px 4px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-subtitle);
+  font-weight: 400;
+  text-align: left;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.menu__item:hover {
+  background: var(--layer-selected);
+}
+
+.menu__item--danger {
+  color: var(--danger);
+}
+
+/* El hueco de la palomita existe en todos los renglones, marcados o no: sin él las etiquetas
+   bailarían 18px según cuál sea la prioridad puesta. */
+.menu__check {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: var(--ink-secondary);
+}
+
+.menu__rule {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--hairline);
+}
+
+/* El título de la tarea que se va a eliminar, para que la confirmación diga cuál. */
+.menu__note {
+  margin: 2px 8px 4px 22px;
+  font-size: var(--text-meta);
+  line-height: 1.35;
+  color: var(--ink-secondary);
+}
+
+/* ── Ajustes ─────────────────────────────────────────────────────────────────────────── */
+
+/* El popover del `⚙︎` (spec 8): la misma superficie que el menú de la fila, porque es la misma
+   clase de cosa —algo pequeño colgado de un botón— y darle un material propio sería inventar
+   una segunda gramática para lo mismo. */
+.settings {
+  min-width: 208px;
+}
+
+/* El encabezado de un grupo de opciones. Mismo papel que el encabezado de día de una lista,
+   así que mismo tratamiento (spec 3.3): mono, versalitas, tinta terciaria. */
+.settings__label {
+  margin: 6px 8px 2px 22px;
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+}
+
+/* La nota de permiso denegado. Dice qué pasó y qué hacer, sin disculparse (spec 3.8). */
+.settings__note {
+  margin: 2px 8px 4px 22px;
+  font-size: var(--text-meta);
+  line-height: 1.35;
+  color: var(--ink-secondary);
+}
+
+/* Mientras se escribe el export, el renglón no acepta un segundo clic. */
+.menu__item:disabled {
+  color: var(--ink-tertiary);
+}
+
+.menu__item:disabled:hover {
+  background: none;
+}
+
+/* La versión no es un renglón que se pueda tocar: va en mono, con la sangría de las etiquetas
+   del menú, y sin el relleno horizontal que sugeriría que se puede pulsar. */
+.settings__version {
+  margin: 2px 8px 2px 4px;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+}

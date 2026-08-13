@@ -5,16 +5,54 @@ mod tray;
 
 use tauri::Manager;
 
+/// Mientras un panel nativo esté delante —el de guardar del exportador—, perder el foco no
+/// puede cerrar el panel (spec 4). Lo levanta y lo baja el frontend, que es quien sabe
+/// cuándo abre uno.
+#[tauri::command]
+fn set_keep_open(value: bool) {
+    panel::set_keep_open(value);
+}
+
+/// El glifo de la barra cambia de peso con lo vencido (spec 4). Quien sabe si hay algo
+/// vencido es la capa de datos, que vive en TypeScript.
+#[tauri::command]
+fn set_overdue(app: tauri::AppHandle, overdue: bool) -> Result<(), String> {
+    tray::set_overdue(&app, overdue).map_err(|error| error.to_string())
+}
+
+/// Escribe el export en la ruta que eligió el panel de guardar.
+///
+/// Es un comando propio y no `tauri-plugin-fs` a propósito: el plugin traería permiso para
+/// leer y escribir el disco del usuario, y lo único que hace falta es volcar una cadena en
+/// un archivo que acaba de elegir a mano.
+#[tauri::command]
+fn write_export(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(path, contents).map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
+        // `LaunchAgent` y no `AppleScript`: deja un plist en `~/Library/LaunchAgents` que se
+        // puede leer, y no una entrada opaca escrita con Eventos de Sistema.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(db::URL, db::migrations())
                 .build(),
         )
+        .invoke_handler(tauri::generate_handler![
+            set_keep_open,
+            set_overdue,
+            write_export
+        ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,
             // porque en `tauri dev` el binario no está empaquetado y no hay Info.plist.

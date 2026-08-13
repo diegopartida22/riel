@@ -1,0 +1,193 @@
+/* El alta y la edición de un proyecto, y el selector de color de la sección 3.2. */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 14px 16px;
+}
+
+.editor__title {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* El único campo con caja de la app. Aquí sí: es un formulario, y sin borde no se sabría
+   dónde se escribe. `--field-bg` es una veladura, no un fondo opaco. */
+.editor__name {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--row-radius);
+  background: var(--field-bg);
+  font-family: inherit;
+  font-size: var(--text-title);
+  color: var(--ink-primary);
+  caret-color: var(--project);
+}
+
+.editor__name::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.editor__name:focus-visible {
+  outline: 2px solid var(--project);
+  outline-offset: 2px;
+}
+
+.editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.editor__button {
+  padding: 5px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-subtitle);
+  font-weight: 500;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.editor__button:hover {
+  background: var(--layer-hover);
+}
+
+/* El primario lleva el color del proyecto en contexto (spec 3.1) y la palomita —aquí el
+   texto— la tinta que contrasta con él, la misma que calcula la casilla. */
+.editor__button--primary {
+  border-color: transparent;
+  background: var(--project);
+  color: var(--on-project);
+}
+
+.editor__button--primary:hover {
+  background: var(--project);
+  opacity: 0.88;
+}
+
+.editor__button--primary:disabled {
+  opacity: 0.4;
+}
+
+.editor__button--danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
+}
+
+/* «Eliminar proyecto» no compite con Guardar: es texto, y en rojo solo al tocarlo. */
+.editor__destroy {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.editor__destroy:hover {
+  color: var(--danger);
+}
+
+.editor__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.editor__confirm-text {
+  margin: 0;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+/* ── Selector de color ───────────────────────────────────────────────────────────────── */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.picker__discs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.picker__disc,
+.picker__more {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: default;
+}
+
+.picker__disc {
+  background: var(--project);
+}
+
+/* El seleccionado se marca con un anillo separado, no con un borde encima: un borde sobre el
+   propio disco le come el color, que es justo lo que se está eligiendo. */
+.picker__disc.is-selected,
+.picker__more.is-selected {
+  box-shadow:
+    0 0 0 2px var(--field-bg),
+    0 0 0 3.5px var(--ink-secondary);
+}
+
+.picker__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--ink-tertiary);
+  background: none;
+  color: var(--ink-tertiary);
+}
+
+.picker__hex {
+  width: 96px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--row-radius);
+  background: var(--field-bg);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
+  text-transform: uppercase;
+}
+
+.picker__hex:focus-visible {
+  outline: 2px solid var(--project);
+  outline-offset: 2px;
+}
+
+/* El aviso de contraste y el del formato. Ninguno de los dos bloquea nada. */
+.picker__note {
+  margin: 0;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}

@@ -6,5 +6,7 @@
 export * from "./types";
 export * from "./projects";
 export * from "./tasks";
-export { localDay, localIso, dayOf } from "./time";
-export { db } from "./db";
+export * from "./settings";
+export * from "./backup";
+export { localDay, localIso, dayOf, nextDay } from "./time";
+export { db, dbPath } from "./db";

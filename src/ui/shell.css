@@ -1,0 +1,252 @@
+/* El armazón del panel: la barra de búsqueda arriba, el riel y la lista en medio, el pie de
+   captura abajo. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* El ancho del riel lo declara el panel y no el riel, porque la celda del pie tiene que
+     seguirlo para que la línea vertical no se quiebre al expandir (spec 3.4). */
+  --rail-width: 44px;
+}
+
+.panel.is-rail-expanded {
+  --rail-width: 148px;
+}
+
+/* Dentro de un proyecto el acento del panel entero es el suyo: casillas, anillos de foco y
+   selección (spec 3.1). Fuera, `--accent` se queda en el grafito neutro. */
+.panel.is-project {
+  --accent: var(--project);
+}
+
+.panel__middle {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* ── Barra superior ──────────────────────────────────────────────────────────────────── */
+
+/* 48px, de borde a borde por encima del riel (spec 3.4). Es también la franja por la que se
+   arrastraría la ventana en una app con barra de título — aquí no se mueve, pero sigue siendo
+   la zona que el ojo lee como «marco», así que no lleva nada más que la búsqueda y el `⚙︎`. */
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.topbar__glass {
+  flex: 0 0 auto;
+  color: var(--ink-tertiary);
+}
+
+/* Sin caja, igual que el campo de captura: encuadrar algo que ocupa todo el ancho de un panel
+   de vidrio lo apaga, y la lupa ya dice dónde se escribe. */
+.topbar__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+  appearance: none;
+}
+
+.topbar__field::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.topbar__field:focus {
+  outline: none;
+}
+
+/* La lupa sube de tinta mientras se escribe. Es la misma señal de foco que usa el `+` del pie:
+   sin anillo, pero con algo que cambia. */
+.topbar:focus-within .topbar__glass {
+  color: var(--ink-secondary);
+}
+
+/* Safari dibuja su propia equis dentro de `input[type=search]`, y es la del sistema: azul.
+   La nuestra va aparte, con la tinta de la app. */
+.topbar__field::-webkit-search-decoration,
+.topbar__field::-webkit-search-cancel-button,
+.topbar__field::-webkit-search-results-button,
+.topbar__field::-webkit-search-results-decoration {
+  appearance: none;
+  display: none;
+}
+
+.topbar__clear,
+.topbar__gear {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.topbar__clear:hover,
+.topbar__gear:hover {
+  background: var(--layer-hover);
+  color: var(--ink-secondary);
+}
+
+/* Con el popover abierto el botón se queda hundido: es lo que ata el popover a lo que lo abrió
+   mientras el puntero anda por otro lado. */
+.topbar__gear.is-open {
+  background: var(--layer-selected);
+  color: var(--ink-primary);
+}
+
+.topbar__clear:focus-visible,
+.topbar__gear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.panel__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.view {
+  padding: 2px 8px 10px;
+}
+
+/* ── Pie ─────────────────────────────────────────────────────────────────────────────── */
+
+/* 44px de alto, como la sección 3.4. La hairline es la única línea del pie: separa sin pesar,
+   que es lo que aguanta el vidrio.
+
+   Es un mínimo y no una altura fija porque los chips de captura van *debajo* del campo (spec 6)
+   y el campo ya está en el borde inferior de la ventana: el sitio solo puede salir de que el
+   pie crezca hacia arriba. Sin chips el pie mide exactamente los 44px del diagrama. */
+.panel__foot {
+  flex: 0 0 auto;
+  display: flex;
+  min-height: 44px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ── Captura ─────────────────────────────────────────────────────────────────────────── */
+
+/* Columna, no fila: el campo arriba y los chips debajo. `relative` es para el menú del `#`,
+   que se cuelga hacia arriba por encima de la lista. */
+.composer {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.composer__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 43px;
+  padding: 0 12px;
+}
+
+/* Ancho fijo para que los chips de abajo puedan alinearse con el texto del campo sin depender
+   de lo que mida un `+` en la fuente del sistema. */
+.composer__plus {
+  flex: 0 0 auto;
+  width: 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-tertiary);
+}
+
+/* Sin caja: en reposo el pie es una línea de texto y nada más. El campo se delata solo cuando
+   el cursor está dentro, que es cuando hace falta saber dónde se está escribiendo. */
+.composer__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+}
+
+.composer__field::placeholder {
+  color: var(--ink-tertiary);
+}
+
+/* Sin anillo, pero no sin señal: el spec prohíbe `outline: none` a secas, no tener foco
+   visible. Lo sustituyen el cursor en color de acento y el `+`, que sube de tinta mientras se
+   escribe. Un anillo de 2px alrededor de un pie de 44px pesaría más que todo el panel. */
+.composer__field:focus {
+  outline: none;
+}
+
+.composer:focus-within .composer__plus {
+  color: var(--ink-secondary);
+}
+
+/* ── Estado vacío ────────────────────────────────────────────────────────────────────── */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 18px 8px;
+}
+
+.empty__message {
+  margin: 0;
+  font-size: var(--text-title);
+  color: var(--ink-secondary);
+}
+
+/* Botón de texto y no relleno: un estado vacío invita, no reclama. */
+.empty__action {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.empty__action:hover {
+  text-decoration: underline;
+}
+
+/* ── Aviso ───────────────────────────────────────────────────────────────────────────── */
+
+/* Dice qué pasó y qué hacer, sin disculparse (spec 3.8). */
+.notice {
+  margin: 6px 8px 0;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+}
+
+.notice--error {
+  color: var(--danger);
+}

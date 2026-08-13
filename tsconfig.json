@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    /* El ES2020 que trae la plantilla de Vite apunta a «cualquier navegador». Aquí el único
+       motor que va a correr esto es el WKWebView del macOS donde está instalada la app, que
+       lleva `replaceAll`, `at` y `Object.hasOwn` desde hace varias versiones. */
+    "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 

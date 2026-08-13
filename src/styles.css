@@ -1,22 +1,26 @@
-/* Paso 1: solo lo indispensable para juzgar el vidrio.
-   Los tokens de diseño llegan en el paso 3. */
-
-:root {
-  color-scheme: light dark;
-}
+@import "./design/tokens.css";
+@import "./ui/primitives.css";
+@import "./ui/shell.css";
+@import "./ui/rail.css";
+@import "./ui/project.css";
+@import "./ui/menu.css";
+@import "./ui/capture.css";
+@import "./ui/detail.css";
 
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
-  /* El vidrio lo pinta la NSVisualEffectView por debajo del webview. Cualquier fondo
-     aquí lo tapa: el panel tiene que ser transparente de punta a punta. */
+  /* El vidrio lo pinta el sistema por debajo del webview. Cualquier fondo aquí lo tapa: el
+     panel tiene que ser transparente de punta a punta. */
   background: transparent;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--text-title);
+  color: var(--ink-primary);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   cursor: default;
@@ -43,87 +47,5 @@ body {
 @media (prefers-color-scheme: dark) {
   :root[data-glass="popover"] body::after {
     border-color: rgb(255 255 255 / 14%);
-  }
-}
-
-.probe {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  box-sizing: border-box;
-  font-family: ui-monospace, "SF Mono", monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.checks {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.checks li {
-  display: grid;
-  grid-template-columns: 14px 1fr;
-  gap: 6px;
-  color: rgb(28 28 30 / 55%);
-}
-
-.checks em {
-  display: block;
-  font-style: normal;
-  font-size: 10px;
-  opacity: 0.8;
-}
-
-.checks .ok > span:first-child {
-  color: rgb(46 158 91 / 90%);
-}
-
-.checks .bad {
-  color: rgb(196 72 60 / 90%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .checks li {
-    color: rgb(255 255 255 / 58%);
-  }
-  .checks .ok > span:first-child {
-    color: rgb(79 190 124 / 90%);
-  }
-  .checks .bad {
-    color: rgb(232 105 92 / 90%);
-  }
-}
-
-.probe strong {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgb(28 28 30 / 32%);
-}
-
-.probe span {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: rgb(28 28 30 / 55%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .probe strong {
-    color: rgb(255 255 255 / 36%);
-  }
-  .probe span {
-    color: rgb(255 255 255 / 58%);
   }
 }

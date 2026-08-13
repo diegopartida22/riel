@@ -5,8 +5,12 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-hide",
     "opener:default",
     "sql:default",
-    "sql:allow-execute"
+    "sql:allow-execute",
+    "notification:default",
+    "autostart:default",
+    "dialog:allow-save"
   ]
 }

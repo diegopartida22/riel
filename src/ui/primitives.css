@@ -1,0 +1,374 @@
+/* Los primitivos de la lista: encabezado de grupo, fila, casilla, punto de proyecto, marca
+   de prioridad y chip de fecha. Todo sale de los tokens de `design/tokens.css`. */
+
+/* ── Encabezado de grupo ─────────────────────────────────────────────────────────────── */
+
+.group-header {
+  margin: 0;
+  padding: 12px 8px 4px;
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* ── Fila ────────────────────────────────────────────────────────────────────────────── */
+
+.task-list,
+.subtasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Una rejilla de una sola fila es lo único que sabe animar «hasta el alto del contenido» sin
+   medirlo en JS: al salir, la pista pasa de `1fr` a `0fr` en 200ms (spec 3.6, punto 4). En
+   reposo no recorta nada, para que el anillo de foco pueda salirse del borde. */
+.collapse {
+  display: grid;
+  /* `minmax(0, 1fr)` y no el `auto` implícito: una pista `auto` no baja de su contenido
+     mínimo, y un título largo con `nowrap` empujaría la fecha fuera del panel en vez de
+     cortarse con elipsis. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 200ms ease-in,
+    opacity 180ms ease-out;
+}
+
+.collapse > * {
+  min-height: 0;
+}
+
+.collapse.is-leaving {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.collapse.is-leaving > * {
+  overflow: hidden;
+}
+
+/* La opacidad va sobre `__main` y no sobre la fila entera: una padre completada arrastra a
+   sus subtareas en los datos, pero cada renglón tiene que reflejar su propio estado — si no,
+   una subtarea sin completar se vería tachada solo por colgar de una que sí lo está. */
+.task-row.is-completed > .task-row__clip > .task-row__main {
+  opacity: 0.45;
+}
+
+.task-row__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--row-radius);
+}
+
+.task-row__main:hover {
+  background: var(--layer-hover);
+}
+
+/* Bloque y no una columna flex: dentro de un contenedor flex el `max-width: 100%` del título
+   no llega a apretarlo y el título largo empuja la fecha fuera del panel. */
+.task-row__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* `inline-block` con ancho máximo: así la caja se ciñe al texto y el tachado no se pasa de
+   largo cuando el título es corto. */
+.task-row__title {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  font-weight: 400;
+  color: var(--ink-primary);
+}
+
+.task-row__notes {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+/* El tachado se traza de izquierda a derecha en 220ms. Es una línea propia recortada con
+   `clip-path` y no un `text-decoration`, que aparecería de golpe. */
+.task-row__title::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: currentcolor;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 220ms ease-out;
+}
+
+.task-row.is-completed > .task-row__clip > .task-row__main .task-row__title::after,
+.subtask.is-completed .task-row__title::after {
+  clip-path: inset(0 0 0 0);
+}
+
+/* La fecha y las herramientas comparten un alto de línea con el título — el mismo `1.35` de
+   `--text-title` — en vez de llevar cada una su propio empujón en px. Así los tres bloques se
+   centran contra la primera línea del título y no unos contra otros, que era de donde salía
+   el descuadre de la fecha respecto del `⋯`. */
+.task-row__meta,
+.task-row__tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: calc(var(--text-title) * 1.35);
+}
+
+.task-row__meta {
+  gap: 6px;
+}
+
+/* El hueco de las herramientas existe siempre; lo que cambia al hover es si se ven. Si
+   apareciera de la nada, la fecha daría un salto cada vez que el puntero cruza una fila. */
+.task-row__tools {
+  justify-content: flex-end;
+  gap: 2px;
+  width: 34px;
+  margin-left: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.task-row__main:hover .task-row__tools,
+.task-row__tools:focus-within,
+.task-row.is-flying .task-row__tools {
+  opacity: 1;
+}
+
+/* Los glifos `⋯` y `⠿` se veían torcidos porque su caja tipográfica no está centrada sobre su
+   tinta y cada fuente los coloca a su manera. Un icono es geometría, no tipografía: cae
+   centrado en su propio cuadro y ahí se queda. */
+.task-row__tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.task-row__tool:hover {
+  color: var(--ink-secondary);
+  background: var(--layer-selected);
+}
+
+.task-row__grip {
+  cursor: grab;
+  /* Sin esto el gesto de arrastre se lo queda el desplazamiento de la lista. */
+  touch-action: none;
+}
+
+.task-row.is-flying .task-row__grip {
+  cursor: grabbing;
+}
+
+/* El título abre el detalle, así que se comporta como un objetivo: ocupa su renglón entero
+   para que no haya que apuntarle a las letras. */
+.task-row__text[role="button"] {
+  cursor: default;
+}
+
+/* ── Reordenar ───────────────────────────────────────────────────────────────────────── */
+
+/* Las que ceden el sitio se corren con una transición; la que va en vuelo sigue al puntero
+   sin ninguna, o iría siempre un poco por detrás de la mano. */
+.task-list.is-sorting .task-row {
+  transition: transform 140ms ease-out;
+}
+
+.task-row.is-flying {
+  position: relative;
+  z-index: 2;
+  transition: none;
+}
+
+.task-row.is-flying .task-row__main {
+  background: var(--layer-selected);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 14%);
+}
+
+/* Mientras se arrastra, el texto no se selecciona ni cambia el cursor por toda la lista. */
+.task-list.is-sorting {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* ── Subtareas ───────────────────────────────────────────────────────────────────────── */
+
+.subtask {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 8px 3px calc(8px + var(--subtask-indent));
+  border-radius: var(--row-radius);
+}
+
+.subtask:hover {
+  background: var(--layer-hover);
+}
+
+.subtask .task-row__title {
+  font-size: var(--text-subtitle);
+}
+
+.subtask.is-completed {
+  opacity: 0.45;
+}
+
+/* ── Casilla ─────────────────────────────────────────────────────────────────────────── */
+
+.checkbox {
+  flex: 0 0 auto;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.checkbox svg {
+  display: block;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+}
+
+.checkbox__ring {
+  fill: transparent;
+  stroke: var(--ink-tertiary);
+  stroke-width: 1.5;
+  transition:
+    fill 180ms ease-out,
+    stroke 120ms ease-out;
+}
+
+.checkbox:hover .checkbox__ring {
+  stroke: var(--project);
+}
+
+/* El trazo va normalizado a 1 por el `pathLength` del SVG. */
+.checkbox__tick {
+  fill: none;
+  stroke: var(--on-project, #fff);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 180ms ease-out;
+}
+
+.checkbox[aria-checked="true"] .checkbox__ring {
+  fill: var(--project);
+  stroke: var(--project);
+}
+
+.checkbox[aria-checked="true"] .checkbox__tick {
+  stroke-dashoffset: 0;
+}
+
+/* ── Punto de proyecto ───────────────────────────────────────────────────────────────── */
+
+.project-dot {
+  display: block;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 50%;
+  background: var(--project);
+}
+
+/* ── Prioridad ───────────────────────────────────────────────────────────────────────── */
+
+.priority {
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.priority--alta {
+  color: var(--project);
+}
+
+.priority--media {
+  color: var(--ink-tertiary);
+}
+
+/* ── Fecha ───────────────────────────────────────────────────────────────────────────── */
+
+.due-chip {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.due-chip--overdue {
+  color: var(--danger);
+}
+
+.due-chip--today {
+  color: var(--ink-primary);
+}
+
+.due-chip--future {
+  color: var(--ink-secondary);
+}
+
+/* ── Foco ────────────────────────────────────────────────────────────────────────────── */
+
+/* Siempre visible, del acento en contexto, con 2px de separación. Nunca `outline: none`
+   sin reemplazo (spec, sección 5). */
+:where(button, [tabindex], a):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── Movimiento reducido ─────────────────────────────────────────────────────────────── */
+
+/* Sin trazado, sin colapso: la casilla se llena y la fila desaparece. Criterio de
+   aceptación 7: ni una sola animación de movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .collapse,
+  .task-row__title::after,
+  .task-row__tools,
+  .checkbox__ring,
+  .checkbox__tick,
+  /* El arrastre en sí es manipulación directa —la fila va donde va la mano— y eso se queda.
+     Lo que se apaga es lo único que aquí era animación: el deslizamiento con el que las demás
+     filas le hacen sitio, que pasa a ser un salto (criterio 7). */
+  .task-list.is-sorting .task-row {
+    transition: none;
+  }
+
+  .collapse.is-leaving {
+    display: none;
+  }
+}

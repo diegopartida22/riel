@@ -1,0 +1,604 @@
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  DEFAULT_RETENTION,
+  allTasks,
+  completeTask,
+  countTasks,
+  createProject,
+  createTask,
+  deleteProject,
+  deleteTask,
+  getRetention,
+  hasOverdue,
+  listProjects,
+  localDay,
+  localIso,
+  moveTask,
+  pendingCountByProject,
+  renameProject,
+  setProjectColor,
+  setRetention as storeRetention,
+  sweepCompleted,
+  uncompleteTasks,
+  updateTask,
+  withSubtasks,
+  type Between,
+  type NewTask,
+  type Project,
+  type Retention,
+  type Task,
+  type TaskPatch,
+  type TaskTree,
+} from "../data";
+import { ensurePermission, start as startNotifications } from "./notifications";
+import { rank } from "./search";
+import { belongs, draftFor, loadView, sameView, viewKey, type View } from "./views";
+
+/**
+ * Mientras esto esté en alto, perder el foco no cierra el panel (spec 4). Lo necesita el
+ * diálogo de permiso de notificaciones, que es una ventana del sistema y se lleva el foco.
+ */
+const keepOpen = (value: boolean) => invoke<void>("set_keep_open", { value });
+
+/** Los tres segundos de gracia y los 200ms de colapso de la sección 3.6. */
+const UNDO_MS = 3000;
+const COLLAPSE_MS = 200;
+
+/** El estado de expansión del riel persiste (spec 3.4). No es un dato: no va a SQLite. */
+const RAIL_KEY = "riel:rail-expandido";
+
+/** Lo que se espera tras la última tecla antes de consultar. Una pulsación lee la base entera. */
+const TYPING_MS = 120;
+
+export interface RielState {
+  view: View;
+  select: (view: View) => void;
+
+  projects: Project[];
+  projectsById: Map<string, Project>;
+  /** Pendientes por proyecto, para el tooltip del riel colapsado. */
+  counts: Map<string | null, number>;
+
+  tasks: TaskTree[];
+  /** El día local con el que se compararon las fechas de esta lista. */
+  today: string;
+  loading: boolean;
+  /** Base vacía: el campo de captura cambia de texto y se queda con el foco (spec 3.7). */
+  firstRun: boolean;
+  error: string | null;
+  /** Ids en sus 200ms de colapso. Siguen en el DOM: si no, no habría nada que animar. */
+  leaving: ReadonlySet<string>;
+
+  /** Lo que el parser de captura sacó del texto pisa lo que la vista pondría por omisión. */
+  add: (draft: NewTask) => Promise<boolean>;
+  toggle: (task: Task, checked: boolean) => Promise<void>;
+  /** Edita campos sueltos de una tarea, desde el detalle o desde el menú de la fila. */
+  patch: (id: string, patch: TaskPatch) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  reorder: (id: string, between: Between) => Promise<void>;
+
+  /** La tarea cuyo detalle se está mirando, o nula si se ve la lista. */
+  detail: TaskTree | null;
+  openDetail: (id: string) => void;
+  closeDetail: () => void;
+
+  /**
+   * Lo escrito en la barra de búsqueda. Con algo escrito, `tasks` deja de ser la vista en
+   * curso y pasa a ser el resultado: la búsqueda no es otra lista, es otra consulta para la
+   * misma lista, y así completar, editar y deshacer siguen funcionando sin nada aparte.
+   */
+  query: string;
+  setQuery: (query: string) => void;
+  /** Cierto en cuanto la consulta ya se aplicó — no mientras se teclea el primer carácter. */
+  searching: boolean;
+  /** La consulta que produjo lo que se ve. Es la que va en «Sin resultados para «…»». */
+  term: string;
+
+  /** Crea si `project` es nulo, actualiza si no. Falso si la escritura falló. */
+  saveProject: (project: Project | null, name: string, color: string) => Promise<boolean>;
+  removeProject: (id: string) => Promise<void>;
+
+  railExpanded: boolean;
+  toggleRail: () => void;
+
+  /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
+  retention: Retention;
+  setRetention: (retention: Retention) => void;
+}
+
+/**
+ * El estado del panel entero: qué vista se mira, qué proyectos hay y qué tareas se ven.
+ *
+ * La lista **no** se relee después de completar. Una tarea completada tiene que quedarse tres
+ * segundos a la vista para poder deshacerla, y la consulta de la vista no la devolvería;
+ * releer la borraría de la pantalla al instante. Así que cada operación aplica su propio
+ * cambio sobre el estado local, que es además lo que hace que el deshacer se sienta inmediato.
+ */
+export function useRiel(): RielState {
+  const [today] = useState(localDay);
+  const [view, setView] = useState<View>({ kind: "hoy" });
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
+  const [tasks, setTasks] = useState<TaskTree[]>([]);
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [firstRun, setFirstRun] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [term, setTerm] = useState("");
+  const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
+  /** Se incrementa para forzar una relectura cuando la base cambió por debajo de la vista. */
+  const [epoch, setEpoch] = useState(0);
+  const [railExpanded, setRailExpanded] = useState(
+    () => localStorage.getItem(RAIL_KEY) === "1",
+  );
+
+  /**
+   * Por cada tarea completada, los temporizadores que la sacarán de la lista y la lista exacta
+   * de ids que se completaron con ella — una padre arrastra a sus hijas pendientes, y deshacer
+   * no puede descompletar a las que ya estaban tachadas de antes.
+   */
+  const pending = useRef(new Map<string, { ids: string[]; timers: number[] }>());
+
+  const clearTimers = useCallback(() => {
+    for (const entry of pending.current.values()) entry.timers.forEach(clearTimeout);
+    pending.current.clear();
+  }, []);
+
+  const reloadProjects = useCallback(async () => {
+    const [list, totals] = await Promise.all([listProjects(), pendingCountByProject()]);
+    setProjects(list);
+    setCounts(totals);
+  }, []);
+
+  // Proyectos y conteos: una vez, y después cada vez que alguien los mueva.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        // El barrido de completadas va antes de la primera lectura (spec 8). Al revés, lo que
+        // se vería un instante en Completadas es justo lo que está a punto de desaparecer.
+        const kept = await getRetention();
+        if (alive) setRetention(kept);
+        if (kept !== null) await sweepCompleted(kept);
+
+        const total = await countTasks();
+        await reloadProjects();
+        if (alive) setFirstRun(total === 0);
+      } catch (cause) {
+        console.error(cause);
+        if (alive) setError("No se pudieron leer los proyectos. Cierra y vuelve a abrir el panel.");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [reloadProjects]);
+
+  const projectsById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
+
+  // El plan de notificaciones se rehace al arrancar y cada vez que cambia algo que pueda
+  // mover una hora (spec 7). Depender de `tasks` es más ancho de lo necesario —cambia también
+  // al navegar— pero `schedule` relee la base y es idempotente: de más solo cuesta una
+  // consulta, y de menos costaría un aviso que no llega.
+  useEffect(() => startNotifications(projectsById), [projectsById, tasks]);
+
+  // El peso del glifo de la barra (spec 4). Se recalcula contra la base entera y no contra la
+  // vista: en Casa puede no haber nada vencido y seguir habiéndolo en Infra.
+  useEffect(() => {
+    let alive = true;
+    hasOverdue(localIso())
+      .then((overdue) => {
+        if (alive) void invoke("set_overdue", { overdue });
+      })
+      .catch((cause) => console.error(cause));
+    return () => {
+      alive = false;
+    };
+  }, [tasks]);
+
+  // Escribir espera un respiro; borrar no. Limpiar la búsqueda tiene que devolver la vista de
+  // golpe — es lo que hace el primer Escape (spec 4), y ahí una demora se siente como un tirón.
+  useEffect(() => {
+    const clean = query.trim();
+    if (!clean) {
+      setTerm("");
+      return;
+    }
+    const id = window.setTimeout(() => setTerm(clean), TYPING_MS);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  // Las tareas se releen al cambiar de vista o de consulta. Los temporizadores pendientes se
+  // cancelan: la fila que estaba por irse ya está completada en la base, y lo que se carga
+  // ahora no la incluye.
+  const key = `${epoch}:${term ? `buscar:${term}` : viewKey(view)}`;
+  useEffect(() => {
+    let alive = true;
+    clearTimers();
+    setLeaving(new Set());
+    setLoading(true);
+
+    (async () => {
+      try {
+        // Buscando se lee la base entera y se filtra en memoria. `LIKE` no sabe de
+        // subsecuencias, y son unos cientos de filas: la consulta que las trae vale menos que
+        // el índice que haría falta para no traerlas.
+        const roots = term
+          ? rank(term, await allTasks(), (task) => [task.title, task.notes])
+          : await loadView(view, today);
+
+        // En los resultados cada tarea sale como fila de pleno derecho, subtareas incluidas.
+        // Anidarlas duplicaría a la hija que casa por su cuenta bajo una madre que también casa.
+        const trees = term ? roots.map((task) => ({ ...task, subtasks: [] })) : await withSubtasks(roots);
+        if (!alive) return;
+        setTasks(trees);
+        setError(null);
+      } catch (cause) {
+        console.error(cause);
+        if (alive) setError("No se pudieron leer las tareas. Cierra y vuelve a abrir el panel.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // `view` y `term` se derivan de `key`; el día se fija al montar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, today, clearTimers]);
+
+  // Los temporizadores no pueden sobrevivir al panel: al cerrarse, la ventana se oculta pero
+  // el webview sigue vivo, y un disparo tardío tocaría un estado que ya nadie mira.
+  useEffect(() => clearTimers, [clearTimers]);
+
+  /** Marca o desmarca en el estado local exactamente los ids que cambiaron en la base. */
+  const stamp = useCallback((ids: string[], at: string | null) => {
+    const wanted = new Set(ids);
+    setTasks((current) =>
+      current.map((root) => {
+        const hit = wanted.has(root.id);
+        const touched = root.subtasks.some((subtask) => wanted.has(subtask.id));
+        if (!hit && !touched) return root;
+        return {
+          ...root,
+          completedAt: hit ? at : root.completedAt,
+          subtasks: root.subtasks.map((subtask) =>
+            wanted.has(subtask.id) ? { ...subtask, completedAt: at } : subtask,
+          ),
+        };
+      }),
+    );
+  }, []);
+
+  const forget = useCallback((id: string) => {
+    const entry = pending.current.get(id);
+    if (!entry) return null;
+    entry.timers.forEach(clearTimeout);
+    pending.current.delete(id);
+    return entry.ids;
+  }, []);
+
+  const unmarkLeaving = useCallback((id: string) => {
+    setLeaving((current) => {
+      if (!current.has(id)) return current;
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  /** Saca la fila de la lista: una raíz se lleva a sus hijas, una hija sale sola. */
+  const drop = useCallback(
+    (id: string) => {
+      unmarkLeaving(id);
+      setTasks((current) =>
+        current
+          .filter((root) => root.id !== id)
+          .map((root) =>
+            root.subtasks.some((subtask) => subtask.id === id)
+              ? { ...root, subtasks: root.subtasks.filter((subtask) => subtask.id !== id) }
+              : root,
+          ),
+      );
+    },
+    [unmarkLeaving],
+  );
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      setCounts(await pendingCountByProject());
+    } catch (cause) {
+      console.error(cause);
+    }
+  }, []);
+
+  const toggle = useCallback(
+    async (task: Task, checked: boolean) => {
+      setError(null);
+      try {
+        if (checked) {
+          const { ids, at } = await completeTask(task.id);
+          if (!ids.length) return;
+
+          stamp(ids, at);
+          pending.current.set(task.id, {
+            ids,
+            timers: [
+              window.setTimeout(
+                () => setLeaving((current) => new Set(current).add(task.id)),
+                UNDO_MS,
+              ),
+              window.setTimeout(() => {
+                pending.current.delete(task.id);
+                drop(task.id);
+              }, UNDO_MS + COLLAPSE_MS),
+            ],
+          });
+        } else {
+          // Dentro de la ventana de gracia se repone tal cual estaba; fuera de ella —una fila
+          // de Completadas, por ejemplo— basta con ella misma.
+          const ids = forget(task.id) ?? [task.id];
+          await uncompleteTasks(ids);
+          stamp(ids, null);
+          unmarkLeaving(task.id);
+        }
+        void refreshCounts();
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo guardar el cambio. Vuelve a intentarlo.");
+      }
+    },
+    [drop, forget, refreshCounts, stamp, unmarkLeaving],
+  );
+
+  const add = useCallback(
+    async (draft: NewTask) => {
+      const clean = draft.title.trim();
+      if (!clean) return false;
+
+      setError(null);
+      try {
+        // La vista pone el fondo —Hoy da la fecha de hoy, un proyecto da el suyo— y lo que se
+        // escribió lo pisa. Escribir `#casa` dentro de Infra manda la tarea a Casa.
+        const created = await createTask({ ...draftFor(view, today), ...draft, title: clean });
+        // El permiso se pide la primera vez que alguien le pone hora a algo, no en el primer
+        // arranque (spec 7): así la pregunta llega cuando ya se ve para qué sirve.
+        if (created.hasTime) void ensurePermission(keepOpen);
+        // La tarea nace en la vista en curso, no en la consulta. Si había una búsqueda escrita
+        // se limpia para poder ver dónde cayó; si no, la forma funcional evita el redibujo.
+        setQuery((current) => (current ? "" : current));
+        // Y solo se queda en la lista si es de esta vista: «Comprar pan mañana» escrito en Hoy
+        // se guarda para mañana, y verla aquí sería una promesa que la próxima carga rompe.
+        if (belongs(view, created, today)) {
+          setTasks((current) => [...current, { ...created, subtasks: [] }]);
+        }
+        setFirstRun(false);
+        void refreshCounts();
+        return true;
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo crear la tarea. Vuelve a intentarlo.");
+        return false;
+      }
+    },
+    [refreshCounts, today, view],
+  );
+
+  /**
+   * Edita campos sueltos. El cambio se aplica también en local en vez de releer la vista: una
+   * relectura cancelaría los tres segundos de gracia de cualquier fila que se esté yendo.
+   *
+   * El único caso que sí saca la fila de la lista es cambiarle el proyecto estando dentro de
+   * uno: la tarea deja de pertenecer a lo que se está mirando.
+   */
+  const patch = useCallback(
+    async (id: string, values: TaskPatch) => {
+      setError(null);
+      try {
+        await updateTask(id, values);
+        if (values.hasTime) void ensurePermission(keepOpen);
+
+        // Buscando no hay destierro: lo que se ve no es el proyecto, es la consulta, y cambiarle
+        // el proyecto a una tarea no la saca de lo que casó.
+        const exiled =
+          !term &&
+          view.kind === "proyecto" &&
+          values.projectId !== undefined &&
+          values.projectId !== view.id;
+
+        setTasks((current) =>
+          current.flatMap((root) => {
+            if (root.id === id) return exiled ? [] : [{ ...root, ...values }];
+            if (!root.subtasks.some((subtask) => subtask.id === id)) return [root];
+            return [
+              {
+                ...root,
+                subtasks: root.subtasks.map((subtask) =>
+                  subtask.id === id ? { ...subtask, ...values } : subtask,
+                ),
+              },
+            ];
+          }),
+        );
+
+        if (exiled) setDetailId(null);
+        if (values.projectId !== undefined) void refreshCounts();
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo guardar el cambio. Vuelve a intentarlo.");
+      }
+    },
+    [refreshCounts, term, view],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        forget(id);
+        await deleteTask(id);
+        setDetailId((current) => (current === id ? null : current));
+        drop(id);
+        void refreshCounts();
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo eliminar la tarea. Vuelve a intentarlo.");
+      }
+    },
+    [drop, forget, refreshCounts],
+  );
+
+  /**
+   * Mueve una tarea entre otras dos. El orden local se reordena antes de esperar a la base:
+   * el arrastre ya dejó la fila donde el usuario la soltó y verla volver a su sitio para
+   * regresar un instante después es peor que no animar nada.
+   */
+  const reorder = useCallback(async (id: string, between: Between) => {
+    setError(null);
+    setTasks((current) => {
+      const moved = current.find((task) => task.id === id);
+      if (!moved) return current;
+
+      const rest = current.filter((task) => task.id !== id);
+      let at = 0;
+      if (between.after !== null) {
+        // `findIndex` devuelve -1 cuando no está, y sumarle uno da 0 — o sea, la cabeza de la
+        // lista, que es el sitio equivocado. Hay que mirarlo antes de sumar.
+        const previous = rest.findIndex((task) => task.id === between.after);
+        if (previous < 0) return current;
+        at = previous + 1;
+      }
+
+      rest.splice(at, 0, moved);
+      return rest;
+    });
+
+    try {
+      await moveTask(id, between);
+    } catch (cause) {
+      console.error(cause);
+      setError("No se pudo guardar el orden. Vuelve a intentarlo.");
+    }
+  }, []);
+
+  const closeDetail = useCallback(() => setDetailId(null), []);
+
+  // Elegir en el riel manda sobre la búsqueda: si la consulta siguiera puesta, el clic no
+  // cambiaría nada de lo que se ve y el riel parecería roto.
+  const select = useCallback((next: View) => {
+    setDetailId(null);
+    setQuery("");
+    setView((current) => (sameView(current, next) ? current : next));
+  }, []);
+
+  const saveProject = useCallback(
+    async (project: Project | null, name: string, color: string) => {
+      setError(null);
+      try {
+        if (project) {
+          // Dos sentencias y no una: el nombre y el color son campos independientes y no hay
+          // ningún momento intermedio que se vea mal si solo una llegara.
+          if (name !== project.name) await renameProject(project.id, name);
+          if (color !== project.color) await setProjectColor(project.id, color);
+        } else {
+          const created = await createProject(name, color);
+          setView({ kind: "proyecto", id: created.id });
+        }
+        await reloadProjects();
+        return true;
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo guardar el proyecto. Vuelve a intentarlo.");
+        return false;
+      }
+    },
+    [reloadProjects],
+  );
+
+  /**
+   * Las tareas del proyecto no se van con él: la clave foránea las deja sin proyecto (spec 2).
+   * Si se estaba mirando su vista, no queda dónde estar y se vuelve a Hoy.
+   */
+  const removeProject = useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        await deleteProject(id);
+        setView((current) =>
+          current.kind === "proyecto" && current.id === id ? { kind: "hoy" } : current,
+        );
+        await reloadProjects();
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo eliminar el proyecto. Vuelve a intentarlo.");
+      }
+    },
+    [reloadProjects],
+  );
+
+  /**
+   * Cambiar el plazo de conservación barre en el momento, sin esperar al próximo arranque.
+   * Un ajuste que destruye datos tiene que enseñar lo que hace cuando se toca: bajar a 7 días
+   * y no ver ningún cambio deja sin saber si se guardó.
+   */
+  const changeRetention = useCallback(async (next: Retention) => {
+    setRetention(next);
+    try {
+      await storeRetention(next);
+      if (next !== null && (await sweepCompleted(next)) > 0) setEpoch((current) => current + 1);
+    } catch (cause) {
+      console.error(cause);
+      setError("No se pudo guardar el ajuste. Vuelve a intentarlo.");
+    }
+  }, []);
+
+  const toggleRail = useCallback(() => {
+    setRailExpanded((current) => {
+      localStorage.setItem(RAIL_KEY, current ? "0" : "1");
+      return !current;
+    });
+  }, []);
+
+  return {
+    view,
+    select,
+    projects,
+    projectsById,
+    counts,
+    tasks,
+    today,
+    loading,
+    firstRun,
+    error,
+    leaving,
+    add,
+    toggle,
+    patch,
+    remove,
+    reorder,
+    // Se deriva de la lista en vez de guardarse aparte: así el detalle siempre muestra lo
+    // mismo que la fila, y si la tarea se va —completada, borrada, movida a otro proyecto—
+    // el detalle se cierra solo porque deja de haber nada que mostrar.
+    detail: tasks.find((task) => task.id === detailId) ?? null,
+    openDetail: setDetailId,
+    closeDetail,
+    query,
+    setQuery,
+    searching: term !== "",
+    term,
+    saveProject,
+    removeProject,
+    railExpanded,
+    toggleRail,
+    retention,
+    setRetention: changeRetention,
+  };
+}

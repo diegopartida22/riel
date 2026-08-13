@@ -116,7 +116,6 @@ fn log_event(event: &TrayIconEvent) {
 }
 
 /// Cambia el peso del glifo según haya o no tareas vencidas.
-#[allow(dead_code)] // lo usa el paso de datos, todavía no cableado
 pub fn set_overdue<R: Runtime>(app: &AppHandle<R>, overdue: bool) -> tauri::Result<()> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let bytes = if overdue { FILLED } else { OUTLINE };
