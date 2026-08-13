@@ -1,0 +1,36 @@
+[package]
+name = "riel"
+version = "0.1.0"
+description = "Tareas en la barra de menú"
+authors = ["Diego Partida"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "riel_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target."cfg(target_os = \"macos\")".dependencies]
+window-vibrancy = "0.6"
+# Las mismas versiones que ya arrastra Tauri, así que no crecen el árbol. Se usan solo
+# para instanciar `NSGlassEffectView`, que ninguna caja de Rust expone todavía.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSGraphics",
+  "NSResponder",
+  "NSView",
+  "NSWindow",
+] }
