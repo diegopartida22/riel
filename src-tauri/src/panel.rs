@@ -72,14 +72,9 @@ fn position<R: Runtime>(window: &WebviewWindow<R>) {
 /// completa y `position` se queda solo con la llamada al plugin.
 fn align_below_menu_bar<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
     let tray = crate::tray::last_rect();
+    let cursor = window.cursor_position().ok();
 
-    // El monitor que importa es el que tiene el icono, no el que tenga la ventana: puede
-    // estar oculta en otra pantalla desde la última vez que se abrió.
-    let monitor = match tray {
-        Some(rect) => window.monitor_from_point(rect.center_x(), rect.y)?,
-        None => None,
-    };
-    let Some(monitor) = monitor.or(window.primary_monitor()?) else {
+    let Some(monitor) = tray_monitor(window, tray, cursor)? else {
         return Ok(());
     };
 
@@ -87,25 +82,81 @@ fn align_below_menu_bar<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<
     let scale = monitor.scale_factor();
     let window_width = window.outer_size()?.width as f64;
 
-    let left = work_area.position.x as f64 + EDGE_MARGIN * scale;
-    let right = work_area.position.x as f64 + work_area.size.width as f64
-        - window_width
-        - EDGE_MARGIN * scale;
+    let start = work_area.position.x as f64;
+    let end = start + work_area.size.width as f64;
+    let left = start + EDGE_MARGIN * scale;
+    let right = end - window_width - EDGE_MARGIN * scale;
 
-    // Sin icono conocido — solo puede pasar en el primer arranque, antes de que llegue
-    // ningún evento del tray — el mejor lugar es la esquina donde el icono vive de todos
-    // modos.
-    let x = match tray {
-        Some(rect) => rect.center_x() - window_width / 2.0,
-        None => right,
-    };
+    // Bajo qué punto se centra el panel, en orden de preferencia:
+    //
+    // 1. El centro del icono, siempre que caiga en esta pantalla. Es lo correcto y lo que se
+    //    usa en el caso normal.
+    // 2. El puntero, si el icono dice estar en otra pantalla —o sea, si su X vino mal por lo
+    //    que se explica en `tray_monitor`— o si todavía no hay icono conocido. El clic acaba
+    //    de ocurrir ahí, así que el panel aparece donde se hizo, que es lo que se espera
+    //    aunque no quede centrado al milímetro.
+    // 3. La esquina, si no hay ni lo uno ni lo otro: es donde el icono vive de todos modos.
+    let center = tray
+        .map(|rect| rect.center_x())
+        .filter(|x| (start..=end).contains(x))
+        .or(cursor.map(|point| point.x))
+        .unwrap_or(right + window_width / 2.0);
 
     let position = tauri::PhysicalPosition::new(
-        x.clamp(left, right.max(left)).round() as i32,
+        (center - window_width / 2.0).clamp(left, right.max(left)).round() as i32,
         (work_area.position.y as f64 + MENU_BAR_GAP * scale).round() as i32,
     );
 
+    // Con dos pantallas, esta línea es la que dice si el icono y el puntero coinciden. Si el
+    // panel vuelve a abrirse donde no toca, lo que hay que mirar es si el centro que se usó
+    // salió del icono o del puntero.
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "[riel] icono {tray:?}, puntero {cursor:?}, área {work_area:?} ×{scale}, centro {center} → {position:?}"
+        );
+    }
+
     window.set_position(position)
+}
+
+/// En qué pantalla está el icono de la barra. La que importa es esa, no la de la ventana:
+/// puede haber quedado oculta en otra desde la última vez que se abrió.
+///
+/// **El puntero manda, y el rect del icono es el suplente.** Parece al revés, pero el rect
+/// del icono no es de fiar con varias pantallas. `tray-icon` lo convierte desde las
+/// coordenadas de AppKit —origen abajo a la izquierda, Y hacia arriba— volteando la Y contra
+/// `CGDisplayPixelsHigh(CGMainDisplayID())`, o sea el alto de la pantalla **principal**, y
+/// aplicando después la escala de la pantalla **del icono**. Mientras las dos pantallas
+/// tengan la misma escala las dos mitades concuerdan y el resultado sale bien; en cuanto una
+/// es Retina y la otra no, no hay una sola escala que sirva para las dos y el punto que llega
+/// no cae dentro de ninguna pantalla. `monitor_from_point` devuelve `None`, y lo que había
+/// aquí antes caía a `primary_monitor()`: hacías clic en el icono de una pantalla y el panel
+/// se abría en la otra.
+///
+/// El puntero no tiene ese problema, porque no pasa por esa conversión: lo da el mismo
+/// runtime que da los monitores, así que los dos hablan del mismo espacio. Y un clic en el
+/// icono deja el cursor encima del icono por definición, así que su pantalla es la del icono.
+///
+/// Solo hay un camino que llega aquí sin clic previo —el `show` de arranque en desarrollo— y
+/// ahí tampoco hay rect todavía, así que el puntero sigue siendo lo mejor que hay.
+fn tray_monitor<R: Runtime>(
+    window: &WebviewWindow<R>,
+    tray: Option<crate::tray::TrayRect>,
+    cursor: Option<tauri::PhysicalPosition<f64>>,
+) -> tauri::Result<Option<tauri::Monitor>> {
+    if let Some(point) = cursor {
+        if let Some(monitor) = window.monitor_from_point(point.x, point.y)? {
+            return Ok(Some(monitor));
+        }
+    }
+
+    if let Some(rect) = tray {
+        if let Some(monitor) = window.monitor_from_point(rect.center_x(), rect.y)? {
+            return Ok(Some(monitor));
+        }
+    }
+
+    window.primary_monitor()
 }
 
 pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
