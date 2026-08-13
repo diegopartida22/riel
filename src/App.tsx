@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -40,6 +41,33 @@ export default function App() {
   useEffect(() => {
     if (riel.firstRun) composer.current?.focus();
   }, [riel.firstRun]);
+
+  /**
+   * Cada apertura del panel lo devuelve a la vista elegida en Ajustes, y limpia lo que hubiera
+   * encima: búsqueda, detalle, editor de proyecto.
+   *
+   * El panel no se cierra, se oculta, así que sin esto reabrirlo te devuelve exactamente donde
+   * lo dejaste — que en una ventana normal sería lo correcto, pero esta se abre y se cierra
+   * decenas de veces al día y la última vez casi nunca es la que importa ahora.
+   */
+  const { select, startView } = riel;
+  useEffect(() => {
+    // Se depende de `select` y de la vista, no de `riel` entero: ese es un objeto nuevo en cada
+    // render, y con él aquí el oyente se daría de baja y de alta constantemente. `listen`
+    // devuelve una promesa, así que entre una cosa y la otra hay un hueco sin nadie
+    // escuchando — y el evento que se cayera en ese hueco es justo el que importa.
+    //
+    // `select` ya limpia la búsqueda y cierra el detalle; lo que no sabe es de las capas que
+    // vive App.
+    const unlisten = listen("riel://panel-abierto", () => {
+      setSettings(null);
+      setEditing(null);
+      select({ kind: startView });
+    });
+    return () => {
+      void unlisten.then((off) => off());
+    };
+  }, [select, startView]);
 
   // ⌘N puede llegar con el detalle abierto o con el editor de proyecto delante, y el campo de
   // captura no está en el DOM hasta que esa capa se cierra. Pedirle el foco en el mismo golpe
@@ -152,6 +180,8 @@ export default function App() {
           anchor={settings}
           retention={riel.retention}
           onRetention={riel.setRetention}
+          startView={riel.startView}
+          onStartView={riel.setStartView}
           onClose={() => setSettings(null)}
         />
       )}
@@ -168,6 +198,7 @@ export default function App() {
           }}
           onNewProject={() => setEditing({ project: null })}
           onEditProject={(target) => setEditing({ project: target })}
+          onReorder={riel.reorderProject}
         />
 
         <main className="panel__body">

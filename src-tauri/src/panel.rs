@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tauri::{Manager, Runtime, WebviewWindow, Window};
+use tauri::{Emitter, Manager, Runtime, WebviewWindow, Window};
 use tauri_plugin_positioner::{Position, WindowExt};
 
 /// Mientras esto esté en alto, perder el foco no cierra el panel. Lo levanta cualquier
@@ -113,6 +113,10 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.show();
     let _ = window.set_focus();
     crate::glass::refresh_shadow(window);
+    // Que el panel se abrió, para que el frontend pueda volver a su vista de siempre. Va por
+    // aquí y no por el foco de la ventana: el panel de guardar del export también devuelve el
+    // foco al cerrarse, y con eso la vista se recolocaría a media exportación.
+    let _ = window.emit("riel://panel-abierto", ());
 }
 
 pub fn hide<R: Runtime>(window: &WebviewWindow<R>) {

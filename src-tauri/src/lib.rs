@@ -60,6 +60,17 @@ fn take_completed() -> Vec<String> {
     notify::take_completed()
 }
 
+/// Cierra la app desde Ajustes.
+///
+/// Sin Dock y sin ⌘Tab (spec 4), una app de la barra no tiene ⌘Q ni menú de aplicación, así
+/// que sin esto la única forma de pararla es el Monitor de Actividad. Es un comando propio y
+/// no `tauri-plugin-process` por lo mismo que el export: el plugin trae también reiniciar y
+/// permisos que no hacen falta para un botón.
+#[tauri::command]
+fn quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -84,7 +95,8 @@ pub fn run() {
             notification_permission,
             request_notification_permission,
             set_reminders,
-            take_completed
+            take_completed,
+            quit
         ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,

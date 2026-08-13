@@ -24,8 +24,25 @@ export const PALETTE: ProjectColor[] = [
   { id: "grafito", name: "Grafito", light: "#6B7280", dark: "#98A0AC" },
 ];
 
-/** `#RRGGBB`, en mayúsculas o minúsculas. Lo que no case con esto se rechaza. */
+/** `#RRGGBB`, en mayúsculas o minúsculas. Es la forma en que se guarda, no la que se exige. */
 export const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Lee un color escrito a mano y lo devuelve como `#RRGGBB`, o nulo si no hay forma de leerlo.
+ *
+ * Acepta más de lo que guarda, a propósito. Un hex se copia de sitios que lo escriben distinto
+ * —de Figma llega sin `#`, de un CSS llega abreviado a tres— y rechazar esas formas no protege
+ * de nada: no hay ambigüedad sobre qué color quería quien escribió `d4ff44`. Lo que sí hacía
+ * daño era exigir la forma exacta, porque el error no se leía como «te falta la almohadilla»
+ * sino como «este campo no sirve».
+ */
+export function parseHex(text: string): string | null {
+  const body = text.trim().replace(/^#/, "").toUpperCase();
+  // Los tres dígitos de CSS son cada uno duplicado: `#ABC` es `#AABBCC`, no `#0A0B0C`.
+  if (/^[0-9A-F]{3}$/.test(body)) return `#${[...body].map((digit) => digit + digit).join("")}`;
+  if (/^[0-9A-F]{6}$/.test(body)) return `#${body}`;
+  return null;
+}
 
 /**
  * El color curado al que corresponde un hex guardado, si es uno de los ocho. Un hex escrito a

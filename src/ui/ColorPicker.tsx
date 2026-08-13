@@ -1,7 +1,7 @@
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { useState } from "react";
 
-import { HEX, PALETTE, contrastWarning, curatedOf, tint } from "../design/palette";
+import { HEX, PALETTE, contrastWarning, curatedOf, parseHex, tint } from "../design/palette";
 
 export interface ColorPickerProps {
   value: string;
@@ -29,14 +29,21 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
 
   const onDraft = (text: string) => {
     setDraft(text);
-    if (HEX.test(text)) onChange(text);
+    const hex = parseHex(text);
+    if (hex) onChange(hex);
   };
 
-  const malformed = manual && draft.length > 0 && !HEX.test(draft);
+  const malformed = manual && draft.length > 0 && !parseHex(draft);
+  /**
+   * El `+` se marca solo si el color de verdad no es de los ocho. Con el campo abierto sobre
+   * un color curado —se abre trayendo el que había— marcarlo también pondría dos cosas
+   * elegidas a la vez, y entonces ninguna de las dos dice nada.
+   */
+  const custom = manual && HEX.test(value) && !curatedOf(value);
   // El aviso es para el hex a mano y solo para él (spec 3.2). Un color curado se juzgaría por
   // el par equivocado: en oscuro no se pinta con este valor sino con su variante aclarada, y
   // Ámbar —2.95:1 contra el blanco— saldría avisado por un problema que no tiene.
-  const warning = manual && HEX.test(value) && !curatedOf(value) ? contrastWarning(value) : null;
+  const warning = custom ? contrastWarning(value) : null;
 
   return (
     <div className="picker">
@@ -56,13 +63,18 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
                 setManual(false);
                 onChange(color.light);
               }}
-            />
+            >
+              {/* El anillo solo no bastaba: sobre ocho discos de 22px, a un color oscuro se le
+                  lee igual que a su vecino. La palomita dentro es la misma señal que usa la
+                  casilla de una tarea, y va en la tinta que contrasta con el disco. */}
+              {selected && <Check size={13} strokeWidth={2.75} aria-hidden />}
+            </button>
           );
         })}
 
         <button
           type="button"
-          className={`picker__more${manual ? " is-selected" : ""}`}
+          className={`picker__more${custom ? " is-selected" : ""}`}
           title="Otro color"
           aria-label="Otro color"
           aria-pressed={manual}
@@ -80,10 +92,21 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
           placeholder="#RRGGBB"
           spellCheck={false}
           autoComplete="off"
-          maxLength={7}
           aria-label="Color en hexadecimal"
           autoFocus={claimFocus}
-          onChange={(event) => onDraft(event.target.value.trim())}
+          onFocus={(event) => {
+            // Al abrirlo desde el `+` el campo trae el color de antes, así que se ofrece
+            // seleccionado: lo normal ahí es escribir otro entero, no editar un dígito.
+            if (parseHex(event.target.value)) event.target.select();
+          }}
+          onChange={(event) => onDraft(event.target.value)}
+          onBlur={() => {
+            // Al soltar el campo, lo escrito se asienta en la forma en que se guarda. Así lo
+            // que se ve y lo que hay en la base son lo mismo, y volver a entrar no ofrece un
+            // `d4ff44` que ya no es lo que el proyecto tiene.
+            const hex = parseHex(draft);
+            if (hex) setDraft(hex);
+          }}
         />
       )}
 

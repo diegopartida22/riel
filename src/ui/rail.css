@@ -99,6 +99,73 @@
   text-overflow: ellipsis;
 }
 
+/* ── El `⋯` del proyecto ─────────────────────────────────────────────────────────────── */
+
+.rail__slot {
+  position: relative;
+}
+
+/* El hueco se reserva siempre en el riel expandido, aunque el `⋯` esté invisible: así el
+   nombre no se recorta de golpe al pasar el puntero. Colapsado no hay `⋯` ni hueco. */
+.panel.is-rail-expanded .rail__group--projects .rail__item {
+  padding-right: 24px;
+}
+
+.rail__tool {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-tertiary);
+  opacity: 0;
+  cursor: default;
+}
+
+/* En reposo la fila es solo el disco y el nombre, igual que una fila de tarea (spec 3.5).
+   Con el menú abierto se queda: si se fuera al mover el puntero hacia el menú, el botón que
+   lo abrió desaparecería justo mientras se usa. */
+.rail__slot:hover .rail__tool,
+.rail__tool:focus-visible,
+.rail__tool.is-open {
+  opacity: 1;
+}
+
+.rail__tool:hover,
+.rail__tool.is-open {
+  background: var(--layer-selected);
+  color: var(--ink-secondary);
+}
+
+/* ── Reordenar ───────────────────────────────────────────────────────────────────────── */
+
+/* Mientras se arrastra, los demás discos se corren para abrir el hueco. Solo entonces: fuera
+   del arrastre, la transición se comería el salto de un proyecto recién creado. */
+.rail__group--projects.is-sorting .rail__slot {
+  transition: transform 140ms ease-out;
+}
+
+/* El que va en vuelo sigue al puntero sin suavizado —si no, va siempre por detrás del dedo—
+   y se levanta del riel con la misma sombra que una fila de tarea. */
+.rail__slot.is-flying {
+  position: relative;
+  z-index: 2;
+  transition: none;
+}
+
+.rail__slot.is-flying .rail__item {
+  background: var(--layer-selected);
+  box-shadow: var(--shadow-lift);
+}
+
 /* El disco del proyecto: más grande que el punto de 6px de una fila, porque aquí es lo único
    que hay para reconocerlo. */
 .rail__dot {
@@ -165,7 +232,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rail,
-  .foot__rail {
+  .foot__rail,
+  .rail__group--projects.is-sorting .rail__slot {
     transition: none;
   }
 }

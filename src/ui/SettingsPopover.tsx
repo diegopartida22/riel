@@ -8,12 +8,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
+import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
   anchor: DOMRect;
   retention: Retention;
   onRetention: (retention: Retention) => void;
+  startView: SystemKind;
+  onStartView: (kind: SystemKind) => void;
   onClose: () => void;
 }
 
@@ -25,7 +28,14 @@ const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notif
 /**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
  */
-export function SettingsPopover({ anchor, retention, onRetention, onClose }: SettingsPopoverProps) {
+export function SettingsPopover({
+  anchor,
+  retention,
+  onRetention,
+  startView,
+  onStartView,
+  onClose,
+}: SettingsPopoverProps) {
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const [version, setVersion] = useState<string | null>(null);
@@ -133,6 +143,28 @@ export function SettingsPopover({ anchor, retention, onRetention, onClose }: Set
 
       <div className="menu__rule" role="separator" />
 
+      {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
+          quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que
+          decidir a dónde caer cuando se borre, y eso sería un ajuste que cambia solo. */}
+      <p className="settings__label">Vista al abrir</p>
+      {SYSTEM_VIEWS.map(({ kind, label }) => (
+        <button
+          key={kind}
+          type="button"
+          className="menu__item"
+          role="menuitemradio"
+          aria-checked={kind === startView}
+          onClick={() => onStartView(kind)}
+        >
+          <span className="menu__check">
+            {kind === startView && <Check size={13} strokeWidth={2.25} aria-hidden />}
+          </span>
+          {label}
+        </button>
+      ))}
+
+      <div className="menu__rule" role="separator" />
+
       <p className="settings__label">Conservar completadas</p>
       {RETENTIONS.map((option) => (
         <button
@@ -185,6 +217,19 @@ export function SettingsPopover({ anchor, retention, onRetention, onClose }: Set
       >
         <span className="menu__check" />
         Mostrar los datos en Finder
+      </button>
+
+      <div className="menu__rule" role="separator" />
+
+      {/* Sin Dock y sin ⌘Tab (spec 4), Riel no tiene menú de aplicación ni ⌘Q: sin este
+          botón, pararla obligaba a ir al Monitor de Actividad. */}
+      <button
+        type="button"
+        className="menu__item"
+        onClick={() => void invoke("quit").catch((cause) => console.error(cause))}
+      >
+        <span className="menu__check" />
+        Salir de Riel
       </button>
 
       <div className="menu__rule" role="separator" />

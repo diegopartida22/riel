@@ -16,6 +16,7 @@ import {
   listProjects,
   localDay,
   localIso,
+  moveProject,
   moveTask,
   pendingCountByProject,
   renameProject,
@@ -43,7 +44,17 @@ import {
   takeCompleted,
 } from "./notifications";
 import { rank } from "./search";
-import { belongs, draftFor, exiles, loadView, sameView, viewKey, type View } from "./views";
+import {
+  SYSTEM_VIEWS,
+  belongs,
+  draftFor,
+  exiles,
+  loadView,
+  sameView,
+  viewKey,
+  type SystemKind,
+  type View,
+} from "./views";
 
 /**
  * Mientras esto esté en alto, perder el foco no cierra el panel (spec 4). Lo necesita el
@@ -57,6 +68,20 @@ const COLLAPSE_MS = 200;
 
 /** El estado de expansión del riel persiste (spec 3.4). No es un dato: no va a SQLite. */
 const RAIL_KEY = "riel:rail-expandido";
+
+/** Con qué vista se abre el panel. Tampoco es un dato: es una preferencia de esta máquina. */
+const START_KEY = "riel:vista-al-abrir";
+
+/**
+ * La vista con la que arranca el panel, o Hoy si no hay nada elegido.
+ *
+ * Solo las cuatro del sistema. Un proyecto fijado tendría que decidir qué hacer cuando ese
+ * proyecto se borra, y la respuesta —caer a otra vista— sería un ajuste que cambia solo.
+ */
+function startView(): SystemKind {
+  const saved = localStorage.getItem(START_KEY);
+  return SYSTEM_VIEWS.some((each) => each.kind === saved) ? (saved as SystemKind) : "hoy";
+}
 
 /** Lo que se espera tras la última tecla antes de consultar. Una pulsación lee la base entera. */
 const TYPING_MS = 120;
@@ -136,6 +161,12 @@ export interface RielState {
   /** Crea si `project` es nulo, actualiza si no. Falso si la escritura falló. */
   saveProject: (project: Project | null, name: string, color: string) => Promise<boolean>;
   removeProject: (id: string) => Promise<void>;
+  /** Mueve un proyecto en el riel, entre los dos que se le indiquen. */
+  reorderProject: (id: string, between: Between) => Promise<void>;
+
+  /** La vista con la que se abre el panel, y con la que vuelve a abrirse cada vez. */
+  startView: SystemKind;
+  setStartView: (kind: SystemKind) => void;
 
   railExpanded: boolean;
   toggleRail: () => void;
@@ -191,7 +222,8 @@ function sortBetween<T extends { id: string }>(list: T[], id: string, after: str
  */
 export function useRiel(): RielState {
   const [today] = useState(localDay);
-  const [view, setView] = useState<View>({ kind: "hoy" });
+  const [view, setView] = useState<View>(() => ({ kind: startView() }));
+  const [start, setStart] = useState<SystemKind>(startView);
   const [projects, setProjects] = useState<Project[]>([]);
   const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
   const [tasks, setTasks] = useState<TaskTree[]>([]);
@@ -765,6 +797,26 @@ export function useRiel(): RielState {
   );
 
   /**
+   * Mueve un proyecto en el riel. Es la misma escritura que la de una tarea —`position` es una
+   * escala de floats y solo se miran los dos vecinos— sobre la otra tabla.
+   *
+   * El orden local se cambia antes de esperar a la base, por lo mismo que en las tareas: el
+   * disco ya está donde lo soltaron, y verlo volver a su sitio para regresar un instante
+   * después se lee como un fallo.
+   */
+  const reorderProject = useCallback(async (id: string, between: Between) => {
+    setError(null);
+    setProjects((current) => sortBetween(current, id, between.after) ?? current);
+
+    try {
+      await moveProject(id, between);
+    } catch (cause) {
+      console.error(cause);
+      setError("No se pudo guardar el orden de los proyectos. Vuelve a intentarlo.");
+    }
+  }, []);
+
+  /**
    * ⌘Z. Repone el último borrado con sus ids y sus posiciones originales, así que lo repuesto
    * vuelve al sitio del que salió y no al final de la lista.
    *
@@ -807,6 +859,12 @@ export function useRiel(): RielState {
     }
   }, []);
 
+  /** Con qué vista se abre el panel a partir de ahora. Se aplica en la siguiente apertura. */
+  const setStartView = useCallback((kind: SystemKind) => {
+    localStorage.setItem(START_KEY, kind);
+    setStart(kind);
+  }, []);
+
   const toggleRail = useCallback(() => {
     setRailExpanded((current) => {
       localStorage.setItem(RAIL_KEY, current ? "0" : "1");
@@ -847,6 +905,9 @@ export function useRiel(): RielState {
     term,
     saveProject,
     removeProject,
+    reorderProject,
+    startView: start,
+    setStartView,
     railExpanded,
     toggleRail,
     retention,

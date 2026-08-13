@@ -138,6 +138,9 @@
 
 .picker__disc,
 .picker__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
@@ -148,15 +151,20 @@
 
 .picker__disc {
   background: var(--project);
+  color: var(--on-project);
 }
 
 /* El seleccionado se marca con un anillo separado, no con un borde encima: un borde sobre el
-   propio disco le come el color, que es justo lo que se está eligiendo. */
+   propio disco le come el color, que es justo lo que se está eligiendo.
+
+   Al anillo se le subió el contraste —tinta primaria y medio píxel más— porque en el original
+   se perdía contra los discos oscuros y contra el vidrio en modo oscuro. Con la palomita
+   dentro, además, el anillo ya no carga solo con decir cuál es. */
 .picker__disc.is-selected,
 .picker__more.is-selected {
   box-shadow:
     0 0 0 2px var(--field-bg),
-    0 0 0 3.5px var(--ink-secondary);
+    0 0 0 4px var(--ink-primary);
 }
 
 .picker__more {
