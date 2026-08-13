@@ -51,6 +51,15 @@ fn set_reminders(items: Vec<notify::Reminder>) {
     notify::set_reminders(items);
 }
 
+/// Lo que se completó desde el botón de un banner y todavía no se ha aplicado a la base.
+///
+/// El botón también emite un evento, que es el camino normal. Esto cubre el otro: si el aviso
+/// llega con la app recién arrancada, la pulsación puede ser anterior a que nadie escuche.
+#[tauri::command]
+fn take_completed() -> Vec<String> {
+    notify::take_completed()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -74,7 +83,8 @@ pub fn run() {
             write_export,
             notification_permission,
             request_notification_permission,
-            set_reminders
+            set_reminders,
+            take_completed
         ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,
@@ -89,6 +99,11 @@ pub fn run() {
             let material = panel::apply_glass(&window)?;
             app.manage(material);
             tray::build(app.handle())?;
+
+            // Antes de que pueda llegar ningún aviso: un banner de una categoría que el
+            // sistema todavía no conoce se dibuja sin su botón.
+            #[cfg(target_os = "macos")]
+            notify::install(app.handle());
 
             // En desarrollo el panel se muestra solo al arrancar: si hubiera que abrirlo
             // a mano desde la barra en cada recarga, iterar sobre la UI sería un castigo.

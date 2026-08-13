@@ -76,16 +76,6 @@
   color: var(--ink-secondary);
 }
 
-/* La fecha larga en mono, como todo dato de la sección 3.3. */
-.detail__due {
-  font-family: var(--font-data);
-  font-size: var(--text-meta);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-primary);
-}
-
 .detail__title::placeholder,
 .detail__notes::placeholder {
   color: var(--ink-tertiary);
@@ -120,11 +110,6 @@
   color: var(--ink-tertiary);
 }
 
-.detail__none {
-  font-size: var(--text-meta);
-  color: var(--ink-tertiary);
-}
-
 .detail__subtasks {
   display: flex;
   flex-direction: column;
@@ -145,10 +130,80 @@
 }
 
 .detail__subtasks .task-row__title {
+  flex: 1 1 auto;
   font-size: var(--text-subtitle);
   /* Aquí sí se envuelve: el detalle es donde el texto se lee completo. */
   white-space: normal;
   overflow: visible;
+}
+
+/* En reposo no está, como las herramientas de la fila (spec 3.5). Se queda visible mientras
+   tenga el foco, o navegando con el Tab se estaría pulsando un botón que no se ve. */
+.detail__drop {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-tertiary);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  cursor: default;
+}
+
+.detail__subtasks li:hover .detail__drop,
+.detail__drop:focus-visible {
+  opacity: 1;
+}
+
+.detail__drop:hover {
+  color: var(--danger);
+  background: var(--layer-selected);
+}
+
+/* La subtarea a medio escribir. El anillo punteado ocupa el hueco de la casilla para que el
+   título arranque en la misma columna que las de arriba. */
+.detail__new {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.detail__new .title-editor {
+  font-size: var(--text-subtitle);
+}
+
+.detail__add {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.detail__add:hover {
+  color: var(--ink-primary);
+  background: var(--layer-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail__drop {
+    transition: none;
+  }
 }
 
 /* ── Chips de proyecto y prioridad ───────────────────────────────────────────────────── */
@@ -201,4 +256,237 @@
    que contrasta, la misma que usa la palomita. */
 .chip.is-selected .chip__dot {
   background: var(--on-project);
+}
+
+/* ── Selector de fecha ───────────────────────────────────────────────────────────────── */
+
+.due-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* La fecha larga en mono, como todo dato de la sección 3.3. En reposo es solo texto —igual que
+   la fila de tarea— y el fondo aparece al hover, que es lo que dice que se puede tocar. */
+.due-editor__trigger {
+  margin-left: -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.due-editor__trigger.is-empty {
+  font-family: var(--font-ui);
+  letter-spacing: normal;
+  color: var(--ink-tertiary);
+}
+
+.due-editor__trigger:hover {
+  background: var(--layer-hover);
+}
+
+/* En el flujo y no flotando: el detalle ya desplaza, y un popover anclado dentro de un panel de
+   440px acabaría siempre pegado a un borde. Lo que hay debajo se corre, que es más honesto que
+   taparlo. */
+.due-editor__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--layer-hover);
+}
+
+.due-editor__month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.due-editor__title {
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.due-editor__step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.due-editor__step:hover {
+  color: var(--ink-secondary);
+  background: var(--layer-selected);
+}
+
+/* Siete columnas iguales para el encabezado y para los días: es lo que mantiene la rejilla
+   cuadrada aunque un mes empiece en domingo y otro en lunes. */
+.due-editor__week,
+.due-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.due-editor__week {
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+  text-align: center;
+}
+
+.due-editor__day {
+  padding: 3px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.due-editor__day:hover {
+  background: var(--layer-selected);
+}
+
+/* Los días del mes vecino se pintan igual pero apagados: sin ellos la rejilla tendría huecos, y
+   con el mismo peso que los propios haría falta contar para saber dónde empieza el mes. */
+.due-editor__day.is-outside {
+  color: var(--ink-tertiary);
+}
+
+.due-editor__day.is-today {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+/* El elegido, del color del proyecto en contexto — el mismo acento que la casilla (spec 3.1). */
+.due-editor__day.is-selected {
+  background: var(--project);
+  color: var(--on-project);
+  font-weight: 600;
+}
+
+.due-editor__day.is-selected:hover {
+  opacity: 0.88;
+}
+
+.due-editor__row,
+.due-editor__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.due-editor__label {
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* El único campo con caja del detalle. La lleva porque es el único sitio donde hay que escribir
+   dentro de algo que ya es una superficie, y sin borde no se distinguiría del texto de al lado. */
+.due-editor__time {
+  width: 52px;
+  padding: 2px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--field-bg);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+}
+
+.due-editor__time::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.due-editor__time:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.due-editor__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.due-editor__clear:hover {
+  color: var(--ink-secondary);
+  background: var(--layer-selected);
+}
+
+.due-editor__quick {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.due-editor__quick:hover:not(:disabled) {
+  color: var(--ink-primary);
+  background: var(--layer-selected);
+}
+
+.due-editor__quick:disabled {
+  color: var(--ink-tertiary);
+}
+
+/* Quitar la fecha no es del mismo grupo que «hoy» y «mañana»: separarlo al otro extremo evita
+   el clic equivocado en una fila de tres botones seguidos. */
+.due-editor__quick--end {
+  margin-left: auto;
 }

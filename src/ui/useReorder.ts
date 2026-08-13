@@ -18,7 +18,9 @@ const THRESHOLD = 3;
 
 interface Flight {
   id: string;
-  /** Índice de la fila en vuelo dentro de la lista completa. */
+  /** Las hermanas entre las que se mueve, en orden. Fuera de este grupo nadie se entera. */
+  group: string[];
+  /** Índice de la fila en vuelo dentro de su grupo. */
   from: number;
   /**
    * Dónde va a caer, contado sobre la lista **sin** ella. Es el índice que quiere `splice`, y
@@ -42,8 +44,15 @@ interface Flight {
  * Las medidas se toman una sola vez, al agarrar. Durante el arrastre las filas van desplazadas
  * con `transform`, que no cambia el flujo, así que los rectángulos medidos al principio siguen
  * describiendo el hueco de cada una y no hay que volver a medir en cada movimiento.
+ *
+ * Los grupos son las listas de hermanas: las raíces por un lado y las subtareas de cada una por
+ * el suyo. Una subtarea se ordena entre las suyas y nada más — dejarla salir de su grupo sería
+ * cambiarla de madre, que es otro gesto y no está en la v1.
  */
-export function useReorder(ids: string[], onDrop: (id: string, between: Between) => void): Reorder {
+export function useReorder(
+  groups: string[][],
+  onDrop: (id: string, between: Between) => void,
+): Reorder {
   const nodes = useRef(new Map<string, HTMLElement>());
   const [flight, setFlight] = useState<Flight | null>(null);
 
@@ -57,10 +66,13 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
 
   const grab = useCallback(
     (event: React.PointerEvent<HTMLElement>, id: string) => {
-      const from = ids.indexOf(id);
-      if (event.button !== 0 || from < 0 || ids.length < 2) return;
+      const group = groups.find((each) => each.includes(id));
+      if (!group) return;
 
-      const rects = ids.map((other) => nodes.current.get(other)?.getBoundingClientRect() ?? null);
+      const from = group.indexOf(id);
+      if (event.button !== 0 || group.length < 2) return;
+
+      const rects = group.map((other) => nodes.current.get(other)?.getBoundingClientRect() ?? null);
       const own = rects[from];
       if (!own) return;
 
@@ -89,7 +101,7 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
       const track = (move: PointerEvent) => {
         const dy = move.clientY - startY;
         if (!current && Math.abs(dy) < THRESHOLD) return;
-        current = { id, from, to: landing(dy), dy, height: own.height };
+        current = { id, group, from, to: landing(dy), dy, height: own.height };
         setFlight(current);
       };
 
@@ -101,7 +113,7 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
         setFlight(null);
 
         if (!drop || !current || current.to === from) return;
-        const next = ids.filter((other) => other !== id);
+        const next = group.filter((other) => other !== id);
         const at = current.to;
         onDrop(id, { after: next[at - 1] ?? null, before: next[at] ?? null });
       };
@@ -113,7 +125,7 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
       handle.addEventListener("pointerup", onUp);
       handle.addEventListener("pointercancel", onCancel);
     },
-    [ids, onDrop],
+    [groups, onDrop],
   );
 
   const offsetOf = useCallback(
@@ -121,7 +133,11 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
       if (!flight) return 0;
       if (id === flight.id) return flight.dy;
 
-      const index = ids.indexOf(id);
+      // Las de otro grupo no se mueven: arrastrar una subtarea no corre las tareas raíz, ni al
+      // revés — una raíz en vuelo se lleva sus propias subtareas dentro, sin desplazarlas.
+      const index = flight.group.indexOf(id);
+      if (index < 0) return 0;
+
       const { from, to, height } = flight;
       // El mismo índice «sin la fila en vuelo» que usa `landing`, para comparar peras con
       // peras: las de antes conservan el suyo, las de después bajan uno.
@@ -133,7 +149,7 @@ export function useReorder(ids: string[], onDrop: (id: string, between: Between)
       if (index > from && own < to) return -height;
       return 0;
     },
-    [flight, ids],
+    [flight],
   );
 
   return { dragging: flight?.id ?? null, offsetOf, grab, register };

@@ -148,9 +148,17 @@
 }
 
 .task-row__main:hover .task-row__tools,
+.subtask:hover .task-row__tools,
 .task-row__tools:focus-within,
-.task-row.is-flying .task-row__tools {
+.task-row.is-flying .task-row__tools,
+.subtask-row.is-flying .task-row__tools {
   opacity: 1;
+}
+
+/* Una sola herramienta: la manija de la subtarea. Reserva su ancho igual que las dos de la
+   raíz, y como las dos se alinean a la derecha, las manijas quedan en la misma columna. */
+.task-row__tools--one {
+  width: 16px;
 }
 
 /* Los glifos `⋯` y `⠿` se veían torcidos porque su caja tipográfica no está centrada sobre su
@@ -239,26 +247,37 @@
 /* ── Reordenar ───────────────────────────────────────────────────────────────────────── */
 
 /* Las que ceden el sitio se corren con una transición; la que va en vuelo sigue al puntero
-   sin ninguna, o iría siempre un poco por detrás de la mano. */
-.task-list.is-sorting .task-row {
+   sin ninguna, o iría siempre un poco por detrás de la mano.
+
+   Las subtareas se ordenan entre ellas, con su propio grupo y su propia clase: arrastrar una
+   hija no puede correr las raíces ni salirse de su madre. */
+.task-list.is-sorting .task-row,
+.subtasks.is-sorting .subtask-row {
   transition: transform 140ms ease-out;
 }
 
-.task-row.is-flying {
+.task-row.is-flying,
+.subtask-row.is-flying {
   position: relative;
   z-index: 2;
   transition: none;
 }
 
-.task-row.is-flying .task-row__main {
+.task-row.is-flying .task-row__main,
+.subtask-row.is-flying .subtask {
   background: var(--layer-selected);
   box-shadow: var(--shadow-lift);
 }
 
 /* Mientras se arrastra, el texto no se selecciona ni cambia el cursor por toda la lista. */
-.task-list.is-sorting {
+.task-list.is-sorting,
+.subtasks.is-sorting {
   cursor: grabbing;
   user-select: none;
+}
+
+.subtask-row.is-flying .task-row__grip {
+  cursor: grabbing;
 }
 
 /* ── Subtareas ───────────────────────────────────────────────────────────────────────── */
@@ -421,7 +440,8 @@
   /* El arrastre en sí es manipulación directa —la fila va donde va la mano— y eso se queda.
      Lo que se apaga es lo único que aquí era animación: el deslizamiento con el que las demás
      filas le hacen sitio, que pasa a ser un salto (criterio 7). */
-  .task-list.is-sorting .task-row {
+  .task-list.is-sorting .task-row,
+  .subtasks.is-sorting .subtask-row {
     transition: none;
   }
 

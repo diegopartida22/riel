@@ -116,6 +116,11 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 pub fn hide<R: Runtime>(window: &WebviewWindow<R>) {
+    // Cerrar el panel baja la bandera. Aquí solo se llega por un cierre explícito —Escape, el
+    // icono de la barra— porque `on_focus_lost` ya se rinde antes si está en alto; y si la
+    // bandera sobreviviera al cierre, la siguiente apertura no volvería a ocultarse al perder
+    // el foco. Un panel clavado en pantalla es peor que uno que se cierra de más.
+    set_keep_open(false);
     let _ = window.hide();
 }
 

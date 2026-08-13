@@ -141,6 +141,19 @@ export function Composer({ firstRun = false, projects, today, ref, onAdd }: Comp
       }
     }
 
+    // El Escape del campo escrito lo vacía, y solo el siguiente cierra el panel. Es la misma
+    // escalera que la búsqueda (spec 4), y hace falta por lo mismo: sin ella, arrepentirse de
+    // media tarea escrita costaba cerrar el panel entero, y volver a abrirlo devolvía el texto
+    // igual que estaba porque el webview sigue vivo — o sea que Escape no cancelaba nada.
+    if (event.key === "Escape" && text) {
+      event.preventDefault();
+      event.stopPropagation();
+      setText("");
+      setCaret(0);
+      setDismissed(new Set());
+      return;
+    }
+
     if (event.key === "Enter") {
       event.preventDefault();
       void submit();

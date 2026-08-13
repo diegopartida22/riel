@@ -199,6 +199,10 @@ export default function App() {
               onPatch={(values) => riel.detail && void riel.patch(riel.detail.id, values)}
               onToggle={riel.toggle}
               onDelete={() => riel.detail && void riel.remove(riel.detail.id)}
+              onAddSubtask={(title) =>
+                riel.detail ? riel.addSubtask(riel.detail.id, title) : Promise.resolve(false)
+              }
+              onRemoveSubtask={(id) => void riel.remove(id)}
               onClose={riel.closeDetail}
             />
           ) : riel.searching ? (
@@ -224,6 +228,7 @@ export default function App() {
               loading={riel.loading}
               error={riel.error}
               leaving={riel.leaving}
+              undoing={riel.undoing}
               toggle={riel.toggle}
               patch={riel.patch}
               remove={riel.remove}

@@ -19,6 +19,8 @@ export interface TaskListProps {
   loading: boolean;
   error: string | null;
   leaving: ReadonlySet<string>;
+  /** Las completadas que todavía están en su ventana de deshacer. */
+  undoing: ReadonlySet<string>;
   toggle: (task: Task, checked: boolean) => void;
   patch: (id: string, patch: TaskPatch) => void;
   remove: (id: string) => void;
@@ -51,6 +53,7 @@ export function TaskList({
   loading,
   error,
   leaving,
+  undoing,
   toggle,
   patch,
   remove,
@@ -70,21 +73,53 @@ export function TaskList({
   /** A qué fila devolver el foco en cuanto vuelva a estar pintada. */
   const [restore, setRestore] = useState<string | null>(null);
 
-  const drag = useReorder(
-    tasks.map((task) => task.id),
-    reorder,
+  /**
+   * Lo que de verdad se pinta. La lista es de trabajo pendiente, así que una subtarea que ya
+   * estaba completada al leer la vista no ocupa renglón: tuvo su tachado y su colapso el día
+   * que se marcó (spec 3.6), y volver a enseñarla en cada lectura sería no haberla dejado ir
+   * nunca. Sigue existiendo —el detalle la lista tachada y el barrido no la toca—, que es la
+   * diferencia entre terminada y borrada.
+   *
+   * Las que están en su ventana de deshacer se quedan: ahí el tachado se está dibujando y la
+   * casilla todavía revierte. Y bajo una raíz completada no se filtra nada, porque en
+   * Completadas lo terminado es justo lo que se viene a ver.
+   */
+  const visible = useMemo(
+    () =>
+      tasks.map((task) =>
+        task.completedAt
+          ? task
+          : {
+              ...task,
+              subtasks: task.subtasks.filter(
+                (subtask) => !subtask.completedAt || undoing.has(subtask.id),
+              ),
+            },
+      ),
+    [tasks, undoing],
   );
+
+  // Las raíces en un grupo y las subtareas de cada una en el suyo: se ordena entre hermanas.
+  const groups = useMemo(
+    () => [
+      visible.map((task) => task.id),
+      ...visible.map((task) => task.subtasks.map((subtask) => subtask.id)),
+    ],
+    [visible],
+  );
+
+  const drag = useReorder(groups, reorder);
 
   // El orden en que se ven las filas, subtareas incluidas: es el recorrido de ↑↓ y quien
   // decide cuál entra en el Tab.
   const order = useMemo(
-    () => tasks.flatMap((task) => [task.id, ...task.subtasks.map((subtask) => subtask.id)]),
-    [tasks],
+    () => visible.flatMap((task) => [task.id, ...task.subtasks.map((subtask) => subtask.id)]),
+    [visible],
   );
 
   const find = (id: string): Task | undefined =>
-    tasks.find((task) => task.id === id) ??
-    tasks.flatMap((task) => task.subtasks).find((subtask) => subtask.id === id);
+    visible.find((task) => task.id === id) ??
+    visible.flatMap((task) => task.subtasks).find((subtask) => subtask.id === id);
 
   const keys = useRowKeys({
     order,
@@ -103,7 +138,7 @@ export function TaskList({
     if (!restore) return;
     focus(restore);
     setRestore(null);
-  }, [restore, focus, tasks]);
+  }, [restore, focus, visible]);
 
   const saveTitle = (id: string, text: string, andAnother: boolean) => {
     const task = find(id);
@@ -136,13 +171,13 @@ export function TaskList({
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
   if (loading) return <div className="view" />;
 
-  const open = menu && tasks.find((task) => task.id === menu.id);
+  const open = menu && visible.find((task) => task.id === menu.id);
 
   return (
     <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
       {error && <p className="notice notice--error">{error}</p>}
 
-      {tasks.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState
           message={emptyMessage(view)}
           action={view.kind === "hoy" ? "Agregar tarea" : undefined}
@@ -152,7 +187,7 @@ export function TaskList({
         <>
           <GroupHeader>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
-            {tasks.map((task) => (
+            {visible.map((task) => (
               <Fragment key={task.id}>
                 <TaskRow
                   ref={drag.register(task.id)}
@@ -165,6 +200,7 @@ export function TaskList({
                   offset={drag.offsetOf(task.id)}
                   flying={drag.dragging === task.id}
                   onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
+                  sortSubtasks={sortable ? drag : undefined}
                   onToggle={toggle}
                   onOpen={() => onOpen(task.id)}
                   onMenu={(anchor) =>

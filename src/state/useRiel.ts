@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -35,9 +36,14 @@ import {
   type TaskPatch,
   type TaskTree,
 } from "../data";
-import { ensurePermission, start as startNotifications } from "./notifications";
+import {
+  DONE_EVENT,
+  ensurePermission,
+  start as startNotifications,
+  takeCompleted,
+} from "./notifications";
 import { rank } from "./search";
-import { belongs, draftFor, loadView, sameView, viewKey, type View } from "./views";
+import { belongs, draftFor, exiles, loadView, sameView, viewKey, type View } from "./views";
 
 /**
  * Mientras esto esté en alto, perder el foco no cierra el panel (spec 4). Lo necesita el
@@ -87,11 +93,21 @@ export interface RielState {
   error: string | null;
   /** Ids en sus 200ms de colapso. Siguen en el DOM: si no, no habría nada que animar. */
   leaving: ReadonlySet<string>;
+  /**
+   * Ids completados que todavía están en su ventana de deshacer, colapso incluido.
+   *
+   * Es lo que separa una subtarea que se acaba de marcar —y que sigue en la lista, tachada y
+   * a un clic de volver— de una que ya estaba completada al abrir la vista, que no tiene por
+   * qué ocupar un renglón de trabajo pendiente.
+   */
+  undoing: ReadonlySet<string>;
 
   /** Lo que el parser de captura sacó del texto pisa lo que la vista pondría por omisión. */
   add: (draft: NewTask) => Promise<boolean>;
   /** Crea una tarea justo debajo de otra y devuelve su id. Es lo que hace ⌘⏎ (spec 5). */
   addAfter: (title: string, afterId: string) => Promise<string | null>;
+  /** Cuelga una subtarea de una tarea. Solo desde el detalle: es donde se ven las hermanas. */
+  addSubtask: (parentId: string, title: string) => Promise<boolean>;
   toggle: (task: Task, checked: boolean) => Promise<void>;
   /** Edita campos sueltos de una tarea, desde el detalle o desde el menú de la fila. */
   patch: (id: string, patch: TaskPatch) => Promise<void>;
@@ -130,6 +146,42 @@ export interface RielState {
 }
 
 /**
+ * Saca un id de un conjunto de estado. Devuelve el mismo si no estaba: sin eso, apagar dos
+ * veces lo que ya estaba apagado repintaría la lista entera por nada.
+ */
+const without =
+  (id: string) =>
+  (current: ReadonlySet<string>): ReadonlySet<string> => {
+    if (!current.has(id)) return current;
+    const next = new Set(current);
+    next.delete(id);
+    return next;
+  };
+
+/**
+ * Recoloca un elemento justo detrás de `after`, o a la cabeza si no hay nadie detrás de quien
+ * ponerse. Devuelve nulo si el elemento o su vecino no están en la lista, que es la señal de
+ * que este no era el grupo de hermanas que había que tocar.
+ */
+function sortBetween<T extends { id: string }>(list: T[], id: string, after: string | null): T[] | null {
+  const moved = list.find((each) => each.id === id);
+  if (!moved) return null;
+
+  const rest = list.filter((each) => each.id !== id);
+  let at = 0;
+  if (after !== null) {
+    // `findIndex` devuelve -1 cuando no está, y sumarle uno da 0 — o sea, la cabeza de la
+    // lista, que es el sitio equivocado. Hay que mirarlo antes de sumar.
+    const previous = rest.findIndex((each) => each.id === after);
+    if (previous < 0) return null;
+    at = previous + 1;
+  }
+
+  rest.splice(at, 0, moved);
+  return rest;
+}
+
+/**
  * El estado del panel entero: qué vista se mira, qué proyectos hay y qué tareas se ven.
  *
  * La lista **no** se relee después de completar. Una tarea completada tiene que quedarse tres
@@ -144,6 +196,7 @@ export function useRiel(): RielState {
   const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
   const [tasks, setTasks] = useState<TaskTree[]>([]);
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  const [undoing, setUndoing] = useState<ReadonlySet<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [firstRun, setFirstRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +222,15 @@ export function useRiel(): RielState {
    * deshacer, solo el atajo, así que apilar no tiene por qué repintar el panel.
    */
   const undoable = useRef<Undoable[]>([]);
+
+  /**
+   * Tareas que ya no pertenecen a la vista y cuya fila espera a que se cierre su detalle.
+   *
+   * El detalle se deriva de la lista, así que sacar la fila lo cierra. Al cambiar el proyecto
+   * eso daba igual —es lo último que se toca— pero la fecha se pone en dos tiempos: se elige el
+   * día y después la hora. Desterrar en el primero cierra el detalle justo antes del segundo.
+   */
+  const strayed = useRef(new Set<string>());
 
   const remember = useCallback((entry: Undoable) => {
     undoable.current.push(entry);
@@ -254,6 +316,7 @@ export function useRiel(): RielState {
   useEffect(() => {
     let alive = true;
     clearTimers();
+    strayed.current.clear();
     setLeaving(new Set());
     setLoading(true);
 
@@ -319,18 +382,21 @@ export function useRiel(): RielState {
   }, []);
 
   const unmarkLeaving = useCallback((id: string) => {
-    setLeaving((current) => {
-      if (!current.has(id)) return current;
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
+    setLeaving(without(id));
+  }, []);
+
+  const unmarkUndoing = useCallback((id: string) => {
+    setUndoing(without(id));
   }, []);
 
   /** Saca la fila de la lista: una raíz se lleva a sus hijas, una hija sale sola. */
   const drop = useCallback(
     (id: string) => {
+      // Si estaba esperando a que se cerrara su detalle, ya no espera nada: se fue por otra vía
+      // —completada, borrada— y dejarla apuntada haría que la próxima ronda buscara un fantasma.
+      strayed.current.delete(id);
       unmarkLeaving(id);
+      unmarkUndoing(id);
       setTasks((current) =>
         current
           .filter((root) => root.id !== id)
@@ -341,7 +407,7 @@ export function useRiel(): RielState {
           ),
       );
     },
-    [unmarkLeaving],
+    [unmarkLeaving, unmarkUndoing],
   );
 
   const refreshCounts = useCallback(async () => {
@@ -352,6 +418,36 @@ export function useRiel(): RielState {
     }
   }, []);
 
+  /**
+   * El botón «Completar» del banner (spec 7), de vuelta en la base.
+   *
+   * No pasa por `toggle`: ahí hace falta la fila, y de un aviso solo llega un identificador de
+   * una tarea que puede no estar en la vista abierta — o en ninguna, si el panel lleva cerrado
+   * toda la mañana. Sin fila tampoco hay nada que animar ni ventana de deshacer que ofrecer,
+   * así que se completa de una y la vista se relee. Deshacerlo sigue estando: ⌘Z y la casilla
+   * de Completadas, que es lo mismo que hay para cualquier otra tarea vieja.
+   *
+   * Rust encola la pulsación *y* avisa; aquí solo se vacía la cola. Tener un único consumidor
+   * es lo que evita aplicar dos veces la misma pulsación, y la cola es la que cubre el caso en
+   * que el aviso sea justo lo que arrancó la app y todavía no hubiera nadie escuchando.
+   */
+  useEffect(() => {
+    const drain = () => {
+      void takeCompleted()
+        .then(async (ids) => {
+          if (!ids.length) return;
+          for (const id of ids) await completeTask(id);
+          setEpoch((current) => current + 1);
+          await refreshCounts();
+        })
+        .catch((cause) => console.error(cause));
+    };
+
+    drain();
+    const off = listen(DONE_EVENT, drain);
+    return () => void off.then((stop) => stop()).catch((cause) => console.error(cause));
+  }, [refreshCounts]);
+
   const toggle = useCallback(
     async (task: Task, checked: boolean) => {
       setError(null);
@@ -361,6 +457,7 @@ export function useRiel(): RielState {
           if (!ids.length) return;
 
           stamp(ids, at);
+          setUndoing((current) => new Set(current).add(task.id));
           pending.current.set(task.id, {
             ids,
             timers: [
@@ -370,7 +467,13 @@ export function useRiel(): RielState {
               ),
               window.setTimeout(() => {
                 pending.current.delete(task.id);
-                drop(task.id);
+                // Una subtarea no se va del árbol al terminar su salida: sale de la lista,
+                // que es donde estorba, pero sigue siendo un renglón de una tarea viva y el
+                // detalle la enseña tachada. Es la misma razón por la que el barrido del
+                // arranque no las borra. Una raíz sí se va: para eso está Completadas.
+                if (task.parentId !== null) unmarkLeaving(task.id);
+                else drop(task.id);
+                unmarkUndoing(task.id);
               }, UNDO_MS + COLLAPSE_MS),
             ],
           });
@@ -381,6 +484,7 @@ export function useRiel(): RielState {
           await uncompleteTasks(ids);
           stamp(ids, null);
           unmarkLeaving(task.id);
+          unmarkUndoing(task.id);
         }
         void refreshCounts();
       } catch (cause) {
@@ -388,7 +492,7 @@ export function useRiel(): RielState {
         setError("No se pudo guardar el cambio. Vuelve a intentarlo.");
       }
     },
-    [drop, forget, refreshCounts, stamp, unmarkLeaving],
+    [drop, forget, refreshCounts, stamp, unmarkLeaving, unmarkUndoing],
   );
 
   const add = useCallback(
@@ -468,11 +572,45 @@ export function useRiel(): RielState {
   );
 
   /**
+   * Una subtarea nueva, al final de las de su madre.
+   *
+   * No hereda nada de la vista, al revés que una tarea raíz. Una subtarea no dibuja fecha ni
+   * punto de proyecto (spec 3.5), así que darle los suyos sería guardar dos datos que nadie
+   * lee y que se quedarían desfasados en cuanto la madre cambiara de proyecto. Su proyecto es
+   * el de su madre porque cuelga de ella, y no hay que escribirlo dos veces para saberlo.
+   *
+   * El nivel único lo defiende un disparador de la base (spec 2). Aquí ni siquiera hay forma
+   * de intentarlo: solo las raíces tienen detalle, y este es el único sitio donde se crean.
+   */
+  const addSubtask = useCallback(async (parentId: string, title: string) => {
+    const clean = title.trim();
+    if (!clean) return false;
+
+    setError(null);
+    try {
+      const created = await createTask({ parentId, title: clean });
+      setTasks((current) =>
+        current.map((root) =>
+          root.id === parentId ? { ...root, subtasks: [...root.subtasks, created] } : root,
+        ),
+      );
+      setFirstRun(false);
+      return true;
+    } catch (cause) {
+      console.error(cause);
+      setError("No se pudo crear la subtarea. Vuelve a intentarlo.");
+      return false;
+    }
+  }, []);
+
+  /**
    * Edita campos sueltos. El cambio se aplica también en local en vez de releer la vista: una
    * relectura cancelaría los tres segundos de gracia de cualquier fila que se esté yendo.
    *
-   * El único caso que sí saca la fila de la lista es cambiarle el proyecto estando dentro de
-   * uno: la tarea deja de pertenecer a lo que se está mirando.
+   * Lo que sí saca la fila de la lista es un cambio que la eche de la vista: el proyecto
+   * estando dentro de uno, o la fecha estando en Hoy o en Próximas. Con su detalle abierto el
+   * destierro se aplaza a cerrarlo — si no, elegir el día cerraría el detalle antes de poder
+   * ponerle la hora.
    */
   const patch = useCallback(
     async (id: string, values: TaskPatch) => {
@@ -481,17 +619,16 @@ export function useRiel(): RielState {
         await updateTask(id, values);
         if (values.hasTime) void ensurePermission(keepOpen);
 
-        // Buscando no hay destierro: lo que se ve no es el proyecto, es la consulta, y cambiarle
-        // el proyecto a una tarea no la saca de lo que casó.
-        const exiled =
-          !term &&
-          view.kind === "proyecto" &&
-          values.projectId !== undefined &&
-          values.projectId !== view.id;
+        // Buscando no hay destierro: lo que se ve no es una vista, es la consulta, y cambiarle
+        // la fecha o el proyecto a una tarea no la saca de lo que casó.
+        const exiled = !term && exiles(view, values, today);
+        const later = exiled && detailId === id;
+        if (later) strayed.current.add(id);
+        else strayed.current.delete(id);
 
         setTasks((current) =>
           current.flatMap((root) => {
-            if (root.id === id) return exiled ? [] : [{ ...root, ...values }];
+            if (root.id === id) return exiled && !later ? [] : [{ ...root, ...values }];
             if (!root.subtasks.some((subtask) => subtask.id === id)) return [root];
             return [
               {
@@ -504,14 +641,14 @@ export function useRiel(): RielState {
           }),
         );
 
-        if (exiled) setDetailId(null);
+        if (exiled && !later) setDetailId(null);
         if (values.projectId !== undefined) void refreshCounts();
       } catch (cause) {
         console.error(cause);
         setError("No se pudo guardar el cambio. Vuelve a intentarlo.");
       }
     },
-    [refreshCounts, term, view],
+    [detailId, refreshCounts, term, today, view],
   );
 
   const remove = useCallback(
@@ -535,28 +672,24 @@ export function useRiel(): RielState {
   );
 
   /**
-   * Mueve una tarea entre otras dos. El orden local se reordena antes de esperar a la base:
+   * Mueve una tarea entre sus hermanas. El orden local se reordena antes de esperar a la base:
    * el arrastre ya dejó la fila donde el usuario la soltó y verla volver a su sitio para
    * regresar un instante después es peor que no animar nada.
+   *
+   * Vale para una raíz y para una subtarea. En la base es la misma escritura —`position` es una
+   * sola escala y `moveTask` solo mira a los dos vecinos que se le pasan— y aquí lo único que
+   * cambia es en qué lista hay que hacer el hueco.
    */
   const reorder = useCallback(async (id: string, between: Between) => {
     setError(null);
     setTasks((current) => {
-      const moved = current.find((task) => task.id === id);
-      if (!moved) return current;
+      if (current.some((root) => root.id === id)) return sortBetween(current, id, between.after) ?? current;
 
-      const rest = current.filter((task) => task.id !== id);
-      let at = 0;
-      if (between.after !== null) {
-        // `findIndex` devuelve -1 cuando no está, y sumarle uno da 0 — o sea, la cabeza de la
-        // lista, que es el sitio equivocado. Hay que mirarlo antes de sumar.
-        const previous = rest.findIndex((task) => task.id === between.after);
-        if (previous < 0) return current;
-        at = previous + 1;
-      }
-
-      rest.splice(at, 0, moved);
-      return rest;
+      return current.map((root) => {
+        if (!root.subtasks.some((subtask) => subtask.id === id)) return root;
+        const subtasks = sortBetween(root.subtasks, id, between.after);
+        return subtasks ? { ...root, subtasks } : root;
+      });
     });
 
     try {
@@ -567,15 +700,23 @@ export function useRiel(): RielState {
     }
   }, []);
 
-  const closeDetail = useCallback(() => setDetailId(null), []);
+  // Aquí se cobra el destierro que `patch` dejó pendiente: la tarea a la que se le cambió la
+  // fecha o el proyecto sale de la lista al cerrar su detalle, no mientras se edita.
+  const closeDetail = useCallback(() => {
+    if (detailId !== null && strayed.current.delete(detailId)) drop(detailId);
+    setDetailId(null);
+  }, [detailId, drop]);
 
   // Elegir en el riel manda sobre la búsqueda: si la consulta siguiera puesta, el clic no
   // cambiaría nada de lo que se ve y el riel parecería roto.
-  const select = useCallback((next: View) => {
-    setDetailId(null);
-    setQuery("");
-    setView((current) => (sameView(current, next) ? current : next));
-  }, []);
+  const select = useCallback(
+    (next: View) => {
+      closeDetail();
+      setQuery("");
+      setView((current) => (sameView(current, next) ? current : next));
+    },
+    [closeDetail],
+  );
 
   const saveProject = useCallback(
     async (project: Project | null, name: string, color: string) => {
@@ -685,8 +826,10 @@ export function useRiel(): RielState {
     firstRun,
     error,
     leaving,
+    undoing,
     add,
     addAfter,
+    addSubtask,
     toggle,
     patch,
     remove,

@@ -1,5 +1,6 @@
 import {
   completedTasks,
+  dayOf,
   nextDay,
   pendingTasks,
   tasksDueAfter,
@@ -7,6 +8,7 @@ import {
   tasksInProject,
   type NewTask,
   type Task,
+  type TaskPatch,
 } from "../data";
 
 /** Las cuatro vistas del sistema más la de un proyecto (spec 1). */
@@ -98,6 +100,29 @@ export function belongs(view: View, task: Task, today: string): boolean {
     case "proyecto":
       return task.projectId === view.id;
   }
+}
+
+/**
+ * Si un cambio saca la tarea de la vista que se está mirando. Cambiarle el proyecto dentro de
+ * un proyecto la destierra, y desde que la fecha se edita en el detalle, empujar a la semana
+ * que viene algo que estaba en Hoy también: la lista tiene que decir la verdad, y una fila que
+ * anuncia «vie 21» bajo el encabezado HOY no la dice.
+ *
+ * No es `belongs` negado. `belongs` responde por una tarea entera y en Completadas siempre dice
+ * que no —una tarea recién escrita no nace terminada— así que ahí desterraría cualquier cambio.
+ * Esto mira solo lo que el cambio tocó, y en Todas y Completadas no hay nada que mirar: la
+ * primera las trae todas y la segunda ordena por la fecha en que se completaron.
+ */
+export function exiles(view: View, patch: TaskPatch, today: string): boolean {
+  if (view.kind === "proyecto") {
+    return patch.projectId !== undefined && patch.projectId !== view.id;
+  }
+  if (patch.dueAt === undefined) return false;
+
+  const day = patch.dueAt === null ? null : dayOf(patch.dueAt);
+  if (view.kind === "hoy") return day === null || day > today;
+  if (view.kind === "proximas") return day === null || day <= today;
+  return false;
 }
 
 export function titleOf(view: View, projectName?: string): string {

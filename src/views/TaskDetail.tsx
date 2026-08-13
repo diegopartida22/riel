@@ -1,10 +1,11 @@
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Priority, Project, Task, TaskPatch, TaskTree } from "../data";
 import { tint } from "../design/palette";
 import { Checkbox } from "../ui/Checkbox";
-import { formatDueLong } from "../ui/dueDate";
+import { DueEditor } from "../ui/DueEditor";
+import { TitleEditor } from "../ui/TitleEditor";
 
 export interface TaskDetailProps {
   task: TaskTree;
@@ -14,6 +15,10 @@ export interface TaskDetailProps {
   onPatch: (patch: TaskPatch) => void;
   onToggle: (task: Task, checked: boolean) => void;
   onDelete: () => void;
+  /** Crea una subtarea colgando de esta tarea. */
+  onAddSubtask: (title: string) => Promise<boolean>;
+  /** Borra una subtarea. Es reponible con ⌘Z, como cualquier otro borrado. */
+  onRemoveSubtask: (id: string) => void;
   onClose: () => void;
 }
 
@@ -33,9 +38,9 @@ const PRIORITIES: { value: Priority; label: string }[] = [
  * otro— así que tiene que haber un sitio donde el texto se lea entero. Aquí ni el título ni
  * la nota se cortan: crecen hasta donde haga falta y el panel desplaza.
  *
- * La fecha se muestra pero no se edita todavía. El camino para ponerla es el campo de captura
- * del paso 7 («mañana 10:00»), y un selector de fecha nativo traería el azul de sistema, que
- * es lo único que el criterio 9 prohíbe de plano.
+ * Y es donde se cambia todo lo que la captura pone de una pasada — proyecto, prioridad y
+ * fecha. Escribir «Renovar dominio mañana 10:00 #infra !!» sigue siendo el camino rápido; este
+ * es el que hace falta cuando la tarea ya existe y lo que cambió es el plazo.
  */
 export function TaskDetail({
   task,
@@ -45,17 +50,22 @@ export function TaskDetail({
   onPatch,
   onToggle,
   onDelete,
+  onAddSubtask,
+  onRemoveSubtask,
   onClose,
 }: TaskDetailProps) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? "");
   const [confirming, setConfirming] = useState(false);
+  /** Cierto mientras se escribe una subtarea nueva. */
+  const [adding, setAdding] = useState(false);
 
   // Al saltar de una tarea a otra sin desmontar, los campos tienen que traer lo nuevo.
   useEffect(() => {
     setTitle(task.title);
     setNotes(task.notes ?? "");
     setConfirming(false);
+    setAdding(false);
   }, [task.id, task.title, task.notes]);
 
   const commitTitle = () => {
@@ -135,17 +145,20 @@ export function TaskDetail({
       </Field>
 
       <Field label="Fecha">
-        {task.dueAt ? (
-          <time className="detail__due" dateTime={task.dueAt}>
-            {formatDueLong(task.dueAt, task.hasTime, today)}
-          </time>
-        ) : (
-          <span className="detail__none">Sin fecha</span>
-        )}
+        <DueEditor
+          dueAt={task.dueAt}
+          hasTime={task.hasTime}
+          today={today}
+          onChange={(dueAt, hasTime) => onPatch({ dueAt, hasTime })}
+        />
       </Field>
 
-      {task.subtasks.length > 0 && (
-        <Field label={`Subtareas · ${task.subtasks.filter((s) => !s.completedAt).length} pendientes`}>
+      {/* Este es el único sitio donde nace una subtarea. En la lista no cabe —una fila ya tiene
+          su casilla, su fecha y sus dos herramientas— y el campo de captura no las parsea: un
+          `#proyecto` puede estar o no, pero una hija sin madre no existe, y la madre es
+          justamente lo que la captura no sabe a cuál te refieres. Aquí no hay duda. */}
+      <Field label={subtasksLabel(task.subtasks)}>
+        {task.subtasks.length > 0 && (
           <ul className="detail__subtasks">
             {task.subtasks.map((subtask) => (
               <li key={subtask.id} className={subtask.completedAt ? "is-completed" : undefined}>
@@ -155,11 +168,42 @@ export function TaskDetail({
                   onChange={(checked) => onToggle(subtask, checked)}
                 />
                 <span className="task-row__title">{subtask.title}</span>
+                {/* Sin el paso de confirmación que sí lleva borrar la tarea entera: una
+                    subtarea es un renglón, se repone con ⌘Z y el botón no está en reposo —
+                    aparece al pasar por encima, como las herramientas de la fila. */}
+                <button
+                  type="button"
+                  className="detail__drop"
+                  aria-label={`Eliminar «${subtask.title}»`}
+                  onClick={() => onRemoveSubtask(subtask.id)}
+                >
+                  <X size={12} strokeWidth={2.25} aria-hidden />
+                </button>
               </li>
             ))}
           </ul>
-        </Field>
-      )}
+        )}
+
+        {adding ? (
+          <div className="detail__new">
+            <span className="task-row__ghost" aria-hidden />
+            <TitleEditor
+              placeholder="Nueva subtarea"
+              // ⌘⏎ deja el campo abierto para la siguiente, igual que en la lista: las
+              // subtareas se escriben de tres en tres o no se escriben.
+              onSave={(text, andAnother) => {
+                void onAddSubtask(text).then((saved) => setAdding(andAnother && saved));
+              }}
+              onCancel={() => setAdding(false)}
+            />
+          </div>
+        ) : (
+          <button type="button" className="detail__add" onClick={() => setAdding(true)}>
+            <Plus size={12} strokeWidth={2} aria-hidden />
+            Agregar subtarea
+          </button>
+        )}
+      </Field>
 
       {confirming ? (
         <div className="editor__confirm">
@@ -190,6 +234,22 @@ export function TaskDetail({
       )}
     </div>
   );
+}
+
+/**
+ * «Subtareas», y con alguna puesta el conteo de las que quedan. El conteo solo aparece cuando
+ * hay algo que contar: «Subtareas · 0 pendientes» sobre una lista vacía dice dos veces lo
+ * mismo, y encima con un número.
+ *
+ * Con todas terminadas tampoco se cuenta. Aquí las completadas se quedan a la vista —esta es
+ * la hoja de la tarea, no la lista de lo que falta—, así que «0 pendientes» sería contar
+ * hacia atrás para decir algo que se lee de un vistazo en los propios renglones tachados.
+ */
+function subtasksLabel(subtasks: Task[]): string {
+  const pending = subtasks.filter((subtask) => !subtask.completedAt).length;
+  if (!subtasks.length) return "Subtareas";
+  if (!pending) return "Subtareas · completadas";
+  return `Subtareas · ${pending} pendiente${pending === 1 ? "" : "s"}`;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

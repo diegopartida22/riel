@@ -15,6 +15,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { localIso, tasksWithTimeBetween, type Project, type Task } from "../data";
+import { curatedOf } from "../design/palette";
 
 const MINUTE = 60 * 1000;
 
@@ -41,6 +42,12 @@ const GRACE_MS = 5 * MINUTE;
 export type Permission = "granted" | "denied" | "default" | "unavailable";
 
 export const notificationPermission = () => invoke<Permission>("notification_permission");
+
+/** Con qué avisa Rust de que alguien pulsó «Completar» en un banner. */
+export const DONE_EVENT = "aviso-completar";
+
+/** Lo completado desde un banner que todavía no se ha aplicado a la base. Vacía la cola. */
+export const takeCompleted = () => invoke<string[]>("take_completed");
 
 /** El último mapa con el que se armó el plan, para poder rearmarlo desde fuera del ciclo. */
 let context: Map<string, Project> = new Map();
@@ -78,10 +85,72 @@ export async function ensurePermission(
   return granted;
 }
 
-const body = (task: Task, projectsById: Map<string, Project>): string | undefined => {
-  const project = task.projectId ? projectsById.get(task.projectId) : undefined;
-  return project?.name;
+/**
+ * La segunda línea del aviso: la misma que lleva la fila en la lista, hora y proyecto.
+ *
+ * La hora va aunque parezca redundante en un aviso que suena a esa hora. El sello que pone
+ * macOS es el de la entrega, no el de la tarea, y no son lo mismo: con el margen de gracia un
+ * aviso de las 14:30 puede llegar a las 14:33, y horas después, en el Centro de
+ * Notificaciones, es lo único que dice para cuándo era.
+ *
+ * Todo en una línea y no en tres campos: los títulos largos ya envuelven a dos renglones, y
+ * un banner que se pasa de alto se corta por abajo, que es justo donde va lo que ubica.
+ */
+const body = (task: Task, project: Project | undefined): string | undefined => {
+  const hour = task.dueAt?.slice(11, 16);
+  if (!hour) return project?.name;
+  return project ? `${hour} · ${project.name}` : hour;
 };
+
+/**
+ * Lado del PNG del disco. El banner lo enseña a unos 38 pt, así que 128 va sobrado incluso en
+ * pantalla Retina y el círculo no se ve dentado.
+ */
+const DISC = 128;
+
+/** Un PNG por color y modo. Son ocho colores y dos modos: la caché no crece. */
+const discs = new Map<string, number[]>();
+
+/**
+ * El punto de proyecto de la fila, convertido en la miniatura del banner.
+ *
+ * Es la única forma de que el color entre en un aviso, y la sección 3.1 dice exactamente
+ * dónde puede aparecer: donde hay proyecto y en ningún otro sitio. Una tarea suelta no lleva
+ * disco, igual que su fila no lleva punto.
+ *
+ * Se pinta aquí y no en Rust porque la pareja claro/oscuro de cada color ya vive en la
+ * paleta, y tener esa tabla en dos idiomas sería tener dos tablas que se desincronizan.
+ */
+function disc(hex: string, night: boolean): number[] | undefined {
+  const curated = curatedOf(hex);
+  // Un hex escrito a mano no tiene pareja oscura: se usa igual en los dos modos, como en la UI.
+  const paint = (night ? curated?.dark : curated?.light) ?? hex;
+
+  const cached = discs.get(paint);
+  if (cached) return cached;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = DISC;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+
+  // Fondo transparente: el sistema recorta la miniatura a su gusto, y un disco sobre nada se
+  // apoya en el material del banner en vez de traer su propio cuadro de color.
+  //
+  // Y pequeño dentro de su cuadro. La ranura de miniatura del banner es grande, y un disco
+  // que la llene sale más pesado que el propio icono de la app —que ya lleva tres discos— y
+  // deja de leerse como el punto de la fila para leerse como una mancha. Es la misma razón
+  // por la que el punto de la lista son 6 px junto a texto de 13: el color ubica, no grita.
+  ctx.fillStyle = paint;
+  ctx.beginPath();
+  ctx.arc(DISC / 2, DISC / 2, DISC * 0.25, 0, Math.PI * 2);
+  ctx.fill();
+
+  const base64 = canvas.toDataURL("image/png").split(",")[1];
+  const bytes = Array.from(atob(base64), (char) => char.charCodeAt(0));
+  discs.set(paint, bytes);
+  return bytes;
+}
 
 /**
  * Rehace el plan. Idempotente: llamarla de más solo vuelve a mandar la misma lista.
@@ -102,14 +171,22 @@ export async function schedule(projectsById: Map<string, Project>): Promise<void
     localIso(new Date(now.getTime() + WINDOW_MS)),
   );
 
-  const items = upcoming.map((task) => ({
-    id: task.id,
-    title: task.title,
-    body: body(task, projectsById),
-    // El `T` del ISO local no lleva zona, y `new Date` lo interpreta en la del equipo, que es
-    // exactamente lo que significa la fecha guardada.
-    seconds: (new Date(task.dueAt!).getTime() - Date.now()) / 1000,
-  }));
+  // El modo se lee en cada pasada y no una vez: cambiar claro/oscuro con el panel abierto
+  // tiene que reacomodar también lo que está registrado para dentro de un rato (criterio 5).
+  const night = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const items = upcoming.map((task) => {
+    const project = task.projectId ? projectsById.get(task.projectId) : undefined;
+    return {
+      id: task.id,
+      title: task.title,
+      body: body(task, project),
+      icon: project ? disc(project.color, night) : undefined,
+      // El `T` del ISO local no lleva zona, y `new Date` lo interpreta en la del equipo, que es
+      // exactamente lo que significa la fecha guardada.
+      seconds: (new Date(task.dueAt!).getTime() - Date.now()) / 1000,
+    };
+  });
 
   await invoke("set_reminders", { items });
 }

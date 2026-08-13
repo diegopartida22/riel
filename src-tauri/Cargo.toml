@@ -42,9 +42,13 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
+  "NSArray",
   "NSBundle",
   "NSError",
+  "NSObject",
+  "NSSet",
   "NSString",
+  "NSURL",
 ] }
 # Los avisos de la sección 7. `tauri-plugin-notification` no sirve en este macOS: su cadena
 # acaba en `NSUserNotification`, que Apple retiró, y entrega nada devolviendo Ok. Esta es la
@@ -52,8 +56,13 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 objc2-user-notifications = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
+  "UNNotification",
+  "UNNotificationAction",
+  "UNNotificationAttachment",
+  "UNNotificationCategory",
   "UNNotificationContent",
   "UNNotificationRequest",
+  "UNNotificationResponse",
   "UNNotificationSettings",
   "UNNotificationSound",
   "UNNotificationTrigger",

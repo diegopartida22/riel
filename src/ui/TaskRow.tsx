@@ -7,6 +7,7 @@ import { DueChip } from "./DueChip";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
 import { TitleEditor } from "./TitleEditor";
+import type { Reorder } from "./useReorder";
 
 export interface TaskRowProps {
   task: Task;
@@ -26,6 +27,12 @@ export interface TaskRowProps {
   flying?: boolean;
   /** Sin esto la manija no se dibuja: no hay orden que tocar en Completadas. */
   onGrab?: (event: React.PointerEvent<HTMLElement>) => void;
+  /**
+   * El arrastre de las subtareas. Lo lleva la fila y no la lista porque las subtareas se
+   * pintan aquí dentro: la lista solo conoce las raíces. Ordena entre hermanas, nunca entre
+   * madres — sacar una subtarea de su grupo sería cambiarla de padre, que es otro gesto.
+   */
+  sortSubtasks?: Reorder;
   onToggle?: (task: Task, checked: boolean) => void;
   onOpen?: () => void;
   /** Recibe el rectángulo del `⋯` para anclar el menú. */
@@ -64,6 +71,7 @@ export function TaskRow({
   offset = 0,
   flying = false,
   onGrab,
+  sortSubtasks,
   onToggle,
   onOpen,
   onMenu,
@@ -160,12 +168,28 @@ export function TaskRow({
         </div>
 
         {subtasks.length > 0 && (
-          <ul className="subtasks">
+          <ul
+            className={`subtasks${
+              sortSubtasks && subtasks.some((one) => one.id === sortSubtasks.dragging)
+                ? " is-sorting"
+                : ""
+            }`}
+          >
             {subtasks.map((subtask) => (
               <SubtaskRow
                 key={subtask.id}
+                ref={sortSubtasks?.register(subtask.id)}
                 task={subtask}
                 leaving={leaving?.has(subtask.id)}
+                offset={sortSubtasks?.offsetOf(subtask.id) ?? 0}
+                flying={sortSubtasks?.dragging === subtask.id}
+                /* Con una sola subtarea no hay nada que ordenar, y una manija que no mueve
+                   nada es de las afordancias muertas que la fila no puede permitirse. */
+                onGrab={
+                  sortSubtasks && subtasks.length > 1
+                    ? (event) => sortSubtasks.grab(event, subtask.id)
+                    : undefined
+                }
                 onToggle={onToggle}
                 focused={focused}
                 editing={editing}
@@ -188,16 +212,24 @@ export function TaskRow({
  * cualquier otra — así que también necesita su envoltura que colapsa.
  */
 function SubtaskRow({
+  ref,
   task,
   leaving = false,
+  offset = 0,
+  flying = false,
+  onGrab,
   onToggle,
   focused,
   editing,
   onEditSave,
   onEditCancel,
 }: {
+  ref?: React.Ref<HTMLLIElement>;
   task: Task;
   leaving?: boolean;
+  offset?: number;
+  flying?: boolean;
+  onGrab?: (event: React.PointerEvent<HTMLElement>) => void;
   onToggle?: (task: Task, checked: boolean) => void;
   focused?: string | null;
   editing?: string | null;
@@ -207,7 +239,17 @@ function SubtaskRow({
   const completed = task.completedAt !== null;
 
   return (
-    <li className={`subtask-row collapse${leaving ? " is-leaving" : ""}`}>
+    <li
+      ref={ref}
+      className={[
+        "subtask-row collapse",
+        leaving && "is-leaving",
+        flying && "is-flying",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={offset ? { transform: `translateY(${offset}px)` } : undefined}
+    >
       <div className={`subtask${completed ? " is-completed" : ""}`}>
         <Checkbox
           checked={completed}
@@ -229,6 +271,18 @@ function SubtaskRow({
             <span className="task-row__title">{task.title}</span>
           )}
         </div>
+
+        {/* Solo la manija. De las tres cosas del `⋯` de una raíz —abrir el detalle, cambiar la
+            prioridad, borrar— una subtarea no tiene detalle propio ni dibuja prioridad, así
+            que quedaría un menú de un solo elemento, que no es un menú. Borrarla se hace
+            donde se crea: en el detalle de su madre. */}
+        {onGrab && (
+          <div className="task-row__tools task-row__tools--one">
+            <span className="task-row__tool task-row__grip" aria-hidden="true" onPointerDown={onGrab}>
+              <GripVertical size={14} strokeWidth={2} />
+            </span>
+          </div>
+        )}
       </div>
     </li>
   );

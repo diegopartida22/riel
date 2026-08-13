@@ -26,11 +26,20 @@
   gap: 1px;
 }
 
-/* Los proyectos son los que pueden crecer, así que son los que se desplazan. */
+/* Los proyectos son los que pueden crecer, así que son los que se desplazan.
+
+   El hueco a los lados es para el anillo de foco. `overflow-y: auto` no se puede pedir solo:
+   el `overflow-x` se vuelve `auto` con él, y la caja de recorte pasa a ser exactamente el
+   ancho del botón. El anillo, que se dibuja 2px por fuera, perdía sus dos costados y quedaban
+   dos barras sueltas encima y debajo del disco — que sobre un riel de discos se leen como
+   separadores, no como foco. El margen negativo devuelve el hueco para que los botones sigan
+   alineados con los de las vistas del sistema. */
 .rail__group--projects {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  padding-inline: 4px;
+  margin-inline: -4px;
 }
 
 /* La hairline que separa las cuatro vistas del sistema de los proyectos (spec 3.4). */
