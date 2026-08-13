@@ -1,5 +1,6 @@
 mod db;
 mod glass;
+mod notify;
 mod panel;
 mod tray;
 
@@ -30,12 +31,31 @@ fn write_export(path: String, contents: String) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|error| error.to_string())
 }
 
+/// `granted`, `denied`, `default` o `unavailable` (spec 7). Lo consulta Ajustes para saber
+/// si dibuja la nota del enlace a Preferencias del Sistema.
+#[tauri::command]
+fn notification_permission() -> String {
+    notify::permission()
+}
+
+/// La pregunta del sistema, la primera vez que alguien le pone hora a una tarea.
+#[tauri::command]
+fn request_notification_permission() -> bool {
+    notify::request()
+}
+
+/// Rehace el plan de avisos de las próximas 24 h. Lo llama el frontend al arrancar y cada
+/// vez que algo puede haber movido una hora.
+#[tauri::command]
+fn set_reminders(items: Vec<notify::Reminder>) {
+    notify::set_reminders(items);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         // `LaunchAgent` y no `AppleScript`: deja un plist en `~/Library/LaunchAgents` que se
         // puede leer, y no una entrada opaca escrita con Eventos de Sistema.
@@ -51,7 +71,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_keep_open,
             set_overdue,
-            write_export
+            write_export,
+            notification_permission,
+            request_notification_permission,
+            set_reminders
         ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,

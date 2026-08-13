@@ -30,6 +30,9 @@ export function TopBar({ query, onQuery, onSettings, settingsOpen, ref }: TopBar
         aria-label="Buscar tareas"
         spellCheck={false}
         autoComplete="off"
+        /* ↓ desde aquí baja a la lista en vez de morirse en el campo. Es lo que hacen Spotlight
+           y el buscador del Finder, y sin ello escribir y elegir con el teclado no se puede. */
+        data-into-list
         onChange={(event) => onQuery(event.target.value)}
       />
 

@@ -33,6 +33,11 @@
   --menu-bg: #f7f7f8;
   --menu-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 
+  /* La sombra de lo que se levanta de la lista: la fila en vuelo de un arrastre. Va aquí y no
+     escrita en el componente porque cambia con el modo — un 14% de negro sobre vidrio oscuro
+     no se ve, y la fila arrastrada se quedaría sin despegar del resto. */
+  --shadow-lift: 0 6px 16px rgb(0 0 0 / 14%);
+
   /* La app no tiene acento propio (sección 3.1): el acento es el grafito neutro salvo
      dentro de la vista de un proyecto, que lo sobreescribe con el suyo. */
   --accent: var(--ink-accent);
@@ -71,6 +76,7 @@
 
     --menu-bg: #2c2c2e;
     --menu-shadow: 0 8px 24px rgb(0 0 0 / 44%);
+    --shadow-lift: 0 6px 16px rgb(0 0 0 / 42%);
   }
 }
 

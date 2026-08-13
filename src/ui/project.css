@@ -80,10 +80,13 @@
   opacity: 0.4;
 }
 
+/* La tinta la pone el mismo token que la palomita de una casilla llena, no un blanco fijo: en
+   oscuro el rojo se aclara a `#E8695C`, y ahí el blanco cae a 3,2:1 — se lee mal justo en el
+   botón que borra algo. La contraria del modo da 5,3:1 sin cambiar el rojo. */
 .editor__button--danger {
   border-color: transparent;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 /* «Eliminar proyecto» no compite con Guardar: es texto, y en rojo solo al tocarlo. */

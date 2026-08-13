@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import type { Between, Priority, Project, Task, TaskPatch, TaskTree } from "../data";
+import { tint } from "../design/palette";
 import { emptyMessage, titleOf, type View } from "../state/views";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
 import { RowMenu } from "../ui/RowMenu";
 import { TaskRow } from "../ui/TaskRow";
+import { TitleEditor } from "../ui/TitleEditor";
 import { useReorder } from "../ui/useReorder";
+import { useRowKeys } from "../ui/useRowKeys";
 
 export interface TaskListProps {
   view: View;
@@ -20,6 +23,8 @@ export interface TaskListProps {
   patch: (id: string, patch: TaskPatch) => void;
   remove: (id: string) => void;
   reorder: (id: string, between: Between) => void;
+  /** ⌘⏎: guardar y crear otra debajo. */
+  addAfter: (title: string, afterId: string) => Promise<string | null>;
   onOpen: (id: string) => void;
   /** Lleva el foco al campo de captura desde el botón del estado vacío. */
   onCapture: () => void;
@@ -50,6 +55,7 @@ export function TaskList({
   patch,
   remove,
   reorder,
+  addAfter,
   onOpen,
   onCapture,
 }: TaskListProps) {
@@ -58,10 +64,74 @@ export function TaskList({
   const sortable = view.kind !== "completadas";
 
   const [menu, setMenu] = useState<OpenMenu>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  /** Debajo de qué fila se está escribiendo una tarea que todavía no existe (⌘⏎). */
+  const [draftAfter, setDraftAfter] = useState<string | null>(null);
+  /** A qué fila devolver el foco en cuanto vuelva a estar pintada. */
+  const [restore, setRestore] = useState<string | null>(null);
+
   const drag = useReorder(
     tasks.map((task) => task.id),
     reorder,
   );
+
+  // El orden en que se ven las filas, subtareas incluidas: es el recorrido de ↑↓ y quien
+  // decide cuál entra en el Tab.
+  const order = useMemo(
+    () => tasks.flatMap((task) => [task.id, ...task.subtasks.map((subtask) => subtask.id)]),
+    [tasks],
+  );
+
+  const find = (id: string): Task | undefined =>
+    tasks.find((task) => task.id === id) ??
+    tasks.flatMap((task) => task.subtasks).find((subtask) => subtask.id === id);
+
+  const keys = useRowKeys({
+    order,
+    onToggle: (id) => {
+      const task = find(id);
+      if (task) toggle(task, task.completedAt === null);
+    },
+    onEdit: setEditing,
+  });
+
+  // Al cerrar el campo, el foco se iría al `body` y con él se irían las flechas y el anillo.
+  // Va por estado y no en el mismo golpe porque la fila a la que hay que volver puede ser una
+  // que se acaba de crear y todavía no existe en el DOM.
+  const { focus } = keys;
+  useEffect(() => {
+    if (!restore) return;
+    focus(restore);
+    setRestore(null);
+  }, [restore, focus, tasks]);
+
+  const saveTitle = (id: string, text: string, andAnother: boolean) => {
+    const task = find(id);
+    // Un título vacío no es una edición, es medio borrado: se deja como estaba y para borrar
+    // está el menú, que además avisa.
+    if (text && task && text !== task.title) patch(id, { title: text });
+    setEditing(null);
+    if (andAnother) setDraftAfter(id);
+    else setRestore(id);
+  };
+
+  const saveDraft = async (afterId: string, text: string, andAnother: boolean) => {
+    if (!text) {
+      setDraftAfter(null);
+      setRestore(afterId);
+      return;
+    }
+
+    const created = await addAfter(text, afterId);
+    // Encadenar: otro ⌘⏎ deja el campo abierto de nuevo, ahora colgando de la recién creada.
+    // Es el modo en que se escriben cinco tareas seguidas sin bajar al pie.
+    if (andAnother && created) {
+      setDraftAfter(created);
+      return;
+    }
+    setDraftAfter(null);
+    if (created) setRestore(created);
+  };
 
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
   if (loading) return <div className="view" />;
@@ -69,7 +139,7 @@ export function TaskList({
   const open = menu && tasks.find((task) => task.id === menu.id);
 
   return (
-    <div className="view">
+    <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
       {error && <p className="notice notice--error">{error}</p>}
 
       {tasks.length === 0 ? (
@@ -83,26 +153,61 @@ export function TaskList({
           <GroupHeader>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
             {tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                ref={drag.register(task.id)}
-                task={task}
-                project={task.projectId ? projectsById.get(task.projectId) : null}
-                showProjectDot={view.kind !== "proyecto"}
-                subtasks={task.subtasks}
-                today={today}
-                leaving={leaving}
-                offset={drag.offsetOf(task.id)}
-                flying={drag.dragging === task.id}
-                onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
-                onToggle={toggle}
-                onOpen={() => onOpen(task.id)}
-                onMenu={(anchor) =>
-                  setMenu((current) =>
-                    current?.id === task.id ? null : { id: task.id, anchor },
-                  )
-                }
-              />
+              <Fragment key={task.id}>
+                <TaskRow
+                  ref={drag.register(task.id)}
+                  task={task}
+                  project={task.projectId ? projectsById.get(task.projectId) : null}
+                  showProjectDot={view.kind !== "proyecto"}
+                  subtasks={task.subtasks}
+                  today={today}
+                  leaving={leaving}
+                  offset={drag.offsetOf(task.id)}
+                  flying={drag.dragging === task.id}
+                  onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
+                  onToggle={toggle}
+                  onOpen={() => onOpen(task.id)}
+                  onMenu={(anchor) =>
+                    setMenu((current) =>
+                      current?.id === task.id ? null : { id: task.id, anchor },
+                    )
+                  }
+                  focused={keys.focused}
+                  editing={editing}
+                  onEditSave={saveTitle}
+                  onEditCancel={() => {
+                    setEditing(null);
+                    setRestore(task.id);
+                  }}
+                />
+
+                {/* La fila que todavía no existe. Nada llega a la base hasta que tenga
+                    título: así un ⌘⏎ del que uno se arrepiente no deja una tarea en blanco
+                    que después hay que ir a buscar y borrar. */}
+                {draftAfter === task.id && (
+                  <li
+                    className="task-row task-row--draft tinted"
+                    style={tint(task.projectId ? projectsById.get(task.projectId)?.color : undefined)}
+                  >
+                    <div className="task-row__main">
+                      {/* El anillo de la casilla, inerte: la tarea no existe, así que no hay
+                          nada que completar. Sin él la fila arranca desalineada con las de
+                          arriba y se lee como si faltara algo. */}
+                      <span className="task-row__ghost" aria-hidden />
+                      <div className="task-row__text">
+                        <TitleEditor
+                          placeholder="Nueva tarea"
+                          onSave={(text, andAnother) => void saveDraft(task.id, text, andAnother)}
+                          onCancel={() => {
+                            setDraftAfter(null);
+                            setRestore(task.id);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </li>
+                )}
+              </Fragment>
             ))}
           </ul>
         </>

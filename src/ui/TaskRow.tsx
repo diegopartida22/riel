@@ -6,6 +6,7 @@ import { Checkbox } from "./Checkbox";
 import { DueChip } from "./DueChip";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
+import { TitleEditor } from "./TitleEditor";
 
 export interface TaskRowProps {
   task: Task;
@@ -29,6 +30,13 @@ export interface TaskRowProps {
   onOpen?: () => void;
   /** Recibe el rectángulo del `⋯` para anclar el menú. */
   onMenu?: (anchor: DOMRect) => void;
+  /** El id que lleva el `tabIndex` de 0 de toda la lista (tabulación itinerante). */
+  focused?: string | null;
+  /** El id que se está editando en línea. Puede ser esta tarea o una de sus subtareas. */
+  editing?: string | null;
+  /** El tercer argumento es cierto si se pidió además otra debajo (⌘⏎). */
+  onEditSave?: (id: string, title: string, andAnother: boolean) => void;
+  onEditCancel?: () => void;
   ref?: React.Ref<HTMLLIElement>;
 }
 
@@ -59,6 +67,10 @@ export function TaskRow({
   onToggle,
   onOpen,
   onMenu,
+  focused,
+  editing,
+  onEditSave,
+  onEditCancel,
   ref,
 }: TaskRowProps) {
   const completed = task.completedAt !== null;
@@ -90,18 +102,25 @@ export function TaskRow({
             onChange={(checked) => onToggle?.(task, checked)}
           />
 
+          {/* El foco vive aquí y no en el `li`: es lo que se ve como «la tarea» y lo que el
+              anillo tiene que rodear. Sin `role="button"`, que sería mentira desde que la
+              tecla ⏎ edita en vez de abrir — un botón activa, y aquí ⏎, Espacio y ↑↓ hacen
+              tres cosas distintas. El teclado lo lleva `useRowKeys` desde el contenedor. */}
           <div
             className="task-row__text"
-            role={onOpen ? "button" : undefined}
-            tabIndex={onOpen ? 0 : undefined}
-            onClick={onOpen}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              onOpen?.();
-            }}
+            data-task-id={task.id}
+            tabIndex={focused === task.id ? 0 : -1}
+            onClick={editing === task.id ? undefined : onOpen}
           >
-            <span className="task-row__title">{task.title}</span>
+            {editing === task.id ? (
+              <TitleEditor
+                value={task.title}
+                onSave={(title, andAnother) => onEditSave?.(task.id, title, andAnother)}
+                onCancel={() => onEditCancel?.()}
+              />
+            ) : (
+              <span className="task-row__title">{task.title}</span>
+            )}
             {task.notes && <span className="task-row__notes">{task.notes}</span>}
           </div>
 
@@ -148,6 +167,10 @@ export function TaskRow({
                 task={subtask}
                 leaving={leaving?.has(subtask.id)}
                 onToggle={onToggle}
+                focused={focused}
+                editing={editing}
+                onEditSave={onEditSave}
+                onEditCancel={onEditCancel}
               />
             ))}
           </ul>
@@ -168,10 +191,18 @@ function SubtaskRow({
   task,
   leaving = false,
   onToggle,
+  focused,
+  editing,
+  onEditSave,
+  onEditCancel,
 }: {
   task: Task;
   leaving?: boolean;
   onToggle?: (task: Task, checked: boolean) => void;
+  focused?: string | null;
+  editing?: string | null;
+  onEditSave?: (id: string, title: string, andAnother: boolean) => void;
+  onEditCancel?: () => void;
 }) {
   const completed = task.completedAt !== null;
 
@@ -183,7 +214,21 @@ function SubtaskRow({
           label={task.title}
           onChange={(checked) => onToggle?.(task, checked)}
         />
-        <span className="task-row__title">{task.title}</span>
+        {/* Una subtarea es una tarea: entra en el recorrido de ↑↓ y se edita con ⏎ igual que
+            su madre. Lo único que ⌘⏎ no hace aquí es abrir otra debajo — las hermanas se
+            crean desde el detalle, y una raíz nueva colada entre dos subtareas rompería la
+            lectura de la sangría. */}
+        <div className="task-row__text" data-task-id={task.id} tabIndex={focused === task.id ? 0 : -1}>
+          {editing === task.id ? (
+            <TitleEditor
+              value={task.title}
+              onSave={(title) => onEditSave?.(task.id, title, false)}
+              onCancel={() => onEditCancel?.()}
+            />
+          ) : (
+            <span className="task-row__title">{task.title}</span>
+          )}
+        </div>
       </div>
     </li>
   );

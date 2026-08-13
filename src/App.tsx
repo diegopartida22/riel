@@ -7,6 +7,7 @@ import { tint } from "./design/palette";
 import { useRiel } from "./state/useRiel";
 import { acceptsNew } from "./state/views";
 import { Composer } from "./ui/Composer";
+import { useFocoDeTeclado } from "./ui/foco";
 import { ProjectEditor } from "./ui/ProjectEditor";
 import { Rail } from "./ui/Rail";
 import { SettingsPopover } from "./ui/SettingsPopover";
@@ -31,6 +32,8 @@ export default function App() {
   const [editing, setEditing] = useState<Editing>(null);
   const [settings, setSettings] = useState<DOMRect | null>(null);
   const [wantsCapture, setWantsCapture] = useState(false);
+
+  useFocoDeTeclado();
 
   // El foco del primer arranque (spec 3.7) no puede ser `autoFocus`: cuando el componente se
   // monta todavía no se sabe si la base está vacía, y para cuando se sabe ya es tarde.
@@ -79,6 +82,14 @@ export default function App() {
         event.preventDefault();
         field.current?.focus();
         field.current?.select();
+        return;
+      }
+
+      // ⌘Z repone el último borrado. ⇧⌘Z sería rehacer, que no existe: dejarlo caer aquí
+      // haría que rehacer deshiciera, que es lo contrario de lo que se pidió.
+      if (event.key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        void riel.undo();
         return;
       }
 
@@ -217,6 +228,7 @@ export default function App() {
               patch={riel.patch}
               remove={riel.remove}
               reorder={riel.reorder}
+              addAfter={riel.addAfter}
               onOpen={riel.openDetail}
               onCapture={() => composer.current?.focus()}
             />

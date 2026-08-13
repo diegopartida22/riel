@@ -1,4 +1,4 @@
-import { dayOf, localDay } from "../data";
+import { dayOf, localDay, localIso } from "../data";
 
 /**
  * El formato corto en español de la sección 3.5. Escrito a mano y no con `Intl`: la
@@ -23,10 +23,19 @@ export interface FormattedDue {
  */
 export function formatDue(dueAt: string, hasTime: boolean, today: string = localDay()): FormattedDue {
   const day = dayOf(dueAt);
-  const tone: DueTone = day < today ? "overdue" : day === today ? "today" : "future";
+  // Con hora vence en el instante; sin hora, `due_at` representa el día entero y no vence
+  // hasta que el día queda atrás. Es la misma vara que usa `hasOverdue` para decidir el peso
+  // del glifo de la barra, y tiene que serlo: medir aquí solo por día dejaba la barra en
+  // relleno a las 10:01 mientras la fila seguía dibujando su `10:00` en negro hasta la
+  // medianoche. Dos partes de la app diciendo cosas distintas de la misma tarea.
+  const overdue = hasTime ? dueAt < localIso() : day < today;
+  const tone: DueTone = overdue ? "overdue" : day === today ? "today" : "future";
   const date = parseLocal(dueAt);
 
-  if (tone === "today" && hasTime) {
+  // El día, no el tono: una tarea de hoy a las 10:00 sigue siendo «de hoy con hora» a las
+  // 10:05 aunque ya haya vencido. Atarlo al tono la haría cambiar de `10:00` a `mié 12` al
+  // pasar la hora, que es perder justo el dato por el que se le puso hora.
+  if (day === today && hasTime) {
     return { text: `${pad(date.getHours())}:${pad(date.getMinutes())}`, tone };
   }
 

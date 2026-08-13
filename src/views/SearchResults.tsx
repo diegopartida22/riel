@@ -1,7 +1,10 @@
+import { useMemo } from "react";
+
 import type { Project, Task, TaskTree } from "../data";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
 import { TaskRow } from "../ui/TaskRow";
+import { useRowKeys } from "../ui/useRowKeys";
 
 export interface SearchResultsProps {
   query: string;
@@ -39,6 +42,18 @@ export function SearchResults({
   toggle,
   onOpen,
 }: SearchResultsProps) {
+  // Aquí las subtareas salen como filas de pleno derecho, así que el recorrido es la lista tal
+  // cual. Sin `onEdit`: retocar un título mientras la consulta está viva haría que la fila
+  // dejara de casar y se esfumara bajo el cursor a media palabra.
+  const order = useMemo(() => results.map((task) => task.id), [results]);
+  const keys = useRowKeys({
+    order,
+    onToggle: (id) => {
+      const task = results.find((result) => result.id === id);
+      if (task) toggle(task, task.completedAt === null);
+    },
+  });
+
   // Mientras la consulta viaja, lo que hay en `results` sigue siendo lo de la vista anterior.
   // Pintarlo sería anunciar como resultados unas filas que nadie buscó.
   if (loading) return <div className="view" />;
@@ -53,7 +68,7 @@ export function SearchResults({
   }
 
   return (
-    <div className="view">
+    <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
       {error && <p className="notice notice--error">{error}</p>}
 
       <GroupHeader>
@@ -71,6 +86,7 @@ export function SearchResults({
             leaving={leaving}
             onToggle={toggle}
             onOpen={() => onOpen(task.id)}
+            focused={keys.focused}
           />
         ))}
       </ul>

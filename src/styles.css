@@ -28,6 +28,26 @@ body {
   -webkit-user-select: none;
 }
 
+/* El último sitio por el que se colaba el azul de sistema, y el único que no aparecía escrito
+   en ninguna hoja: sin una regla propia, macOS pinta la selección de texto con el color de
+   acento del sistema — azul por omisión. Basta seleccionar una palabra en la búsqueda para
+   verlo, así que el criterio 9 no se cumplía.
+
+   El `color-mix` la tiñe del acento en contexto: grafito en las vistas mixtas, el color del
+   proyecto dentro de uno. La declaración plana de arriba es la red por si la versión de
+   WebKit de macOS 13 no lo entiende — el navegador descarta la que no sepa leer. */
+::selection {
+  background: rgb(28 28 30 / 18%);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: rgb(255 255 255 / 24%);
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
 /* `NSVisualEffectView` no trae borde, y sin él el panel se derrite sobre lo que tenga
    detrás, así que se lo dibujamos nosotros. `NSGlassEffectView` sí trae el suyo — un filo
    especular que además refracta lo que hay debajo — y apilarle encima una hairline plana es

@@ -1,4 +1,4 @@
-import { execute, select } from "./db";
+import { execute, placeholders, select } from "./db";
 import { STEP, between, needsRenumber } from "./position";
 import { localIso } from "./time";
 import type { Between, Project } from "./types";
@@ -61,13 +61,51 @@ export async function setProjectColor(id: string, color: string): Promise<void> 
   await execute(`UPDATE projects SET color = $1 WHERE id = $2`, [color, id]);
 }
 
+/** Lo que se llevó por delante borrar un proyecto. Es lo que necesita ⌘Z para reponerlo. */
+export interface RemovedProject {
+  project: Project;
+  /** Las tareas que quedaron sin proyecto. La clave foránea las desvincula, no las borra. */
+  taskIds: string[];
+}
+
 /**
  * Borrar un proyecto **no** borra sus tareas: la clave foránea las deja con `project_id`
  * nulo, que es lo que pide el spec. El diálogo de confirmación es cosa de la UI; aquí ya se
  * da por dicho que sí.
+ *
+ * Los ids de esas tareas se leen **antes** de borrar. Después ya no hay forma de saber cuáles
+ * eran suyas: `ON DELETE SET NULL` las mezcla con las que nunca tuvieron proyecto.
  */
-export async function deleteProject(id: string): Promise<void> {
+export async function deleteProject(id: string): Promise<RemovedProject | null> {
+  const project = await getProject(id);
+  if (!project) return null;
+
+  const rows = await select<{ id: string }>(`SELECT id FROM tasks WHERE project_id = $1`, [id]);
   await execute(`DELETE FROM projects WHERE id = $1`, [id]);
+
+  return { project, taskIds: rows.map((row) => row.id) };
+}
+
+/**
+ * Repone un proyecto borrado con su id y su posición originales, y le devuelve sus tareas.
+ *
+ * El proyecto va primero por obligación: la clave foránea de `tasks.project_id` rechazaría el
+ * UPDATE si la fila a la que apunta todavía no existe.
+ */
+export async function restoreProject({ project, taskIds }: RemovedProject): Promise<void> {
+  await execute(`INSERT INTO projects (${COLUMNS}) VALUES ($1, $2, $3, $4, $5)`, [
+    project.id,
+    project.name,
+    project.color,
+    project.position,
+    project.createdAt,
+  ]);
+
+  if (!taskIds.length) return;
+  await execute(
+    `UPDATE tasks SET project_id = $1 WHERE id IN (${placeholders(taskIds.length, 2)})`,
+    [project.id, ...taskIds],
+  );
 }
 
 export async function moveProject(id: string, { after, before }: Between): Promise<void> {

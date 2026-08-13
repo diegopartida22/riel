@@ -9,7 +9,6 @@
     "opener:default",
     "sql:default",
     "sql:allow-execute",
-    "notification:default",
     "autostart:default",
     "dialog:allow-save"
   ]

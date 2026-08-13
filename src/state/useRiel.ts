@@ -18,6 +18,8 @@ import {
   moveTask,
   pendingCountByProject,
   renameProject,
+  restoreProject,
+  restoreTasks,
   setProjectColor,
   setRetention as storeRetention,
   sweepCompleted,
@@ -27,6 +29,7 @@ import {
   type Between,
   type NewTask,
   type Project,
+  type RemovedProject,
   type Retention,
   type Task,
   type TaskPatch,
@@ -52,6 +55,20 @@ const RAIL_KEY = "riel:rail-expandido";
 /** Lo que se espera tras la última tecla antes de consultar. Una pulsación lee la base entera. */
 const TYPING_MS = 120;
 
+/**
+ * Cuántos borrados recuerda ⌘Z. Acotado a propósito: lo que se deshace es «lo último», y una
+ * pila sin fondo acabaría reponiendo algo que se tiró hace media hora y ya se había olvidado.
+ */
+const UNDO_DEPTH = 20;
+
+/**
+ * Un borrado que se puede reponer. Completar no entra: tiene sus propios tres segundos con la
+ * casilla, que es un deshacer más directo que un atajo (spec 3.6).
+ */
+type Undoable =
+  | { kind: "tareas"; tasks: Task[] }
+  | { kind: "proyecto"; removed: RemovedProject };
+
 export interface RielState {
   view: View;
   select: (view: View) => void;
@@ -73,11 +90,15 @@ export interface RielState {
 
   /** Lo que el parser de captura sacó del texto pisa lo que la vista pondría por omisión. */
   add: (draft: NewTask) => Promise<boolean>;
+  /** Crea una tarea justo debajo de otra y devuelve su id. Es lo que hace ⌘⏎ (spec 5). */
+  addAfter: (title: string, afterId: string) => Promise<string | null>;
   toggle: (task: Task, checked: boolean) => Promise<void>;
   /** Edita campos sueltos de una tarea, desde el detalle o desde el menú de la fila. */
   patch: (id: string, patch: TaskPatch) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reorder: (id: string, between: Between) => Promise<void>;
+  /** ⌘Z: repone el último borrado. Sin nada que reponer no hace nada (spec 5). */
+  undo: () => Promise<void>;
 
   /** La tarea cuyo detalle se está mirando, o nula si se ve la lista. */
   detail: TaskTree | null;
@@ -142,6 +163,17 @@ export function useRiel(): RielState {
    * no puede descompletar a las que ya estaban tachadas de antes.
    */
   const pending = useRef(new Map<string, { ids: string[]; timers: number[] }>());
+
+  /**
+   * La pila de ⌘Z. En una `ref` y no en el estado porque nadie la dibuja: no hay botón de
+   * deshacer, solo el atajo, así que apilar no tiene por qué repintar el panel.
+   */
+  const undoable = useRef<Undoable[]>([]);
+
+  const remember = useCallback((entry: Undoable) => {
+    undoable.current.push(entry);
+    if (undoable.current.length > UNDO_DEPTH) undoable.current.shift();
+  }, []);
 
   const clearTimers = useCallback(() => {
     for (const entry of pending.current.values()) entry.timers.forEach(clearTimeout);
@@ -393,6 +425,49 @@ export function useRiel(): RielState {
   );
 
   /**
+   * La tarea nueva de ⌘⏎, que nace pegada a la de arriba y no al final de la lista. La
+   * posición se resuelve con la misma maquinaria del arrastre: entre la de referencia y la que
+   * la seguía.
+   *
+   * Hereda lo que da la vista, igual que la del pie: en Hoy sale con la fecha de hoy, dentro
+   * de un proyecto sale con ese proyecto.
+   */
+  const addAfter = useCallback(
+    async (title: string, afterId: string): Promise<string | null> => {
+      const clean = title.trim();
+      if (!clean) return null;
+
+      setError(null);
+      try {
+        const created = await createTask({ ...draftFor(view, today), title: clean });
+
+        const at = tasks.findIndex((task) => task.id === afterId);
+        // `at + 1` sobre el índice de la de referencia, no sobre la lista ya modificada: la
+        // nueva todavía no está dentro, así que la vecina de abajo sigue siendo la de siempre.
+        await moveTask(created.id, { after: afterId, before: tasks[at + 1]?.id ?? null });
+
+        setTasks((current) => {
+          const index = current.findIndex((task) => task.id === afterId);
+          const born = { ...created, subtasks: [] };
+          if (index < 0) return [...current, born];
+          const next = [...current];
+          next.splice(index + 1, 0, born);
+          return next;
+        });
+
+        setFirstRun(false);
+        void refreshCounts();
+        return created.id;
+      } catch (cause) {
+        console.error(cause);
+        setError("No se pudo crear la tarea. Vuelve a intentarlo.");
+        return null;
+      }
+    },
+    [refreshCounts, tasks, today, view],
+  );
+
+  /**
    * Edita campos sueltos. El cambio se aplica también en local en vez de releer la vista: una
    * relectura cancelaría los tres segundos de gracia de cualquier fila que se esté yendo.
    *
@@ -444,7 +519,10 @@ export function useRiel(): RielState {
       setError(null);
       try {
         forget(id);
-        await deleteTask(id);
+        // Lo que devuelve es la tarea y las subtareas que se fueron con ella por la clave
+        // foránea. Es lo único que hace posible ⌘Z: después del DELETE ya no hay dónde leerlo.
+        const removed = await deleteTask(id);
+        if (removed.length) remember({ kind: "tareas", tasks: removed });
         setDetailId((current) => (current === id ? null : current));
         drop(id);
         void refreshCounts();
@@ -453,7 +531,7 @@ export function useRiel(): RielState {
         setError("No se pudo eliminar la tarea. Vuelve a intentarlo.");
       }
     },
-    [drop, forget, refreshCounts],
+    [drop, forget, refreshCounts, remember],
   );
 
   /**
@@ -531,7 +609,8 @@ export function useRiel(): RielState {
     async (id: string) => {
       setError(null);
       try {
-        await deleteProject(id);
+        const removed = await deleteProject(id);
+        if (removed) remember({ kind: "proyecto", removed });
         setView((current) =>
           current.kind === "proyecto" && current.id === id ? { kind: "hoy" } : current,
         );
@@ -541,8 +620,35 @@ export function useRiel(): RielState {
         setError("No se pudo eliminar el proyecto. Vuelve a intentarlo.");
       }
     },
-    [reloadProjects],
+    [reloadProjects, remember],
   );
+
+  /**
+   * ⌘Z. Repone el último borrado con sus ids y sus posiciones originales, así que lo repuesto
+   * vuelve al sitio del que salió y no al final de la lista.
+   *
+   * Después releer es obligatorio y no una comodidad: una tarea repuesta puede pertenecer a
+   * esta vista o no, puede traerse subtareas, y un proyecto repuesto recupera las suyas. Nada
+   * de eso se puede reconstruir a mano sobre el estado local sin volver a preguntar.
+   */
+  const undo = useCallback(async () => {
+    const last = undoable.current.pop();
+    if (!last) return;
+
+    setError(null);
+    try {
+      if (last.kind === "tareas") await restoreTasks(last.tasks);
+      else await restoreProject(last.removed);
+      await reloadProjects();
+      setEpoch((current) => current + 1);
+    } catch (cause) {
+      console.error(cause);
+      // Se devuelve a la pila: el borrado sigue sin deshacerse, y volver a intentarlo tiene
+      // que ser posible.
+      undoable.current.push(last);
+      setError("No se pudo deshacer. Vuelve a intentarlo.");
+    }
+  }, [reloadProjects]);
 
   /**
    * Cambiar el plazo de conservación barre en el momento, sin esperar al próximo arranque.
@@ -580,10 +686,12 @@ export function useRiel(): RielState {
     error,
     leaving,
     add,
+    addAfter,
     toggle,
     patch,
     remove,
     reorder,
+    undo,
     // Se deriva de la lista en vez de guardarse aparte: así el detalle siempre muestra lo
     // mismo que la fila, y si la tarea se va —completada, borrada, movida a otro proyecto—
     // el detalle se cierra solo porque deja de haber nada que mostrar.

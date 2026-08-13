@@ -191,6 +191,51 @@
   cursor: default;
 }
 
+/* ── Edición en línea ────────────────────────────────────────────────────────────────── */
+
+/* El campo ocupa exactamente el hueco del título: misma fuente, mismo tamaño, mismo alto de
+   línea y sin caja propia. Cualquier diferencia haría que la fila diera un salto al entrar en
+   edición y otro al salir, y eso en una lista se ve como un tirón aunque no se sepa nombrar. */
+.title-editor {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+}
+
+.subtask .title-editor {
+  font-size: var(--text-subtitle);
+}
+
+.title-editor::placeholder {
+  color: var(--ink-tertiary);
+}
+
+/* Sin anillo, como el campo de captura: el foco ya se ve en el cursor de color, y un
+   rectángulo de 2px alrededor de un renglón de 13px lo ahoga. */
+.title-editor:focus {
+  outline: none;
+}
+
+/* El anillo de la casilla sin la casilla, para la fila de ⌘⏎ que todavía no existe: no hay
+   nada que completar. Sin él la fila arranca 23px a la izquierda de las de arriba. */
+.task-row__ghost {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  margin-top: 2px;
+  border: 1.5px dashed var(--ink-tertiary);
+  border-radius: 50%;
+}
+
 /* ── Reordenar ───────────────────────────────────────────────────────────────────────── */
 
 /* Las que ceden el sitio se corren con una transición; la que va en vuelo sigue al puntero
@@ -207,7 +252,7 @@
 
 .task-row.is-flying .task-row__main {
   background: var(--layer-selected);
-  box-shadow: 0 6px 16px rgb(0 0 0 / 14%);
+  box-shadow: var(--shadow-lift);
 }
 
 /* Mientras se arrastra, el texto no se selecciona ni cambia el cursor por toda la lista. */
@@ -344,8 +389,20 @@
 /* ── Foco ────────────────────────────────────────────────────────────────────────────── */
 
 /* Siempre visible, del acento en contexto, con 2px de separación. Nunca `outline: none`
-   sin reemplazo (spec, sección 5). */
-:where(button, [tabindex], a):focus-visible {
+   sin reemplazo (spec, sección 5).
+
+   Dos selectores para la misma regla porque `:focus-visible` solo no alcanza. El recorrido de
+   la lista mueve el foco desde código, y ahí el navegador no decide por la tecla sino por si
+   el elemento anterior estaba marcado: una vez que la cadena arranca del `body`, el anillo no
+   vuelve. Mientras la última interacción sea de teclado —lo que marca `useFocoDeTeclado`— el
+   anillo se pinta con `:focus` a secas y deja de depender de esa herencia. Con el ratón manda
+   `:focus-visible`, así que un clic en una fila sigue sin encender nada.
+
+   El menú queda fuera: recibe el foco solo para poder capturar las teclas, y el que está
+   dentro es el elemento marcado. Los tres campos de texto también quedan fuera, pero por sí
+   solos — un `input` es enfocable sin `tabindex`, así que este selector nunca los alcanzó. */
+:where(button, [tabindex], a):focus-visible,
+:root[data-teclado] :where(button, [tabindex], a):not(.menu):focus {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 3px;

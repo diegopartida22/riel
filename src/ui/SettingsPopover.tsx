@@ -7,7 +7,7 @@ import { Check } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
-import { permissionGranted } from "../state/notifications";
+import { notificationPermission, type Permission } from "../state/notifications";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
@@ -31,13 +31,13 @@ export function SettingsPopover({ anchor, retention, onRetention, onClose }: Set
   const [version, setVersion] = useState<string | null>(null);
   const [autostart, setAutostart] = useState<boolean | null>(null);
   /** `null` mientras se consulta: sin saberlo, la nota de permiso denegado no se dibuja. */
-  const [notify, setNotify] = useState<boolean | null>(null);
+  const [notify, setNotify] = useState<Permission | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     getVersion().then(setVersion, (cause) => console.error(cause));
     isEnabled().then(setAutostart, (cause) => console.error(cause));
-    permissionGranted().then(setNotify, (cause) => console.error(cause));
+    notificationPermission().then(setNotify, (cause) => console.error(cause));
   }, []);
 
   // Se remide cuando cambia el alto: la nota de permisos y el estado de arranque llegan
@@ -151,8 +151,10 @@ export function SettingsPopover({ anchor, retention, onRetention, onClose }: Set
       ))}
 
       {/* Solo cuando se sabe que está denegado. Mientras se consulta no hay nota, porque una
-          advertencia que parpadea en cada apertura del popover es peor que ninguna. */}
-      {notify === false && (
+          advertencia que parpadea en cada apertura del popover es peor que ninguna. Y solo
+          para `denied`: con `unavailable` el enlace no llevaría a ningún sitio, porque la app
+          ni siquiera figura en la lista de Ajustes del Sistema. */}
+      {notify === "denied" && (
         <>
           <div className="menu__rule" role="separator" />
           <p className="settings__note">
