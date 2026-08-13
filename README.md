@@ -3,7 +3,7 @@
 Tareas en la barra de menú de macOS. Un clic en el icono abre un panel de vidrio para
 capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 
-> **Estado: en desarrollo.** La v0.1.0 todavía no tiene release. Lo que hay funciona; lo que
+> **Estado: v0.1.0.** Primera release, solo para Apple Silicon. Lo que hay funciona; lo que
 > falta está anotado abajo sin adornos.
 
 ## Qué hace
@@ -30,8 +30,13 @@ vibrancy heredado.
 
 ## Instalar
 
-Todavía no hay release. Cuando lo haya, y **mientras la app no esté firmada con una identidad
-de Apple**, macOS va a negarse a abrirla la primera vez:
+Baja `Riel_0.1.0_aarch64.dmg` de la
+[última release](https://github.com/diegopartida22/riel/releases/latest). Es solo para Apple
+Silicon: en una Mac Intel no abre.
+
+La app va firmada con una identidad de desarrollo de Apple, pero **no notarizada** —la
+notarización pide una cuenta de desarrollador de pago—, así que macOS va a negarse a abrirla
+la primera vez:
 
 1. Arrastra `Riel.app` a Aplicaciones y ábrela con doble clic.
 2. macOS dice que no puede comprobar que no contenga software malicioso. Acepta.
@@ -39,14 +44,15 @@ de Apple**, macOS va a negarse a abrirla la primera vez:
    **Abrir de todos modos**.
 
 Desde macOS 15 el atajo de clic derecho → Abrir ya no sirve para esto; hay que pasar por
-Ajustes del Sistema.
+Ajustes del Sistema. Desde la terminal, `xattr -dr com.apple.quarantine /Applications/Riel.app`
+hace lo mismo de una vez.
 
 ### Sobre las notificaciones
 
 En macOS 26, `UNUserNotificationCenter` no registra una app cuyo paquete no esté firmado con
 un certificado emitido por Apple. Sin esa firma la app pide el permiso, el sistema contesta
-que sí, y no entrega nada. El código está escrito y funcionará en cuanto haya una identidad
-de firma; hasta entonces las tareas con hora no avisan.
+que sí, y no entrega nada. La release sí está firmada, así que las tareas con hora avisan.
+Lo que no avisa es `npm run tauri dev`: ahí el binario corre suelto, sin `.app` que firmar.
 
 ## Desarrollo
 
@@ -54,6 +60,13 @@ de firma; hasta entonces las tareas con hora no avisan.
 npm install
 npm run tauri dev     # panel en caliente; sin notificaciones (el binario corre sin .app)
 npm run tauri build   # genera Riel.app y el .dmg
+```
+
+El `.dmg` de la release se arma con la identidad puesta en el entorno, para que la app salga
+firmada de una vez y no haya que refirmarla después:
+
+```bash
+APPLE_SIGNING_IDENTITY="Apple Development: tu@correo (EQUIPO)" npm run tauri build
 ```
 
 Stack: Tauri v2 + React + TypeScript + Vite, SQLite vía `tauri-plugin-sql`.
