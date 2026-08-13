@@ -3,7 +3,7 @@
 Tareas en la barra de menú de macOS. Un clic en el icono abre un panel de vidrio para
 capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 
-> **Estado: v0.1.0.** Primera release, solo para Apple Silicon. Lo que hay funciona; lo que
+> **Estado: v0.1.1.** Solo para Apple Silicon. Lo que hay funciona; lo que
 > falta está anotado abajo sin adornos.
 
 ## Qué hace
@@ -30,7 +30,7 @@ vibrancy heredado.
 
 ## Instalar
 
-Baja `Riel_0.1.0_aarch64.dmg` de la
+Baja `Riel_0.1.1_aarch64.dmg` de la
 [última release](https://github.com/diegopartida22/riel/releases/latest). Es solo para Apple
 Silicon: en una Mac Intel no abre.
 

@@ -1,6 +1,6 @@
 [package]
 name = "riel"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tareas en la barra de menú"
 authors = ["Diego Partida"]
 edition = "2021"
