@@ -1,3 +1,4 @@
+mod db;
 mod glass;
 mod panel;
 mod tray;
@@ -9,6 +10,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations(db::URL, db::migrations())
+                .build(),
+        )
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,
             // porque en `tauri dev` el binario no está empaquetado y no hay Info.plist.

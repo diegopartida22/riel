@@ -1,33 +1,48 @@
 import { useEffect, useState } from "react";
 
+import { runSelfTest, type Check } from "./data/selftest";
+
 /**
- * Paso 1 del orden de construcción: el panel vacío, solo para confirmar que el vidrio
- * se ve como un popover nativo antes de escribir una línea de UI de verdad.
- *
- * La leyenda reacciona al modo claro/oscuro en vivo, que es el criterio de aceptación 5.
+ * Andamiaje del paso 2: el panel muestra si la capa de datos cumple las reglas de la
+ * sección 2 del spec. Se cambia por la vista Hoy en el paso 4.
  */
 export default function App() {
-  const scheme = useColorScheme();
+  const checks = useSelfTest();
 
   return (
     <div className="probe">
-      <strong>Riel</strong>
-      <span>{scheme === "dark" ? "modo oscuro" : "modo claro"}</span>
+      <strong>Capa de datos</strong>
+      {checks === null ? (
+        <span>comprobando…</span>
+      ) : (
+        <ul className="checks">
+          {checks.map((check) => (
+            <li key={check.name} className={check.ok ? "ok" : "bad"}>
+              <span aria-hidden>{check.ok ? "✓" : "✗"}</span>
+              <span>
+                {check.name}
+                {check.detail && <em>{check.detail}</em>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-function useColorScheme() {
-  const [scheme, setScheme] = useState<"light" | "dark">(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
-  );
+function useSelfTest() {
+  const [checks, setChecks] = useState<Check[] | null>(null);
 
   useEffect(() => {
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = (event: MediaQueryListEvent) => setScheme(event.matches ? "dark" : "light");
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    let alive = true;
+    runSelfTest().then((result) => {
+      if (alive) setChecks(result);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  return scheme;
+  return checks;
 }
