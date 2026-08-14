@@ -91,6 +91,10 @@ if (branch !== "main") die(`Estás en «${branch}». Las releases salen de main.
 
 const tag = `v${version}`;
 if (tryRun("git", ["tag", "-l", tag])) die(`La etiqueta ${tag} ya existe.`);
+// También en el remoto: puede estar publicada sin estar aquí, y entonces lo que falla es
+// `gh release create`, después de haber empujado ya el commit de versión.
+if (tryRun("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]))
+  die(`La etiqueta ${tag} ya está en el remoto.`);
 
 // El endpoint del actualizador y el repositorio al que se publica tienen que ser el mismo. Si
 // se separan, la app seguiría preguntándole al repositorio viejo y nadie se enteraría: no hay
@@ -227,8 +231,13 @@ const touched = [
 ];
 run("git", ["add", ...touched], { stdio: "inherit" });
 run("git", ["commit", "-m", `Cortar la v${version}`], { stdio: "inherit" });
-run("git", ["tag", tag], { stdio: "inherit" });
-run("git", ["push", "origin", "main", "--follow-tags"], { stdio: "inherit" });
+// Anotada, y empujada por su nombre. Las dos cosas por el mismo susto: `--follow-tags` solo
+// empuja etiquetas anotadas, así que con una ligera el push salía bien, la etiqueta se
+// quedaba en local y `gh release create` fallaba después — con el commit de versión ya
+// publicado y la release sin crear, que es el peor sitio donde pararse.
+run("git", ["tag", "-a", tag, "-m", `Riel ${tag}`], { stdio: "inherit" });
+run("git", ["push", "origin", "main"], { stdio: "inherit" });
+run("git", ["push", "origin", tag], { stdio: "inherit" });
 
 // Sin `--draft` y sin `--prerelease`: el endpoint del actualizador es
 // `releases/latest/download/latest.json`, y GitHub solo cuenta como «latest» una release
