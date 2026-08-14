@@ -2,7 +2,7 @@
 
 App nativa de macOS que vive en la barra de menú. Un clic en el icono abre un panel
 translúcido para capturar, organizar y completar tareas. Sin Dock, sin ventana principal,
-sin cuenta de usuario, sin red. Todo local.
+sin cuenta de usuario. Todo local: la única red que toca es la del actualizador (§11).
 
 Stack: **Tauri v2 + React + TypeScript + Vite**. SQLite local.
 
@@ -321,6 +321,7 @@ Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 - Retención de completadas: 30 días por defecto, con opciones 7 / 30 / 90 / siempre.
 - Exportar a JSON.
 - Versión y un enlace a los datos en Finder.
+- El renglón de la actualización, cuando hay una (§11).
 
 Barrido de completadas al arrancar: borra lo que exceda la retención configurada.
 
@@ -363,3 +364,47 @@ Trabaja en este orden y verifica visualmente en cada paso antes de seguir:
 
 Toma capturas de pantalla y critica tu propio trabajo en los pasos 4, 5 y 10. Un panel de
 vidrio con espaciados de 1px de más se ve mal de una forma difícil de nombrar y fácil de ver.
+
+---
+
+## 11. Actualizaciones
+
+Añadido después de la v1. Es lo único que rompe el «todo local» del encabezado, así que hay
+que ser preciso sobre hasta dónde llega.
+
+`tauri-plugin-updater` contra un archivo estático colgado de las releases de GitHub:
+`https://github.com/diegopartida22/riel/releases/latest/download/latest.json`. Sin servidor,
+sin servicio de terceros, sin coste.
+
+Lo que sale por la red es una petición GET a ese archivo y, si hay versión nueva y el usuario
+pulsa, la descarga del paquete. **No se manda nada**: ni la versión instalada, ni un
+identificador, ni un contador. Una descarga de un archivo estático no tiene dónde ponerlo, y
+así tiene que seguir siendo — cualquier cosa que convierta esto en una petición con parámetros
+es telemetría con otro nombre.
+
+Reglas:
+
+- **Nada se instala solo.** El chequeo es silencioso; instalar es siempre una decisión del
+  usuario. Un panel de barra de menú que se reinicia solo mientras se escribe una tarea es
+  exactamente lo que hace desinstalar una app.
+- **El aviso es un punto de 5px en el `⚙︎`**, en `--ink-accent` aunque se esté dentro de un
+  proyecto: la actualización no es del proyecto que se está mirando. Nada de banners sobre la
+  lista, nada de badges numéricos.
+- **Cuándo se pregunta**: al arrancar, y al abrir el panel si han pasado 24 h desde la última
+  vez. No un `setInterval` de 24 h — la webview vive con el panel cerrado y macOS estrangula
+  sus temporizadores, igual que con los avisos de §7.
+- **Un fallo de red no se enseña.** Sin red, o con GitHub caído, la app funciona igual y se
+  vuelve a preguntar en la próxima apertura. Solo se muestra un error si el usuario pulsó, y
+  dice qué pasó y qué hacer (§3.8): que la versión de siempre sigue puesta, y el enlace para
+  bajarla a mano.
+- La firma minisign la verifica el plugin contra `pubkey` antes de reemplazar nada. Un GitHub
+  comprometido no basta para colar un binario: harían falta también las llaves.
+
+Reiniciar después de instalar es un comando propio en Rust y no `tauri-plugin-process`, por lo
+mismo que `quit` (§4): el plugin traería permisos que no hacen falta para un botón. Lo que sí
+hace falta es `cleanup_before_exit`, o el proceso viejo deja su glifo en la barra junto al del
+nuevo.
+
+Las releases las corta `npm run release -- X.Y.Z`. La llave privada vive fuera del repo, en
+`~/.tauri/riel.key`, y es la única copia: perderla deja a todo el que tenga una versión
+anterior sin actualizaciones automáticas para siempre.

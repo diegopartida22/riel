@@ -115,6 +115,15 @@
   background: none;
 }
 
+/* El porcentaje de la descarga cambia varias veces por segundo. En la fuente de interfaz cada
+   dígito mide distinto y el renglón entero bailaría, así que va en mono con cifras de ancho
+   fijo — el mismo tratamiento que las fechas de la lista (spec 3.3). */
+.settings__pct {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 /* La versión no es un renglón que se pueda tocar: va en mono, con la sangría de las etiquetas
    del menú, y sin el relleno horizontal que sugeriría que se puede pulsar. */
 .settings__version {

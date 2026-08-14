@@ -6,6 +6,8 @@ export interface TopBarProps {
   /** Recibe el rectángulo del `⚙︎` para anclar el popover. */
   onSettings: (anchor: DOMRect) => void;
   settingsOpen: boolean;
+  /** Pinta el punto del `⚙︎` cuando hay una versión nueva esperando. */
+  updateReady: boolean;
   ref?: React.Ref<HTMLInputElement>;
 }
 
@@ -16,7 +18,14 @@ export interface TopBarProps {
  * que ocupa todo el ancho de un panel de vidrio lo apaga, y aquí el icono de lupa ya dice
  * dónde se escribe. La hairline de abajo es lo único que separa la barra de la lista.
  */
-export function TopBar({ query, onQuery, onSettings, settingsOpen, ref }: TopBarProps) {
+export function TopBar({
+  query,
+  onQuery,
+  onSettings,
+  settingsOpen,
+  updateReady,
+  ref,
+}: TopBarProps) {
   return (
     <header className="topbar">
       <Search className="topbar__glass" size={14} strokeWidth={1.75} aria-hidden />
@@ -49,10 +58,14 @@ export function TopBar({ query, onQuery, onSettings, settingsOpen, ref }: TopBar
         </button>
       )}
 
+      {/* El punto es todo el aviso que se da de una versión nueva. Un banner sobre la lista
+          interrumpiría lo que se vino a hacer, y sin nada nadie abriría Ajustes nunca. Va en
+          la tinta de acento neutra incluso dentro de un proyecto: la actualización no es del
+          proyecto que se esté mirando, y teñirla de su color diría que sí. */}
       <button
         type="button"
-        className={`topbar__gear${settingsOpen ? " is-open" : ""}`}
-        aria-label="Ajustes"
+        className={`topbar__gear${settingsOpen ? " is-open" : ""}${updateReady ? " has-update" : ""}`}
+        aria-label={updateReady ? "Ajustes — hay una versión nueva" : "Ajustes"}
         aria-haspopup="dialog"
         aria-expanded={settingsOpen}
         data-menu-trigger

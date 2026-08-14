@@ -115,6 +115,24 @@
   color: var(--ink-primary);
 }
 
+/* El punto de versión nueva. 5px en la esquina del engranaje, sin número y sin color de
+   alarma: no ha pasado nada malo, solo hay algo que se puede hacer. El borde del color del
+   panel es lo que lo despega del icono cuando cae encima de un trazo. */
+.topbar__gear.has-update::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-accent);
+}
+
+.topbar__gear {
+  position: relative;
+}
+
 .topbar__clear:focus-visible,
 .topbar__gear:focus-visible {
   outline: 2px solid var(--accent);

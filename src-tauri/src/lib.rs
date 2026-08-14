@@ -71,12 +71,25 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Vuelve a arrancar después de que el actualizador haya reemplazado el paquete.
+///
+/// Por lo mismo que `quit`: `tauri-plugin-process` haría exactamente esto y traería además
+/// `exit` y su permiso. La diferencia con `quit` es `cleanup_before_exit`, que aquí sí hace
+/// falta —desmonta el icono de la barra— para que el proceso viejo no deje un glifo huérfano
+/// junto al del proceso nuevo.
+#[tauri::command]
+fn restart(app: tauri::AppHandle) {
+    app.cleanup_before_exit();
+    app.restart();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // `LaunchAgent` y no `AppleScript`: deja un plist en `~/Library/LaunchAgents` que se
         // puede leer, y no una entrada opaca escrita con Eventos de Sistema.
         .plugin(tauri_plugin_autostart::init(
@@ -96,7 +109,8 @@ pub fn run() {
             request_notification_permission,
             set_reminders,
             take_completed,
-            quit
+            quit,
+            restart
         ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,

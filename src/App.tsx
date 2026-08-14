@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "./data";
 import { tint } from "./design/palette";
+import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
 import { acceptsNew } from "./state/views";
 import { Composer } from "./ui/Composer";
@@ -28,6 +29,7 @@ const NUMBERED = ["hoy", "proximas", "todas", "completadas"] as const;
  */
 export default function App() {
   const riel = useRiel();
+  const updates = useUpdates();
   const composer = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Editing>(null);
@@ -163,6 +165,7 @@ export default function App() {
         ref={field}
         query={riel.query}
         settingsOpen={settings !== null}
+        updateReady={updates.state.stage === "disponible"}
         onQuery={(value) => {
           // Escribir manda sobre lo que estuviera tapando la lista: el resultado se ve donde
           // se ve la lista, y dejarlo detrás de un editor abierto sería teclear a ciegas.
@@ -182,6 +185,7 @@ export default function App() {
           onRetention={riel.setRetention}
           startView={riel.startView}
           onStartView={riel.setStartView}
+          updates={updates}
           onClose={() => setSettings(null)}
         />
       )}

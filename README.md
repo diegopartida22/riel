@@ -14,12 +14,20 @@ capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 - Captura en lenguaje natural: `Renovar dominio mañana 10:00 #infra !!` crea la tarea con la
   fecha, la hora, el proyecto y la prioridad ya puestas, y el título limpio.
 - Búsqueda difusa, reordenar arrastrando, export a JSON, arranque al iniciar sesión.
+- Se actualiza sola desde las releases de este repo, cuando se lo pides.
 
 ## Qué no hace, a propósito
 
-No sale a la red. No hay cuenta, ni sincronización, ni nube, ni telemetría, ni actualizador
-automático. Los datos son un archivo SQLite en `~/Library/Application Support/com.riel.app`,
-y se pueden exportar a JSON desde Ajustes o abrir con cualquier cliente de SQLite.
+No hay cuenta, ni sincronización, ni nube, ni telemetría. Los datos son un archivo SQLite en
+`~/Library/Application Support/com.riel.app`, y se pueden exportar a JSON desde Ajustes o
+abrir con cualquier cliente de SQLite.
+
+La única vez que Riel sale a la red es para preguntar si hay versión nueva: baja el
+`latest.json` de las releases de este repo al arrancar, y como mucho una vez al día a partir
+de ahí. No manda nada de vuelta —descargar un archivo estático no tiene dónde ponerlo—, así
+que lo que GitHub ve es lo mismo que vería si abrieras la página de releases en Safari. Si
+hay algo nuevo aparece un punto en el engranaje y un renglón en Ajustes; nada se instala sin
+que lo pulses.
 
 Tampoco aparece en el Dock ni con ⌘Tab: es una app de barra de menú y vive ahí.
 
@@ -47,6 +55,9 @@ Desde macOS 15 el atajo de clic derecho → Abrir ya no sirve para esto; hay que
 Ajustes del Sistema. Desde la terminal, `xattr -dr com.apple.quarantine /Applications/Riel.app`
 hace lo mismo de una vez.
 
+Esto es solo la primera vez. Las actualizaciones las baja la propia app y no pasan por el
+navegador, así que macOS no les pone la cuarentena y entran sin volver a preguntar nada.
+
 ### Sobre las notificaciones
 
 En macOS 26, `UNUserNotificationCenter` no registra una app cuyo paquete no esté firmado con
@@ -68,6 +79,29 @@ firmada de una vez y no haya que refirmarla después:
 ```bash
 APPLE_SIGNING_IDENTITY="Apple Development: tu@correo (EQUIPO)" npm run tauri build
 ```
+
+### Cortar una release
+
+```bash
+export APPLE_SIGNING_IDENTITY="Apple Development: tu@correo (EQUIPO)"
+npm run release -- 0.1.2              # sube la versión, compila, etiqueta y publica
+npm run release -- 0.1.2 --dry-run    # todo lo local, sin tocar git ni GitHub
+```
+
+El script sube la versión en los tres archivos que tienen que decir lo mismo —`package.json`,
+`tauri.conf.json` y `Cargo.toml`—, compila firmando con la identidad de Apple, comprueba con
+`codesign` que la firma quedó puesta, arma el `latest.json` con la firma minisign del paquete
+y crea la release con el `.dmg`, el `.app.tar.gz`, su `.sig` y el manifiesto. Necesita
+[`gh`](https://cli.github.com) autenticado.
+
+El `latest.json` no se escribe a mano: lleva dentro la firma del paquete, y si no cuadra con
+la llave pública de `tauri.conf.json` la app rechaza la actualización sin explicar por qué.
+
+La llave privada del actualizador vive en `~/.tauri/riel.key` y **no está en el repo**. Es la
+única copia: si se pierde, hay que generar otra y publicar la pública nueva, y quien tenga
+instalada una versión anterior se queda sin actualizaciones automáticas para siempre —tendría
+que bajar el `.dmg` a mano una vez más—. Vale la pena tenerla respaldada donde guardes las
+contraseñas.
 
 Stack: Tauri v2 + React + TypeScript + Vite, SQLite vía `tauri-plugin-sql`.
 

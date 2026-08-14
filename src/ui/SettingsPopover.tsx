@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
+import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
 
 export interface SettingsPopoverProps {
@@ -17,6 +18,7 @@ export interface SettingsPopoverProps {
   onRetention: (retention: Retention) => void;
   startView: SystemKind;
   onStartView: (kind: SystemKind) => void;
+  updates: Updates;
   onClose: () => void;
 }
 
@@ -24,6 +26,9 @@ const EDGE = 8;
 
 /** El panel de Notificaciones de Ajustes del Sistema, para la nota de permiso denegado. */
 const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notifications";
+
+/** La salida manual cuando el actualizador no puede: bajar el `.dmg` a mano siempre funciona. */
+const RELEASES = "https://github.com/diegopartida22/riel/releases/latest";
 
 /**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
@@ -34,8 +39,11 @@ export function SettingsPopover({
   onRetention,
   startView,
   onStartView,
+  updates,
   onClose,
 }: SettingsPopoverProps) {
+  /** Sacado del objeto para que TypeScript pueda estrechar la unión dentro del JSX. */
+  const update = updates.state;
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const [version, setVersion] = useState<string | null>(null);
@@ -59,7 +67,7 @@ export function SettingsPopover({
       top: anchor.bottom + 6,
       left: Math.min(Math.max(EDGE, anchor.right - own.width), window.innerWidth - own.width - EDGE),
     });
-  }, [anchor, version, autostart, notify]);
+  }, [anchor, version, autostart, notify, updates.state]);
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -233,6 +241,46 @@ export function SettingsPopover({
       </button>
 
       <div className="menu__rule" role="separator" />
+
+      {/* La actualización cuelga de la versión porque son la misma pregunta: qué hay puesto y
+          qué hay disponible. Al día —o sin haber podido preguntar— aquí no se dibuja nada, que
+          es el estado en el que va a estar casi siempre. */}
+      {update.stage === "disponible" && (
+        <button type="button" className="menu__item" onClick={updates.install}>
+          <span className="menu__check" />
+          Actualizar a {update.version}
+        </button>
+      )}
+
+      {/* Un renglón deshabilitado y no un texto suelto: ocupa exactamente lo mismo que el botón
+          al que reemplaza, y así el popover no cambia de alto ni se reancla al pulsar. */}
+      {(update.stage === "bajando" || update.stage === "lista") && (
+        <button type="button" className="menu__item" disabled>
+          <span className="menu__check" />
+          {update.stage === "lista" ? (
+            "Reiniciando…"
+          ) : (
+            <span>
+              Bajando…
+              {update.percent !== null && (
+                <span className="settings__pct">{" "}{update.percent}%</span>
+              )}
+            </span>
+          )}
+        </button>
+      )}
+
+      {update.stage === "fallo" && (
+        <>
+          <p className="settings__note">
+            No se pudo instalar la actualización. Riel {version ?? "—"} sigue puesto y funcionando.
+          </p>
+          <button type="button" className="menu__item" onClick={() => void openUrl(RELEASES)}>
+            <span className="menu__check" />
+            Bajarla a mano
+          </button>
+        </>
+      )}
 
       <p className="settings__version">Riel {version ?? "—"}</p>
     </div>

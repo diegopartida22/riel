@@ -25,3 +25,8 @@ dist-ssr
 
 # macOS
 .DS_Store
+
+# La llave privada del actualizador vive en ~/.tauri/riel.key. Esto es solo la red de
+# seguridad por si algún día se genera una dentro del repo: subirla dejaría que cualquiera
+# firmara una actualización que las copias instaladas aceptarían sin rechistar.
+*.key

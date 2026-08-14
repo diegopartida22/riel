@@ -25,6 +25,11 @@ tauri-plugin-autostart = "2"
 # nuestro y no `tauri-plugin-fs`: así la app no se lleva permiso para leer el disco entero,
 # que en una app que presume de no salir a la red es justo lo que no hay que pedir.
 tauri-plugin-dialog = "2"
+# El actualizador. Es el único sitio por el que Riel sale a la red, y solo para leer el
+# `latest.json` de las releases del repo. La firma minisign de cada paquete la verifica el
+# plugin contra `pubkey` antes de reemplazar nada, así que un GitHub comprometido no basta
+# para colar un binario: harían falta también las llaves.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
