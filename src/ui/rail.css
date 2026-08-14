@@ -12,8 +12,8 @@
   border-right: 1px solid var(--hairline);
   overflow: hidden;
   transition:
-    flex-basis 160ms ease-out,
-    width 160ms ease-out;
+    flex-basis var(--rail-swing) ease-out,
+    width var(--rail-swing) ease-out;
 }
 
 .rail__group {
@@ -38,6 +38,11 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Colapsado, el nombre sigue en el flujo —apagado, pero ocupando— y desborda por la derecha.
+     Sin esto, `overflow-y: auto` vuelve el grupo desplazable también en horizontal y un gesto
+     de dos dedos corría la columna de discos hacia un texto invisible. No cambia la caja de
+     recorte, que sigue siendo la del relleno de 4px, así que el anillo de foco no se toca. */
+  overflow-x: hidden;
   padding-inline: 4px;
   margin-inline: -4px;
 }
@@ -67,6 +72,12 @@
   white-space: nowrap;
   color: var(--ink-tertiary);
   cursor: default;
+  /* El relleno viaja con la columna. Es lo que centra el disco cuando el riel se cierra, y
+     tiene que tardar exactamente lo mismo que ella: si llegara antes, el disco se plantaría
+     en su sitio final y esperaría a que la columna lo alcanzara. */
+  transition:
+    padding var(--rail-swing) ease-out,
+    column-gap var(--rail-swing) ease-out;
 }
 
 .rail__item:hover {
@@ -97,6 +108,9 @@
 .rail__label {
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Al expandir entra con 40ms de retraso: para entonces la columna ya le abrió sitio y el
+     nombre aparece sobre hueco en vez de empujar contra el borde. */
+  transition: opacity 140ms ease-out 40ms;
 }
 
 /* ── El `⋯` del proyecto ─────────────────────────────────────────────────────────────── */
@@ -177,16 +191,31 @@
 
 /* ── Colapsado ───────────────────────────────────────────────────────────────────────── */
 
-/* El nombre se quita del flujo en vez de desvanecerse: durante los 160ms de la transición,
-   un texto a media opacidad dentro de una columna de 44px se lee como un error. */
+/* Aquí estaba el salto. `justify-content` no es animable: al colapsar, `center` se aplicaba
+   entero en el primer fotograma sobre una fila que todavía medía los 136px de la columna
+   abierta, así que el disco se plantaba de golpe en mitad del panel y desde ahí volvía a su
+   sitio durante los 180ms. Se veía como un tirón hacia fuera justo al pulsar el interruptor.
+
+   Centrar con relleno hace lo mismo y sí se puede animar: 8px dejan el mark de 16px en el
+   centro de los 32px de columna útil, y en el otro extremo son los 7px de siempre. El disco
+   recorre un píxel en vez de sesenta. */
 .panel:not(.is-rail-expanded) .rail__item {
-  justify-content: center;
-  gap: 0;
-  padding: 0;
+  column-gap: 0;
+  padding: 0 8px;
 }
 
+/* El nombre ya no se quita del flujo. La intuición del comentario viejo era buena —un texto a
+   media opacidad dentro de una columna de 44px se lee como un error— pero la respuesta no era
+   borrarlo en el fotograma cero: eso partía el gesto en dos tiempos, primero parpadeaba el
+   texto y después se arrastraba una columna vacía. Apagándolo en 80ms, menos de la mitad de
+   lo que tarda la columna, el nombre se ha ido antes de que el sitio se estreche y lo que se
+   ve es la columna llevándoselo. En reposo sigue sin haber nada que leer.
+
+   No lleva `min-width: 0` a propósito: sin él el nombre no encoge, así que lo recorta la
+   columna al cerrarse en vez de ir perdiendo letras contra los puntos suspensivos. */
 .panel:not(.is-rail-expanded) .rail__label {
-  display: none;
+  opacity: 0;
+  transition: opacity 80ms ease-out;
 }
 
 /* ── El pie del riel ─────────────────────────────────────────────────────────────────── */
@@ -205,8 +234,8 @@
   padding-top: 8px;
   border-right: 1px solid var(--hairline);
   transition:
-    flex-basis 160ms ease-out,
-    width 160ms ease-out;
+    flex-basis var(--rail-swing) ease-out,
+    width var(--rail-swing) ease-out;
 }
 
 .foot__toggle {
@@ -230,9 +259,15 @@
 
 /* ── Movimiento reducido ─────────────────────────────────────────────────────────────── */
 
+/* Criterio 7: ni una animación de movimiento. El riel salta de ancho, el relleno con él y el
+   nombre aparece y desaparece de golpe — que es exactamente lo que hacía antes de todo esto,
+   y para quien pide movimiento reducido es lo correcto. */
 @media (prefers-reduced-motion: reduce) {
   .rail,
   .foot__rail,
+  .rail__item,
+  .rail__label,
+  .panel:not(.is-rail-expanded) .rail__label,
   .rail__group--projects.is-sorting .rail__slot {
     transition: none;
   }

@@ -8,6 +8,11 @@
   /* El ancho del riel lo declara el panel y no el riel, porque la celda del pie tiene que
      seguirlo para que la línea vertical no se quiebre al expandir (spec 3.4). */
   --rail-width: 44px;
+  /* Y por lo mismo la duración: la columna, su celda del pie, el relleno de cada fila y el
+     apagado de los nombres tienen que llegar juntos, o el riel se abre en varios tiempos.
+     180ms es lo que tarda la casilla en llenarse al completar (spec 3.6) — el riel no tiene
+     por qué moverse a una velocidad que no exista en ningún otro sitio de la app. */
+  --rail-swing: 180ms;
 }
 
 .panel.is-rail-expanded {
