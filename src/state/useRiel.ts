@@ -43,6 +43,7 @@ import {
   start as startNotifications,
   takeCompleted,
 } from "./notifications";
+import { storeRowText, storedRowText, type RowText } from "./rowText";
 import { rank } from "./search";
 import {
   SYSTEM_VIEWS,
@@ -171,6 +172,10 @@ export interface RielState {
   railExpanded: boolean;
   toggleRail: () => void;
 
+  /** Si el título de la fila se corta a una línea o se enseña entero. */
+  rowText: RowText;
+  setRowText: (value: RowText) => void;
+
   /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
   retention: Retention;
   setRetention: (retention: Retention) => void;
@@ -241,6 +246,7 @@ export function useRiel(): RielState {
   const [railExpanded, setRailExpanded] = useState(
     () => localStorage.getItem(RAIL_KEY) === "1",
   );
+  const [rowText, setRowText] = useState<RowText>(storedRowText);
 
   /**
    * Por cada tarea completada, los temporizadores que la sacarán de la lista y la lista exacta
@@ -872,6 +878,11 @@ export function useRiel(): RielState {
     });
   }, []);
 
+  const changeRowText = useCallback((value: RowText) => {
+    storeRowText(value);
+    setRowText(value);
+  }, []);
+
   return {
     view,
     select,
@@ -910,6 +921,8 @@ export function useRiel(): RielState {
     setStartView,
     railExpanded,
     toggleRail,
+    rowText,
+    setRowText: changeRowText,
     retention,
     setRetention: changeRetention,
   };

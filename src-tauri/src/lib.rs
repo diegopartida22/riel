@@ -124,6 +124,9 @@ pub fn run() {
 
             let material = panel::apply_glass(&window)?;
             app.manage(material);
+            // Antes del primer `show`: es lo que hace que el panel se vea también sobre una
+            // app en pantalla completa, que es su propio espacio y no el del escritorio.
+            panel::make_menu_bar_panel(&window);
             tray::build(app.handle())?;
 
             // Antes de que pueda llegar ningún aviso: un banner de una categoría que el

@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
+import { ROW_TEXTS, type RowText } from "../state/rowText";
 import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
 
@@ -18,6 +19,8 @@ export interface SettingsPopoverProps {
   onRetention: (retention: Retention) => void;
   startView: SystemKind;
   onStartView: (kind: SystemKind) => void;
+  rowText: RowText;
+  onRowText: (value: RowText) => void;
   updates: Updates;
   onClose: () => void;
 }
@@ -39,6 +42,8 @@ export function SettingsPopover({
   onRetention,
   startView,
   onStartView,
+  rowText,
+  onRowText,
   updates,
   onClose,
 }: SettingsPopoverProps) {
@@ -168,6 +173,29 @@ export function SettingsPopover({
             {kind === startView && <Check size={13} strokeWidth={2.25} aria-hidden />}
           </span>
           {label}
+        </button>
+      ))}
+
+      <div className="menu__rule" role="separator" />
+
+      {/* Un título largo cortado a la mitad obliga a abrir el detalle para saber de qué tarea
+          se trata; uno entero gasta dos o tres renglones por fila y hace que quepan menos.
+          Ninguna de las dos es la respuesta correcta para todo el mundo, así que se elige una
+          vez y vale para toda la app. */}
+      <p className="settings__label">Texto de las tareas</p>
+      {ROW_TEXTS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className="menu__item"
+          role="menuitemradio"
+          aria-checked={option.value === rowText}
+          onClick={() => onRowText(option.value)}
+        >
+          <span className="menu__check">
+            {option.value === rowText && <Check size={13} strokeWidth={2.25} aria-hidden />}
+          </span>
+          {option.label}
         </button>
       ))}
 

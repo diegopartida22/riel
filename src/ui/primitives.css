@@ -120,6 +120,52 @@
   clip-path: inset(0 0 0 0);
 }
 
+/* ── Texto completo ──────────────────────────────────────────────────────────────────── */
+
+/* La otra mitad del ajuste de Ajustes: el título deja de cortarse y se reparte en tantos
+   renglones como haga falta. `overflow-wrap: anywhere` es para el caso que no tiene espacios
+   —una URL pegada, un identificador largo— que si no se sale del panel por la derecha.
+
+   La fecha y las herramientas siguen alineadas con el primer renglón, y eso ya lo resuelve el
+   `align-items: flex-start` de la fila: si se centraran contra el bloque entero, la columna de
+   fechas —que es lo que el mono alinea— dejaría de ser una columna. */
+.panel[data-texto="completo"] .task-row__title,
+.panel[data-texto="completo"] .task-row__notes {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Con varias líneas el tachado no puede ser una raya absoluta sobre la caja: cruzaría el
+   bloque por el medio en vez de tachar cada renglón. Un degradado de 1px que se repite en cada
+   fragmento de línea —eso es `box-decoration-break: clone`— sí sigue al texto, y su
+   `background-size` se anima igual que el `clip-path`: los mismos 220ms, trazándose de
+   izquierda a derecha en todos los renglones a la vez. */
+.panel[data-texto="completo"] .task-row__title {
+  display: inline;
+  background-image: linear-gradient(currentcolor, currentcolor);
+  background-repeat: no-repeat;
+  background-position: 0 50%;
+  background-size: 0% 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background-size 220ms ease-out;
+}
+
+.panel[data-texto="completo"] .task-row__title::after {
+  display: none;
+}
+
+.panel[data-texto="completo"]
+  .task-row.is-completed
+  > .task-row__clip
+  > .task-row__main
+  .task-row__title,
+.panel[data-texto="completo"] .subtask.is-completed .task-row__title {
+  background-size: 100% 1px;
+}
+
 /* La fecha y las herramientas comparten un alto de línea con el título — el mismo `1.35` de
    `--text-title` — en vez de llevar cada una su propio empujón en px. Así los tres bloques se
    centran contra la primera línea del título y no unos contra otros, que era de donde salía
@@ -433,6 +479,7 @@
    aceptación 7: ni una sola animación de movimiento. */
 @media (prefers-reduced-motion: reduce) {
   .collapse,
+  .task-row__title,
   .task-row__title::after,
   .task-row__tools,
   .checkbox__ring,

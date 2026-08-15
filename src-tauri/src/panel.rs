@@ -26,6 +26,108 @@ pub fn apply_glass<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<crate
     Ok(material)
 }
 
+// La clase que acaba teniendo la ventana del panel.
+//
+// Hereda de `NSPanel` solo para poder decir que sí a `canBecomeKeyWindow`: la ventana no tiene
+// barra de título, y sin barra ni `NSWindow` ni `NSPanel` aceptan ser la ventana clave. Sin
+// esto el panel se dibuja pero no recibe una sola tecla — se veía sobre la app en pantalla
+// completa y el texto que uno escribía se iba a la app de debajo.
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    #[unsafe(super(objc2_app_kit::NSPanel))]
+    #[thread_kind = objc2::MainThreadOnly]
+    #[name = "RielPanel"]
+    struct RielPanel;
+
+    impl RielPanel {
+        #[unsafe(method(canBecomeKeyWindow))]
+        fn can_become_key_window(&self) -> bool {
+            true
+        }
+    }
+);
+
+/// Convierte la ventana en un panel de barra de menú: uno que existe en todos los espacios,
+/// incluidos los de pantalla completa de otras apps.
+///
+/// El bug que arregla: con otra app en pantalla completa —que en macOS no es «una ventana
+/// grande» sino un espacio aparte— el panel no aparecía. La app respondía al clic del icono,
+/// cambiaba el glifo y se creía visible (`isVisible` en true, posición correcta, nivel
+/// correcto), pero el WindowServer la daba por fuera de pantalla: se estaba dibujando en el
+/// escritorio de siempre, en el otro espacio.
+///
+/// Hacen falta las cuatro piezas de abajo, y el orden importa poco pero la combinación no:
+/// medido con `CGWindowListCopyWindowInfo`, quitar cualquiera de ellas devuelve la ventana a
+/// `enpantalla no`.
+///
+/// **La clase.** Es lo que costó encontrar. `NonactivatingPanel` es la que de verdad mete la
+/// ventana en el espacio activo, y AppKit solo acepta esa máscara si la ventana es una
+/// `NSPanel`: puesta sobre la `NSWindow` que crea tao se ignora en silencio, sin error y sin
+/// efecto. Por eso la ventana se rebautiza a [`RielPanel`] con `object_setClass` antes de
+/// tocar la máscara. Cambiar la clase de un objeto vivo suena peor de lo que es —es lo que
+/// hace también `tauri-nspanel`— porque `NSPanel` no añade estado propio: los ivars de la
+/// `NSWindow` siguen donde estaban y el delegado de tao sigue en su sitio.
+///
+/// **El comportamiento de colección.** `CanJoinAllSpaces` mete la ventana en todos los
+/// espacios a la vez, así que aparece en el que esté activo sin arrastrar consigo un cambio de
+/// espacio; es lo que hacen los popovers de la barra del sistema, y por eso el de Wi‑Fi sí se
+/// abre sobre una app en pantalla completa. `FullScreenAuxiliary` es el permiso para dibujarse
+/// **encima** de un espacio de pantalla completa en vez de por debajo. `Stationary` la deja
+/// quieta cuando el sistema desliza los espacios, para que no se vaya con la animación como si
+/// fuera parte del escritorio de donde salió. `IgnoresCycle` la saca de ⌘` por lo mismo que la
+/// app no sale en ⌘Tab (spec 4).
+///
+/// **El nivel.** Sube de `NSFloatingWindowLevel` (3, lo que pone `alwaysOnTop`) a
+/// `NSStatusWindowLevel` (25), que es donde viven los propios elementos de la barra de menú.
+/// Flotante alcanza para quedar sobre las ventanas normales, pero no sobre la barra revelada
+/// ni sobre las superficies que el sistema dibuja en pantalla completa. El panel cuelga del
+/// icono de la barra: su sitio es el de la barra.
+///
+/// **No ocultarse al desactivar.** Una `NSPanel` se esconde sola cuando su app deja de ser la
+/// activa. Aquí eso rompería la excepción de la spec 4: el panel tiene que seguir en pantalla
+/// mientras haya un modal o el selector de fecha delante, que son justo los que se llevan el
+/// foco. Quién y cuándo se oculta lo decide `on_focus_lost`, no AppKit.
+#[cfg(target_os = "macos")]
+pub fn make_menu_bar_panel<R: Runtime>(window: &WebviewWindow<R>) {
+    use std::ptr::NonNull;
+
+    use objc2::runtime::AnyClass;
+    use objc2_app_kit::{
+        NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+    };
+
+    let Ok(pointer) = window.ns_window() else {
+        return;
+    };
+    let Some(pointer) = NonNull::new(pointer) else {
+        return;
+    };
+
+    // SAFETY: `ns_window()` devuelve la `NSWindow` viva de la ventana, y esto se llama desde
+    // `setup`, que corre en el hilo principal.
+    unsafe {
+        let class = <RielPanel as objc2::ClassType>::class();
+        let object = pointer.cast::<objc2::runtime::AnyObject>().as_ptr();
+        objc2::ffi::object_setClass(object.cast(), (class as *const AnyClass).cast());
+
+        let ns_window: &NSWindow = pointer.cast().as_ref();
+        ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+        ns_window.setHidesOnDeactivate(false);
+        ns_window.setCollectionBehavior(
+            NSWindowCollectionBehavior::CanJoinAllSpaces
+                | NSWindowCollectionBehavior::FullScreenAuxiliary
+                | NSWindowCollectionBehavior::Stationary
+                | NSWindowCollectionBehavior::IgnoresCycle,
+        );
+        ns_window.setLevel(NSStatusWindowLevel);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn make_menu_bar_panel<R: Runtime>(window: &WebviewWindow<R>) {
+    let _ = window;
+}
+
 /// Aire entre el área de trabajo y el borde superior del panel, en puntos.
 ///
 /// Cero, porque es lo que hace el sistema: medido sobre el popover de Wi‑Fi en esta máquina,
@@ -163,6 +265,7 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
     position(window);
     let _ = window.show();
     let _ = window.set_focus();
+
     crate::glass::refresh_shadow(window);
     // Que el panel se abrió, para que el frontend pueda volver a su vista de siempre. Va por
     // aquí y no por el foco de la ventana: el panel de guardar del export también devuelve el

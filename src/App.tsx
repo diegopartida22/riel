@@ -159,6 +159,9 @@ export default function App() {
       ]
         .filter(Boolean)
         .join(" ")}
+      /* Un atributo en la raíz y no una prop hasta cada fila: lo mira solo el CSS, y de aquí
+         cuelgan por igual la lista, los resultados de búsqueda y las subtareas del detalle. */
+      data-texto={riel.rowText}
       style={project && !editing ? tint(project.color) : undefined}
     >
       <TopBar
@@ -185,6 +188,8 @@ export default function App() {
           onRetention={riel.setRetention}
           startView={riel.startView}
           onStartView={riel.setStartView}
+          rowText={riel.rowText}
+          onRowText={riel.setRowText}
           updates={updates}
           onClose={() => setSettings(null)}
         />
