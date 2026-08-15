@@ -106,6 +106,51 @@
   color: var(--ink-secondary);
 }
 
+/* Los cinco glifos de la barra, en fila. La sangría es la de las etiquetas del grupo, para
+   que la fila arranque donde arrancan los nombres de las opciones de arriba. */
+.settings__glyphs {
+  display: flex;
+  gap: 2px;
+  margin: 2px 8px 4px 18px;
+}
+
+.settings__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: default;
+}
+
+.settings__glyph:hover {
+  background: var(--layer-hover);
+}
+
+/* El elegido lleva fondo y no un anillo de color: el acento aquí sería el del proyecto que se
+   esté mirando, y el icono de la barra no es de ningún proyecto (spec 3.1). */
+.settings__glyph.is-selected {
+  background: var(--layer-selected);
+}
+
+/* 18px, que es exactamente el alto al que macOS dibuja el icono en la barra: la
+   previsualización no es una versión del glifo, es el glifo. */
+.settings__glyph-tinta {
+  width: 18px;
+  height: 18px;
+  background: var(--ink-secondary);
+  mask-size: 18px 18px;
+  -webkit-mask-size: 18px 18px;
+}
+
+.settings__glyph.is-selected .settings__glyph-tinta {
+  background: var(--ink-primary);
+}
+
 /* Mientras se escribe el export, el renglón no acepta un segundo clic. */
 .menu__item:disabled {
   color: var(--ink-tertiary);

@@ -46,6 +46,12 @@ import {
 import { storeRowText, storedRowText, type RowText } from "./rowText";
 import { rank } from "./search";
 import {
+  applyTrayGlyph,
+  storeTrayGlyph,
+  storedTrayGlyph,
+  type TrayGlyph,
+} from "./trayGlyph";
+import {
   SYSTEM_VIEWS,
   belongs,
   draftFor,
@@ -176,6 +182,10 @@ export interface RielState {
   rowText: RowText;
   setRowText: (value: RowText) => void;
 
+  /** Qué silueta dibuja el icono de la barra de menú (spec 4). */
+  trayGlyph: TrayGlyph;
+  setTrayGlyph: (value: TrayGlyph) => void;
+
   /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
   retention: Retention;
   setRetention: (retention: Retention) => void;
@@ -247,6 +257,7 @@ export function useRiel(): RielState {
     () => localStorage.getItem(RAIL_KEY) === "1",
   );
   const [rowText, setRowText] = useState<RowText>(storedRowText);
+  const [trayGlyph, setTrayGlyph] = useState<TrayGlyph>(storedTrayGlyph);
 
   /**
    * Por cada tarea completada, los temporizadores que la sacarán de la lista y la lista exacta
@@ -334,6 +345,11 @@ export function useRiel(): RielState {
       alive = false;
     };
   }, [tasks]);
+
+  // Y la silueta. Aquí y no dentro del que la cambia porque este también cubre el arranque:
+  // Rust monta el icono con el de omisión —la preferencia vive en el webview, que todavía no
+  // existe cuando se monta la barra— y esta es la primera pasada que lo pone en su sitio.
+  useEffect(() => applyTrayGlyph(trayGlyph), [trayGlyph]);
 
   // Escribir espera un respiro; borrar no. Limpiar la búsqueda tiene que devolver la vista de
   // golpe — es lo que hace el primer Escape (spec 4), y ahí una demora se siente como un tirón.
@@ -883,6 +899,11 @@ export function useRiel(): RielState {
     setRowText(value);
   }, []);
 
+  const changeTrayGlyph = useCallback((value: TrayGlyph) => {
+    storeTrayGlyph(value);
+    setTrayGlyph(value);
+  }, []);
+
   return {
     view,
     select,
@@ -923,6 +944,8 @@ export function useRiel(): RielState {
     toggleRail,
     rowText,
     setRowText: changeRowText,
+    trayGlyph,
+    setTrayGlyph: changeTrayGlyph,
     retention,
     setRetention: changeRetention,
   };

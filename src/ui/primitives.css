@@ -137,6 +137,38 @@
   overflow-wrap: anywhere;
 }
 
+/* El aire de la fila se recalcula entero, porque con dos renglones el reparto de antes se
+   invierte y deja de funcionar.
+
+   Medido en el riel expandido, que es el caso apretado: entre dos renglones de un mismo título
+   había 17px y entre dos filas 12px. Con el hueco de dentro más grande que el de fuera, la
+   lista se lee como un párrafo corrido y hay que ir contando casillas para saber dónde acaba
+   cada tarea. Con un solo renglón el defecto no existe —nunca hay un «dentro»— y por eso el
+   modo de una línea se queda como estaba.
+
+   Así que la fila separa más de lo que junta: `1.45` da 19px dentro, y 9px de relleno arriba y
+   abajo dan 24px fuera. La proporción importa más que los números. */
+.panel[data-texto="completo"] .task-row__main {
+  padding-block: 9px;
+}
+
+.panel[data-texto="completo"] .subtask {
+  padding-block: 7px;
+}
+
+.panel[data-texto="completo"] .task-row__title {
+  line-height: 1.45;
+}
+
+/* La fecha y las herramientas siguen centradas contra el **primer** renglón, así que su alto
+   tiene que seguir al alto de línea del título. Si se quedaran en `1.35` mientras el título
+   sube a `1.45`, la columna de fechas quedaría 1px alta respecto del texto — poco para
+   nombrarlo y suficiente para verlo, que es justo lo que avisa la spec 10. */
+.panel[data-texto="completo"] .task-row__meta,
+.panel[data-texto="completo"] .task-row__tools {
+  height: calc(var(--text-title) * 1.45);
+}
+
 /* Con varias líneas el tachado no puede ser una raya absoluta sobre la caja: cruzaría el
    bloque por el medio en vez de tachar cada renglón. Un degradado de 1px que se repite en cada
    fragmento de línea —eso es `box-decoration-break: clone`— sí sigue al texto, y su
@@ -178,19 +210,47 @@
   height: calc(var(--text-title) * 1.35);
 }
 
-.task-row__meta {
-  gap: 6px;
+/* El hueco de la derecha. La fecha y las herramientas van apiladas en la misma celda en vez
+   de una detrás de otra, así que mide lo que el más ancho de los dos y no la suma.
+
+   Puestas en fila, las herramientas se llevaban 34px del título de forma permanente aunque
+   solo se vean al pasar por encima. Quitarles el hueco y dejar que aparezcan encima sin más
+   tampoco vale: en una tarea sin fecha no hay nada debajo y taparían el final del título.
+   Apiladas se resuelven las dos cosas a la vez, y como el ancho no depende de cuál de los dos
+   se esté viendo, al cruzarse no se mueve nada. */
+.task-row__right {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-areas: "hueco";
+  justify-items: end;
+  margin-left: 6px;
 }
 
-/* El hueco de las herramientas existe siempre; lo que cambia al hover es si se ven. Si
-   apareciera de la nada, la fecha daría un salto cada vez que el puntero cruza una fila. */
+.task-row__right > * {
+  grid-area: hueco;
+}
+
+.task-row__meta {
+  gap: 6px;
+  /* Nada de aquí dentro se pulsa, y bajo las herramientas no llegaría el puntero igual. */
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
 .task-row__tools {
   justify-content: flex-end;
   gap: 2px;
   width: 34px;
-  margin-left: 6px;
   opacity: 0;
   transition: opacity 120ms ease-out;
+}
+
+/* El cruce. La fecha se va justo cuando llegan las herramientas: si se quedara, las dos se
+   verían una encima de la otra y ninguna se leería. */
+.task-row__main:hover .task-row__meta,
+.task-row__right:focus-within .task-row__meta,
+.task-row.is-flying .task-row__meta {
+  opacity: 0;
 }
 
 .task-row__main:hover .task-row__tools,
@@ -201,10 +261,13 @@
   opacity: 1;
 }
 
-/* Una sola herramienta: la manija de la subtarea. Reserva su ancho igual que las dos de la
-   raíz, y como las dos se alinean a la derecha, las manijas quedan en la misma columna. */
+/* Una sola herramienta: la manija de la subtarea. No tiene fecha con la que compartir celda,
+   así que va suelta y sí reserva su ancho — son 16px, y sin ellos el título de la subtarea
+   daría un salto cada vez que el puntero la cruza. Alineada a la derecha como las de la raíz,
+   las manijas quedan en la misma columna. */
 .task-row__tools--one {
   width: 16px;
+  margin-left: 6px;
 }
 
 /* Los glifos `⋯` y `⠿` se veían torcidos porque su caja tipográfica no está centrada sobre su
@@ -481,6 +544,7 @@
   .collapse,
   .task-row__title,
   .task-row__title::after,
+  .task-row__meta,
   .task-row__tools,
   .checkbox__ring,
   .checkbox__tick,

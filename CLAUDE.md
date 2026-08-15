@@ -176,8 +176,14 @@ Panel de **440 × 580**, no redimensionable, esquinas de 12px.
 discos de color: los proyectos son reconocibles solo por su color, sin texto. Expandido a
 148px muestra los nombres junto a los discos, más las vistas Hoy / Próximas / Todas /
 Completadas arriba. El estado de expansión persiste. En el riel colapsado, las cuatro
-vistas del sistema se representan con iconos de Lucide en `--ink-tertiary`, separadas de
-los proyectos por una hairline.
+vistas del sistema se representan con iconos en `--ink-tertiary`, separadas de los
+proyectos por una hairline.
+
+Los iconos son de Hugeicons (`@hugeicons/core-free-icons`, MIT) y se importan siempre desde
+`src/ui/icons.tsx`, nunca del paquete: el juego es una decisión de diseño, y cambiarlo tiene
+que ser un archivo. Ahí también se fija el grosor del trazo, que se mide en píxeles ya
+dibujados y no en unidades de la rejilla de 24, para que un icono de 11px y uno de 15px
+pesen lo mismo.
 
 Al hacer hover sobre un disco colapsado, aparece un tooltip nativo con el nombre y el
 conteo de pendientes.
@@ -201,6 +207,10 @@ conteo de pendientes.
 - Hover: fondo `--layer-hover`, radio 6px, y aparecen dos affordances a la derecha —
   un `⋯` para el menú contextual y una manija de arrastre. Antes del hover no hay nada:
   la fila en reposo es solo texto.
+- Las dos affordances no llevan hueco propio: ocupan el de la fecha, que se desvanece al
+  entrar ellas. El hueco de la derecha mide lo que el más ancho de los dos, así que no se
+  mueve nada al cruzarse y el título no paga 34px permanentes por algo que casi nunca está
+  en pantalla. Encimarlas sin más no vale: en una tarea sin fecha taparían el título.
 
 ### 3.6 Completar una tarea
 

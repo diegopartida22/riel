@@ -30,20 +30,33 @@ const TIMEOUT_MS = 20_000;
 
 /**
  * - `ninguna`: al día, o todavía sin respuesta. Para la UI son lo mismo: no se dibuja nada.
+ * - `buscando`: solo tras pulsar. El chequeo de fondo no pasa por aquí, que para eso es de fondo.
+ * - `aldia`: se preguntó a mano y no había nada. Es lo que `ninguna` no puede decir: callarse
+ *   es la respuesta correcta para el chequeo silencioso y la respuesta equivocada para quien
+ *   acaba de pulsar un botón y se queda mirando.
  * - `disponible`: hay versión nueva y espera un clic.
  * - `bajando`: `percent` es `null` mientras el servidor no diga cuánto pesa.
  * - `lista`: instalada; lo siguiente es el reinicio.
- * - `fallo`: se intentó y no se pudo. Solo aparece si el usuario pulsó, nunca de fondo.
+ * - `incomunicada`: se preguntó a mano y no se pudo. De fondo esto no se enseña (spec 11).
+ * - `fallo`: se intentó instalar y no se pudo.
  */
 export type UpdateState =
   | { stage: "ninguna" }
+  | { stage: "buscando" }
+  | { stage: "aldia" }
   | { stage: "disponible"; version: string }
   | { stage: "bajando"; version: string; percent: number | null }
   | { stage: "lista"; version: string }
+  | { stage: "incomunicada" }
   | { stage: "fallo"; version: string };
 
 export interface Updates {
   state: UpdateState;
+  /**
+   * Pregunta ahora, salte el reloj de las 24 h. Es lo que hay detrás del botón de Ajustes: sin
+   * él, la única forma de adelantar el chequeo era reiniciar la app.
+   */
+  check: () => void;
   /** Baja, instala y reinicia. Sin efecto si no hay nada que instalar o si ya está en marcha. */
   install: () => void;
 }
@@ -57,51 +70,73 @@ export function useUpdates(): Updates {
   /** Una consulta en vuelo. Sin esto, abrir el panel dos veces seguidas lanzaría dos. */
   const asking = useRef(false);
 
-  useEffect(() => {
-    const look = async () => {
-      // Ya hay algo esperando, o se está bajando: preguntar otra vez no cambiaría nada y
-      // podría reemplazar por debajo el objeto que `install` tiene apuntado.
-      if (busy.current || asking.current || found.current) return;
-      if (checkedAt.current && Date.now() - checkedAt.current < EVERY_MS) return;
-      asking.current = true;
+  /**
+   * `pedido` distingue las dos formas de llegar aquí, y es toda la diferencia entre las dos.
+   *
+   * De fondo el chequeo es mudo: no dibuja que está buscando, no dice que estás al día y sobre
+   * todo no enseña el fallo de red (spec 11). A mano es al revés — quien pulsa un botón tiene
+   * derecho a ver las tres cosas, incluida la de que no pasó nada.
+   */
+  const look = useCallback(async (pedido: boolean) => {
+    // Ya hay algo esperando, o se está bajando: preguntar otra vez no cambiaría nada y
+    // podría reemplazar por debajo el objeto que `install` tiene apuntado.
+    if (busy.current || asking.current || found.current) return;
+    // El reloj solo frena al chequeo de fondo. Saltárselo es justo lo que se pide al pulsar.
+    if (!pedido && checkedAt.current && Date.now() - checkedAt.current < EVERY_MS) return;
+    asking.current = true;
 
-      try {
-        const update = await check({ timeout: TIMEOUT_MS });
-        // El reloj se sella con la respuesta, no con la pregunta: si se sellara antes, un
-        // fallo gastaría el turno del día igual que un acierto.
-        checkedAt.current = Date.now();
-        if (!update) return;
-        found.current = update;
-        setState({ stage: "disponible", version: update.version });
-      } catch (cause) {
-        // Sin red, con el Wi-Fi de un café de por medio o con GitHub caído. Ninguna de las
-        // tres es noticia: la app funciona igual y se vuelve a preguntar en la próxima
-        // apertura, porque el reloj de arriba se quedó sin sellar. Un aviso aquí sería ruido
-        // por algo que el usuario no pidió.
-        console.error(cause);
-      } finally {
-        asking.current = false;
+    // Un «está al día» de hace tres días no es una respuesta, es un cartel viejo. Se limpia al
+    // empezar cualquier chequeo, así que el mensaje solo vive desde que se pulsa.
+    setState((previous) =>
+      pedido
+        ? { stage: "buscando" }
+        : previous.stage === "aldia" || previous.stage === "incomunicada"
+          ? { stage: "ninguna" }
+          : previous,
+    );
+
+    try {
+      const update = await check({ timeout: TIMEOUT_MS });
+      // El reloj se sella con la respuesta, no con la pregunta: si se sellara antes, un
+      // fallo gastaría el turno del día igual que un acierto.
+      checkedAt.current = Date.now();
+      if (!update) {
+        setState(pedido ? { stage: "aldia" } : { stage: "ninguna" });
+        return;
       }
-    };
+      found.current = update;
+      setState({ stage: "disponible", version: update.version });
+    } catch (cause) {
+      // Sin red, con el Wi-Fi de un café de por medio o con GitHub caído. Ninguna de las
+      // tres es noticia: la app funciona igual y se vuelve a preguntar en la próxima
+      // apertura, porque el reloj de arriba se quedó sin sellar. Un aviso aquí sería ruido
+      // por algo que el usuario no pidió — salvo que lo haya pedido.
+      console.error(cause);
+      setState(pedido ? { stage: "incomunicada" } : { stage: "ninguna" });
+    } finally {
+      asking.current = false;
+    }
+  }, []);
 
+  useEffect(() => {
     // Sin bandera de «ya no estoy montado» a propósito. Este efecto vive en la raíz de la
     // app, que no se desmonta nunca; lo que sí pasa es que `StrictMode` lo monta dos veces en
     // desarrollo, y una bandera así tiraría justo la respuesta de la primera —la única que
     // llega, porque el reloj ya impide que la segunda pregunte— y en `tauri dev` no
     // aparecería nunca una actualización.
-    void look();
+    void look(false);
 
     // Y de ahí en adelante, al abrir el panel. Un `setInterval` de 24 h era lo obvio y es lo
     // que no funciona: el panel vive cerrado y macOS estrangula los temporizadores de una
     // webview sin ventana visible —el mismo motivo por el que los avisos los lleva Rust—, así
     // que ese intervalo despertaría tarde y a saber cuándo. El panel, en cambio, se abre
     // decenas de veces al día, y el reloj de arriba se encarga de que solo una cuente.
-    const unlisten = listen("riel://panel-abierto", () => void look());
+    const unlisten = listen("riel://panel-abierto", () => void look(false));
 
     return () => {
       void unlisten.then((off) => off());
     };
-  }, []);
+  }, [look]);
 
   const install = useCallback(() => {
     const update = found.current;
@@ -144,5 +179,5 @@ export function useUpdates(): Updates {
       });
   }, []);
 
-  return { state, install };
+  return { state, check: useCallback(() => void look(true), [look]), install };
 }

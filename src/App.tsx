@@ -1,6 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "./data";
@@ -10,6 +9,7 @@ import { useRiel } from "./state/useRiel";
 import { acceptsNew } from "./state/views";
 import { Composer } from "./ui/Composer";
 import { useFocoDeTeclado } from "./ui/foco";
+import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
 import { ProjectEditor } from "./ui/ProjectEditor";
 import { Rail } from "./ui/Rail";
 import { SettingsPopover } from "./ui/SettingsPopover";
@@ -190,6 +190,8 @@ export default function App() {
           onStartView={riel.setStartView}
           rowText={riel.rowText}
           onRowText={riel.setRowText}
+          trayGlyph={riel.trayGlyph}
+          onTrayGlyph={riel.setTrayGlyph}
           updates={updates}
           onClose={() => setSettings(null)}
         />
@@ -292,9 +294,9 @@ export default function App() {
             onClick={riel.toggleRail}
           >
             {riel.railExpanded ? (
-              <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden />
+              <PanelLeftClose size={15} aria-hidden />
             ) : (
-              <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden />
+              <PanelLeftOpen size={15} aria-hidden />
             )}
           </button>
         </div>

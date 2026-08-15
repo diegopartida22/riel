@@ -1,4 +1,4 @@
-import { Search, Settings, X } from "lucide-react";
+import { Search, Settings, X } from "./icons";
 
 export interface TopBarProps {
   query: string;
@@ -28,7 +28,7 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <header className="topbar">
-      <Search className="topbar__glass" size={14} strokeWidth={1.75} aria-hidden />
+      <Search className="topbar__glass" size={14} aria-hidden />
 
       <input
         ref={ref}
@@ -54,7 +54,7 @@ export function TopBar({
           aria-label="Limpiar la búsqueda"
           onClick={() => onQuery("")}
         >
-          <X size={13} strokeWidth={2} aria-hidden />
+          <X size={13} aria-hidden />
         </button>
       )}
 
@@ -71,7 +71,7 @@ export function TopBar({
         data-menu-trigger
         onClick={(event) => onSettings(event.currentTarget.getBoundingClientRect())}
       >
-        <Settings size={15} strokeWidth={1.75} aria-hidden />
+        <Settings size={15} aria-hidden />
       </button>
     </header>
   );

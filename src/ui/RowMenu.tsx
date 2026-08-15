@@ -1,7 +1,7 @@
-import { Check } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Priority, Task } from "../data";
+import { Check } from "./icons";
 
 export interface RowMenuProps {
   task: Task;
@@ -110,7 +110,7 @@ export function RowMenu({ task, anchor, onOpen, onPriority, onDelete, onClose }:
           onClick={() => onPriority(value)}
         >
           <span className="menu__check">
-            {task.priority === value && <Check size={12} strokeWidth={2.25} aria-hidden />}
+            {task.priority === value && <Check size={12} aria-hidden />}
           </span>
           {label}
         </button>

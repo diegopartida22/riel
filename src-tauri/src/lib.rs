@@ -21,6 +21,13 @@ fn set_overdue(app: tauri::AppHandle, overdue: bool) -> Result<(), String> {
     tray::set_overdue(&app, overdue).map_err(|error| error.to_string())
 }
 
+/// El glifo de la barra, elegido en Ajustes (spec 4). Lo manda el frontend al arrancar y cada
+/// vez que se cambia: la preferencia vive en `localStorage`, que Rust no puede leer.
+#[tauri::command]
+fn set_tray_glyph(app: tauri::AppHandle, glyph: String) -> Result<(), String> {
+    tray::set_glyph(&app, &glyph).map_err(|error| error.to_string())
+}
+
 /// Escribe el export en la ruta que eligió el panel de guardar.
 ///
 /// Es un comando propio y no `tauri-plugin-fs` a propósito: el plugin traería permiso para
@@ -104,6 +111,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_keep_open,
             set_overdue,
+            set_tray_glyph,
             write_export,
             notification_permission,
             request_notification_permission,

@@ -3,14 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { Check } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
+import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
 import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
+import { Check } from "./icons";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
@@ -21,6 +22,8 @@ export interface SettingsPopoverProps {
   onStartView: (kind: SystemKind) => void;
   rowText: RowText;
   onRowText: (value: RowText) => void;
+  trayGlyph: TrayGlyph;
+  onTrayGlyph: (value: TrayGlyph) => void;
   updates: Updates;
   onClose: () => void;
 }
@@ -44,6 +47,8 @@ export function SettingsPopover({
   onStartView,
   rowText,
   onRowText,
+  trayGlyph,
+  onTrayGlyph,
   updates,
   onClose,
 }: SettingsPopoverProps) {
@@ -149,7 +154,7 @@ export function SettingsPopover({
         onClick={() => void toggleAutostart()}
       >
         <span className="menu__check">
-          {autostart && <Check size={13} strokeWidth={2.25} aria-hidden />}
+          {autostart && <Check size={13} aria-hidden />}
         </span>
         Abrir al iniciar sesión
       </button>
@@ -170,7 +175,7 @@ export function SettingsPopover({
           onClick={() => onStartView(kind)}
         >
           <span className="menu__check">
-            {kind === startView && <Check size={13} strokeWidth={2.25} aria-hidden />}
+            {kind === startView && <Check size={13} aria-hidden />}
           </span>
           {label}
         </button>
@@ -193,11 +198,44 @@ export function SettingsPopover({
           onClick={() => onRowText(option.value)}
         >
           <span className="menu__check">
-            {option.value === rowText && <Check size={13} strokeWidth={2.25} aria-hidden />}
+            {option.value === rowText && <Check size={13} aria-hidden />}
           </span>
           {option.label}
         </button>
       ))}
+
+      <div className="menu__rule" role="separator" />
+
+      {/* Una fila de glifos y no cinco renglones con sus nombres: «Cuadro» no dice qué va a
+          salir en la barra, y lo que se está eligiendo es precisamente cómo se ve. El que
+          importa no es el más bonito sino el que no se confunda con los vecinos que ya haya
+          arriba, y eso solo se decide mirándolos. */}
+      <p className="settings__label">Icono de la barra</p>
+      <div className="settings__glyphs" role="radiogroup" aria-label="Icono de la barra">
+        {TRAY_GLYPHS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`settings__glyph${option.value === trayGlyph ? " is-selected" : ""}`}
+            role="radio"
+            aria-checked={option.value === trayGlyph}
+            title={option.label}
+            aria-label={option.label}
+            onClick={() => onTrayGlyph(option.value)}
+          >
+            {/* Máscara y no `img`: el PNG es una imagen *template* —negro y alfa— y en modo
+                oscuro un negro sobre el vidrio oscuro no se vería. Pintar el alfa con la
+                tinta de la app es lo mismo que hace macOS con la barra. */}
+            <span
+              className="settings__glyph-tinta"
+              style={{
+                maskImage: `url(/tray/${option.value}.png)`,
+                WebkitMaskImage: `url(/tray/${option.value}.png)`,
+              }}
+            />
+          </button>
+        ))}
+      </div>
 
       <div className="menu__rule" role="separator" />
 
@@ -212,7 +250,7 @@ export function SettingsPopover({
           onClick={() => onRetention(option.value)}
         >
           <span className="menu__check">
-            {option.value === retention && <Check size={13} strokeWidth={2.25} aria-hidden />}
+            {option.value === retention && <Check size={13} aria-hidden />}
           </span>
           {option.label}
         </button>
@@ -298,10 +336,37 @@ export function SettingsPopover({
         </button>
       )}
 
-      {update.stage === "fallo" && (
+      {/* Preguntar a mano. Sin esto, adelantar el chequeo obligaba a salir de Riel y volver a
+          abrirla: al abrir el panel se pregunta, pero solo si hace 24 h de la última respuesta.
+          También es el único sitio donde la app puede decir que no hay nada — el chequeo
+          silencioso se calla igual estando al día que sin haber podido preguntar. */}
+      {(update.stage === "ninguna" ||
+        update.stage === "aldia" ||
+        update.stage === "incomunicada") && (
+        <button type="button" className="menu__item" onClick={updates.check}>
+          <span className="menu__check" />
+          Buscar actualizaciones
+        </button>
+      )}
+
+      {update.stage === "buscando" && (
+        <button type="button" className="menu__item" disabled>
+          <span className="menu__check" />
+          Buscando…
+        </button>
+      )}
+
+      {update.stage === "aldia" && <p className="settings__note">No hay una versión nueva.</p>}
+
+      {/* Los dos fallos dicen lo mismo y por lo mismo (spec 11): qué pasó, que lo que había
+          sigue puesto, y por dónde salir a mano. Cambia solo en qué se estaba haciendo. */}
+      {(update.stage === "incomunicada" || update.stage === "fallo") && (
         <>
           <p className="settings__note">
-            No se pudo instalar la actualización. Riel {version ?? "—"} sigue puesto y funcionando.
+            {update.stage === "fallo"
+              ? "No se pudo instalar la actualización."
+              : "No se pudo comprobar si hay una versión nueva."}{" "}
+            Riel {version ?? "—"} sigue puesto y funcionando.
           </p>
           <button type="button" className="menu__item" onClick={() => void openUrl(RELEASES)}>
             <span className="menu__check" />

@@ -1,7 +1,7 @@
-import { Check, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { HEX, PALETTE, contrastWarning, curatedOf, parseHex, tint } from "../design/palette";
+import { Check, Plus } from "./icons";
 
 export interface ColorPickerProps {
   value: string;
@@ -66,8 +66,11 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
             >
               {/* El anillo solo no bastaba: sobre ocho discos de 22px, a un color oscuro se le
                   lee igual que a su vecino. La palomita dentro es la misma señal que usa la
-                  casilla de una tarea, y va en la tinta que contrasta con el disco. */}
-              {selected && <Check size={13} strokeWidth={2.75} aria-hidden />}
+                  casilla de una tarea, y va en la tinta que contrasta con el disco.
+
+                  Más gruesa que el resto a propósito: es la única palomita que no cae sobre el
+                  vidrio sino sobre un color saturado, y ahí la raya de siempre se hunde. */}
+              {selected && <Check size={13} weight={1.5} aria-hidden />}
             </button>
           );
         })}
@@ -80,7 +83,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
           aria-pressed={manual}
           onClick={openManual}
         >
-          <Plus size={13} strokeWidth={2} aria-hidden />
+          <Plus size={13} aria-hidden />
         </button>
       </div>
 

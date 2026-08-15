@@ -3,6 +3,10 @@
 //! Imagen *template* monocroma: macOS la repinta según la barra y el modo de contraste,
 //! así que nunca hay que mantener una variante clara y otra oscura. Dos pesos de glifo,
 //! sin badge numérico: contorno cuando no hay nada vencido, relleno cuando sí.
+//!
+//! Cuál de los cinco glifos se dibuja se elige en Ajustes. Los diez PNG los genera
+//! `scripts/make-tray-icons.mjs` y viajan dentro del binario: son 3 KB en total, y buscarlos
+//! en disco solo añadiría una forma de que el icono no aparezca.
 
 use std::sync::Mutex;
 
@@ -17,8 +21,43 @@ use crate::panel;
 
 pub const TRAY_ID: &str = "riel";
 
-const OUTLINE: &[u8] = include_bytes!("../icons/tray-outline.png");
-const FILLED: &[u8] = include_bytes!("../icons/tray-filled.png");
+/// Los glifos elegibles: nombre, contorno y relleno. El primero es el de omisión.
+///
+/// El nombre es el que manda el frontend y el que sale en Ajustes; que coincida con el del
+/// archivo es a propósito, para que agregar un glifo sea una línea aquí y una allá.
+const GLYPHS: &[(&str, &[u8], &[u8])] = &[
+    (
+        "casilla",
+        include_bytes!("../icons/tray-casilla-outline.png"),
+        include_bytes!("../icons/tray-casilla-filled.png"),
+    ),
+    (
+        "palomita",
+        include_bytes!("../icons/tray-palomita-outline.png"),
+        include_bytes!("../icons/tray-palomita-filled.png"),
+    ),
+    (
+        "lista",
+        include_bytes!("../icons/tray-lista-outline.png"),
+        include_bytes!("../icons/tray-lista-filled.png"),
+    ),
+    (
+        "disco",
+        include_bytes!("../icons/tray-disco-outline.png"),
+        include_bytes!("../icons/tray-disco-filled.png"),
+    ),
+    (
+        "cuadro",
+        include_bytes!("../icons/tray-cuadro-outline.png"),
+        include_bytes!("../icons/tray-cuadro-filled.png"),
+    ),
+];
+
+/// Lo que el icono está enseñando: qué glifo y con qué peso.
+///
+/// Las dos cosas juntas y no en dos variables porque las dos deciden el mismo PNG: cambiar de
+/// glifo tiene que conservar el peso, y cambiar de peso tiene que conservar el glifo.
+static SHOWING: Mutex<(usize, bool)> = Mutex::new((0, false));
 
 /// Dónde quedó el icono la última vez que supimos de él, en píxeles físicos.
 ///
@@ -70,7 +109,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&quit])?;
 
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(OUTLINE)?)
+        // El de omisión. El elegido lo pone el frontend al arrancar, que es donde vive la
+        // preferencia — igual que el peso, que también depende de datos que Rust no lee.
+        .icon(Image::from_bytes(GLYPHS[0].1)?)
         .icon_as_template(true)
         // El clic izquierdo abre el panel; el menú queda en el derecho.
         .show_menu_on_left_click(false)
@@ -115,12 +156,33 @@ fn log_event(event: &TrayIconEvent) {
     }
 }
 
-/// Cambia el peso del glifo según haya o no tareas vencidas.
-pub fn set_overdue<R: Runtime>(app: &AppHandle<R>, overdue: bool) -> tauri::Result<()> {
+/// Vuelve a pintar el icono con lo que diga `SHOWING`.
+fn paint<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let (glyph, overdue) = *SHOWING.lock().expect("SHOWING nunca entra en pánico");
+    let (_, outline, filled) = GLYPHS[glyph];
+
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let bytes = if overdue { FILLED } else { OUTLINE };
-        tray.set_icon(Some(Image::from_bytes(bytes)?))?;
+        tray.set_icon(Some(Image::from_bytes(if overdue { filled } else { outline })?))?;
+        // Cada `set_icon` pierde la bandera de template, y sin ella el glifo deja de
+        // adaptarse a la barra clara, la oscura y el modo de contraste alto.
         tray.set_icon_as_template(true)?;
     }
     Ok(())
+}
+
+/// Cambia el peso del glifo según haya o no tareas vencidas.
+pub fn set_overdue<R: Runtime>(app: &AppHandle<R>, overdue: bool) -> tauri::Result<()> {
+    SHOWING.lock().expect("SHOWING nunca entra en pánico").1 = overdue;
+    paint(app)
+}
+
+/// Cambia el glifo. Un nombre que no esté en la tabla deja el icono como estaba: quien lo
+/// manda es el frontend leyendo `localStorage`, y ahí puede quedar el nombre de un glifo que
+/// una versión posterior retiró.
+pub fn set_glyph<R: Runtime>(app: &AppHandle<R>, name: &str) -> tauri::Result<()> {
+    let Some(index) = GLYPHS.iter().position(|(id, _, _)| *id == name) else {
+        return Ok(());
+    };
+    SHOWING.lock().expect("SHOWING nunca entra en pánico").0 = index;
+    paint(app)
 }

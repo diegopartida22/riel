@@ -1,9 +1,9 @@
-import { Ellipsis, GripVertical } from "lucide-react";
 
 import type { Project, Task } from "../data";
 import { tint } from "../design/palette";
 import { Checkbox } from "./Checkbox";
 import { DueChip } from "./DueChip";
+import { Ellipsis, GripVertical } from "./icons";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
 import { TitleEditor } from "./TitleEditor";
@@ -55,11 +55,12 @@ export interface TaskRowProps {
  * ```
  *
  * En reposo es solo texto. Las dos herramientas de la derecha — el `⋯` y la manija de
- * arrastre — aparecen al hover, pero su hueco está reservado siempre: si apareciera de la
- * nada, la fecha daría un salto cada vez que el puntero cruza una fila.
+ * arrastre — aparecen al hover, y lo hacen en el sitio de la fecha: comparten hueco con ella
+ * en vez de llevar uno propio que estaría vacío casi todo el tiempo comiéndose el título.
  *
- * El título va a una sola línea con corte por elipsis. Es la condición para que el tachado
- * pueda trazarse de izquierda a derecha; el texto completo se ve al editar en línea.
+ * Si el título va a una línea con elipsis o entero en varias lo decide un ajuste, y de ahí
+ * para abajo lo lleva el CSS: cambia el tachado, que no puede ser la misma raya, y el aire de
+ * la fila, que con dos renglones tiene que separar más de lo que junta.
  */
 export function TaskRow({
   task,
@@ -132,39 +133,49 @@ export function TaskRow({
             {task.notes && <span className="task-row__notes">{task.notes}</span>}
           </div>
 
-          <div className="task-row__meta">
-            {showProjectDot && project && <ProjectDot color={project.color} title={project.name} />}
-            <PriorityMark priority={task.priority} />
-            {task.dueAt && <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />}
-          </div>
-
-          {/* Cada herramienta se dibuja solo si tiene a quién avisar. Un `⋯` sin menú detrás o
-              una manija donde no se puede reordenar son promesas que la fila no cumple. */}
-          {(onMenu || onGrab) && (
-            <div className="task-row__tools">
-              {onMenu && (
-                <button
-                  type="button"
-                  className="task-row__tool"
-                  aria-label={`Opciones de ${task.title}`}
-                  aria-haspopup="menu"
-                  data-menu-trigger
-                  onClick={(event) => onMenu(event.currentTarget.getBoundingClientRect())}
-                >
-                  <Ellipsis size={14} strokeWidth={2} aria-hidden />
-                </button>
+          {/* La fecha y las herramientas comparten celda en vez de ir una detrás de otra. Puestas
+              en fila, el hueco de la derecha medía la suma de las dos y las herramientas se
+              llevaban 40px del título aunque solo se vean al pasar por encima — con el riel
+              expandido eso es casi un tercio de la columna. Apiladas, el hueco mide lo que el más
+              ancho de los dos, y como el ancho no depende de cuál se esté viendo, al cruzarse no
+              se mueve nada. */}
+          <div className="task-row__right">
+            <div className="task-row__meta">
+              {showProjectDot && project && (
+                <ProjectDot color={project.color} title={project.name} />
               )}
-              {onGrab && (
-                <span
-                  className="task-row__tool task-row__grip"
-                  aria-hidden="true"
-                  onPointerDown={onGrab}
-                >
-                  <GripVertical size={14} strokeWidth={2} />
-                </span>
-              )}
+              <PriorityMark priority={task.priority} />
+              {task.dueAt && <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />}
             </div>
-          )}
+
+            {/* Cada herramienta se dibuja solo si tiene a quién avisar. Un `⋯` sin menú detrás o
+                una manija donde no se puede reordenar son promesas que la fila no cumple. */}
+            {(onMenu || onGrab) && (
+              <div className="task-row__tools">
+                {onMenu && (
+                  <button
+                    type="button"
+                    className="task-row__tool"
+                    aria-label={`Opciones de ${task.title}`}
+                    aria-haspopup="menu"
+                    data-menu-trigger
+                    onClick={(event) => onMenu(event.currentTarget.getBoundingClientRect())}
+                  >
+                    <Ellipsis size={14} aria-hidden />
+                  </button>
+                )}
+                {onGrab && (
+                  <span
+                    className="task-row__tool task-row__grip"
+                    aria-hidden="true"
+                    onPointerDown={onGrab}
+                  >
+                    <GripVertical size={14} />
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {subtasks.length > 0 && (
@@ -279,7 +290,7 @@ function SubtaskRow({
         {onGrab && (
           <div className="task-row__tools task-row__tools--one">
             <span className="task-row__tool task-row__grip" aria-hidden="true" onPointerDown={onGrab}>
-              <GripVertical size={14} strokeWidth={2} />
+              <GripVertical size={14} />
             </span>
           </div>
         )}

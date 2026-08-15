@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import { dayOf, localDay, nextDay } from "../data";
 import { formatDueLong } from "./dueDate";
+import { ChevronLeft, ChevronRight, X } from "./icons";
 
 export interface DueEditorProps {
   dueAt: string | null;
@@ -289,7 +289,7 @@ function Calendar({
           aria-label="Mes anterior"
           onClick={() => walk(shiftMonth(cursor, -1))}
         >
-          <ChevronLeft size={13} strokeWidth={2} aria-hidden />
+          <ChevronLeft size={13} aria-hidden />
         </button>
         <span className="due-editor__title">
           {MESES[at.getMonth()]} {at.getFullYear()}
@@ -300,7 +300,7 @@ function Calendar({
           aria-label="Mes siguiente"
           onClick={() => walk(shiftMonth(cursor, 1))}
         >
-          <ChevronRight size={13} strokeWidth={2} aria-hidden />
+          <ChevronRight size={13} aria-hidden />
         </button>
       </div>
 
@@ -369,7 +369,7 @@ function Calendar({
               commit(day ?? today, null);
             }}
           >
-            <X size={12} strokeWidth={2.25} aria-hidden />
+            <X size={12} aria-hidden />
           </button>
         )}
       </div>

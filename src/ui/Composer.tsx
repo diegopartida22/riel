@@ -1,4 +1,3 @@
-import { X } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
 import type { NewTask, Project } from "../data";
@@ -11,6 +10,7 @@ import {
   parse,
   type CaptureToken,
 } from "../state/capture";
+import { X } from "./icons";
 
 export interface ComposerProps {
   /** Base vacía: cambia el texto de invitación (spec 3.7). */
@@ -221,7 +221,7 @@ export function Composer({ firstRun = false, projects, today, ref, onAdd }: Comp
                   <span className="chip__dot tinted" style={tint(token.color)} aria-hidden />
                 )}
                 {token.label}
-                <X className="chip__x" size={11} strokeWidth={2.25} aria-hidden />
+                <X className="chip__x" size={11} aria-hidden />
               </button>
             </li>
           ))}

@@ -1,18 +1,18 @@
-import { CalendarDays, CheckCheck, Ellipsis, List, Plus, Sun, type LucideIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import type { Between, Project } from "../data";
 import { tint } from "../design/palette";
 import { SYSTEM_VIEWS, sameView, type SystemKind, type View } from "../state/views";
+import { CalendarDays, CheckCircle, Ellipsis, List, Plus, Sun, type Icon } from "./icons";
 import { ProjectMenu } from "./ProjectMenu";
 import { useReorder } from "./useReorder";
 
-/** Un icono de Lucide por vista del sistema, para cuando el riel está colapsado (spec 3.4). */
-const ICONS: Record<SystemKind, LucideIcon> = {
+/** Un icono por vista del sistema, para cuando el riel está colapsado (spec 3.4). */
+const ICONS: Record<SystemKind, Icon> = {
   hoy: Sun,
   proximas: CalendarDays,
   todas: List,
-  completadas: CheckCheck,
+  completadas: CheckCircle,
 };
 
 export interface RailProps {
@@ -81,7 +81,7 @@ export function Rail({
               selected={sameView(view, { kind })}
               onSelect={() => onSelect({ kind })}
             >
-              <Icon size={15} strokeWidth={1.75} aria-hidden />
+              <Icon size={15} aria-hidden />
             </RailItem>
           );
         })}
@@ -140,7 +140,7 @@ export function Rail({
         onClick={onNewProject}
       >
         <span className="rail__mark">
-          <Plus size={15} strokeWidth={1.75} aria-hidden />
+          <Plus size={15} aria-hidden />
         </span>
         <span className="rail__label">Nuevo proyecto</span>
       </button>
@@ -236,7 +236,7 @@ function RailItem({
           aria-expanded={menuOpen}
           onClick={(event) => onMenu(event.currentTarget.getBoundingClientRect())}
         >
-          <Ellipsis size={14} strokeWidth={1.75} aria-hidden />
+          <Ellipsis size={14} aria-hidden />
         </button>
       )}
     </li>

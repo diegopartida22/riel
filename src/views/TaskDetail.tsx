@@ -1,10 +1,10 @@
-import { ChevronLeft, Plus, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { Priority, Project, Task, TaskPatch, TaskTree } from "../data";
 import { tint } from "../design/palette";
 import { Checkbox } from "../ui/Checkbox";
 import { DueEditor } from "../ui/DueEditor";
+import { ChevronLeft, Plus, X } from "../ui/icons";
 import { TitleEditor } from "../ui/TitleEditor";
 
 export interface TaskDetailProps {
@@ -83,7 +83,7 @@ export function TaskDetail({
   return (
     <div className="detail tinted" style={tint(project?.color)}>
       <button type="button" className="detail__back" onClick={onClose}>
-        <ChevronLeft size={14} strokeWidth={2} aria-hidden />
+        <ChevronLeft size={14} aria-hidden />
         Volver
       </button>
 
@@ -177,7 +177,7 @@ export function TaskDetail({
                   aria-label={`Eliminar «${subtask.title}»`}
                   onClick={() => onRemoveSubtask(subtask.id)}
                 >
-                  <X size={12} strokeWidth={2.25} aria-hidden />
+                  <X size={12} aria-hidden />
                 </button>
               </li>
             ))}
@@ -199,7 +199,7 @@ export function TaskDetail({
           </div>
         ) : (
           <button type="button" className="detail__add" onClick={() => setAdding(true)}>
-            <Plus size={12} strokeWidth={2} aria-hidden />
+            <Plus size={12} aria-hidden />
             Agregar subtarea
           </button>
         )}
