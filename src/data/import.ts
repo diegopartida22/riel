@@ -19,6 +19,7 @@ import type { Snapshot } from "./backup";
 import { execute, select } from "./db";
 import { STEP } from "./position";
 import { listProjects } from "./projects";
+import { formatRepeat, parseRepeat, type Repeat, type RepeatFrom } from "./repeat";
 import { allTasks } from "./tasks";
 import { localIso } from "./time";
 import type { Priority, Project, Task } from "./types";
@@ -113,6 +114,37 @@ function project(value: unknown, index: number): Project {
   };
 }
 
+/**
+ * La regla de repetición, que puede no venir: los archivos exportados antes de que existiera
+ * la recurrencia son respaldos válidos y no pueden empezar a rechazarse ahora. Ausente y nulo
+ * significan lo mismo — esta tarea no vuelve.
+ *
+ * Lo que sí se rechaza es una regla presente que no se entiende. Colarla como nula dejaría una
+ * tarea que en el archivo se repetía y en Riel no, sin decírselo a nadie.
+ */
+function repeat(row: Record<string, unknown>, where: string): Repeat | null {
+  const value = row.repeat;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`${where}: «repeat» tiene que ser texto o nulo.`);
+  }
+
+  const rule = parseRepeat(value);
+  if (rule === null) {
+    throw new Error(`${where}: «repeat» no es una regla que Riel entienda («${value}»).`);
+  }
+  return rule;
+}
+
+function repeatFrom(row: Record<string, unknown>, where: string): RepeatFrom {
+  const value = row.repeatFrom;
+  if (value === undefined || value === null) return "fecha";
+  if (value !== "fecha" && value !== "completada") {
+    throw new Error(`${where}: «repeatFrom» solo puede ser «fecha» o «completada».`);
+  }
+  return value;
+}
+
 function task(value: unknown, index: number): Task {
   const where = `tasks[${index}]`;
   if (!isObject(value)) throw new Error(`${where}: tendría que ser un objeto.`);
@@ -136,18 +168,36 @@ function task(value: unknown, index: number): Task {
     throw new Error(`${where}: «completedAt» no es una fecha ISO («${completedAt}»).`);
   }
 
+  const parentId = maybeText(value, "parentId", where);
+  const rule = repeat(value, where);
+
+  // Una regla en una subtarea no rompe nada —solo las raíces generan la vuelta siguiente— pero
+  // tampoco significa nada, y dejarla entrar sería guardar un ajuste puesto que no hace nada.
+  // Se avisa en vez de tirar el archivo: es una tarea que se puede importar bien.
+  if (rule !== null && parentId !== null) {
+    throw new Error(`${where}: una subtarea no puede repetirse; la regla va en su tarea madre.`);
+  }
+
+  // Una regla sin fecha no tiene desde dónde contar. Es el mismo invariante que mantiene
+  // `updateTask` al quitar la fecha desde el detalle.
+  if (rule !== null && dueAt === null) {
+    throw new Error(`${where}: «repeat» necesita una fecha en «dueAt» desde la que contar.`);
+  }
+
   return {
     id: text(value, "id", where),
     title: text(value, "title", where),
     notes: maybeText(value, "notes", where),
     projectId: maybeText(value, "projectId", where),
-    parentId: maybeText(value, "parentId", where),
+    parentId,
     dueAt,
     hasTime: value.hasTime,
     priority: priority as Priority,
     completedAt,
     position: number(value, "position", where),
     createdAt: stamp(value, "createdAt", where),
+    repeat: rule,
+    repeatFrom: repeatFrom(value, where),
   };
 }
 
@@ -346,7 +396,7 @@ const MAX_PARAMS = 900;
 
 const PROJECT_COLUMNS = "id, name, color, position, created_at";
 const TASK_COLUMNS =
-  "id, title, notes, project_id, parent_id, due_at, has_time, priority, completed_at, position, created_at";
+  "id, title, notes, project_id, parent_id, due_at, has_time, priority, completed_at, position, created_at, repeat, repeat_from";
 
 /** Vuelca filas en tandas, cada una una sola sentencia. */
 async function insertAll(
@@ -391,6 +441,8 @@ const taskRow = (each: Task, offset: number): unknown[] => [
   each.completedAt,
   each.position + offset,
   each.createdAt,
+  formatRepeat(each.repeat),
+  each.repeatFrom,
 ];
 
 /**

@@ -23,10 +23,11 @@ Dentro:
 - Arranque al iniciar sesión.
 - Exportar e importar JSON. El export sin vuelta no es un respaldo, es un archivo: lo que
   hace que los datos sean del usuario es poder devolverlos.
+- Tareas recurrentes (§12). Entraron después de la v1, y no por capricho: sin ellas lo que se
+  repite se escribe a mano cada vez, que es justo lo que una lista tendría que ahorrar.
 
 Fuera de la v1, no lo construyas:
 
-- Tareas recurrentes.
 - Sincronización, cuentas, nube.
 - Subtareas anidadas más allá de un nivel.
 - Atajo global de teclado.
@@ -610,3 +611,54 @@ de los binarios que ya están instalados, y una release firmada con otra llave l
 Así que no puede haber una sola copia. Dos, cifradas y fuera de esta máquina —un gestor de
 contraseñas y un disco que no viva enchufado sirven— y el mismo cuidado que una llave SSH: se
 pierde una vez y ya no se recupera.
+
+---
+
+## 12. Tareas recurrentes
+
+Añadido después de la v1. Una tarea que vuelve no es una lista de fechas por delante: es **una
+fila con una regla**, y la siguiente nace al completar la de ahora. Guardar el año entero de un
+«cada lunes» son cincuenta y dos filas que nadie pidió, y cambiar la hora obligaría a reescribir
+las cincuenta y dos.
+
+Dos columnas nuevas en `tasks`, y ningún disparador: una regla en una subtarea es inerte, no
+corrompe nada.
+
+```sql
+ALTER TABLE tasks ADD COLUMN repeat TEXT;                             -- "mensual:1:17"
+ALTER TABLE tasks ADD COLUMN repeat_from TEXT NOT NULL DEFAULT 'fecha';
+```
+
+La regla es una cadena y no un JSON: son cuatro formas cerradas, se leen de un vistazo en un
+export y no hay nada que versionar.
+
+```
+diario:N                 cada N días
+semanal:N:1,3,5          cada N semanas, esos días (1 lunes … 7 domingo)
+mensual:N:17             cada N meses, el día 17
+mensual:N:ultimo         cada N meses, el último día — que en un mes son 30 y en otro 31
+anual:N                  cada N años
+```
+
+Reglas:
+
+- **Solo en las raíces.** Una subtarea vuelve con su madre, entera y sin completar. Una regla
+  propia en una hija la sacaría de su grupo.
+- **Sin fecha no hay regla.** Es desde ella desde donde se cuenta, así que quitar la fecha
+  quita la repetición, y ponerle una regla a una tarea sin fecha le pone la de hoy.
+- **La regla se muda, no se copia.** Al completar, la fila nueva se lleva la regla y la vieja se
+  queda tachada y quieta. Copiarla dejaría dos filas repitiendo lo mismo cada vez que se
+  desmarcara una completada.
+- `repeat_from` decide desde dónde se cuenta la vuelta: `fecha` para lo que cae en un día del
+  calendario —los impuestos son el 17 aunque se paguen el 19— y `completada` para lo que cuenta
+  desde que se hizo —regar las plantas cada tres días, contados desde el último riego.
+- **La siguiente siempre es futura.** Una tarea abandonada tres meses no reaparece con la fecha
+  del mes pasado: la regla avanza hasta pasar el día en que se completó. La hora se conserva.
+- El día 31 no se pierde por febrero. `31 ene → 28 feb → 31 mar`: la regla recuerda el 31 y el
+  mes corto solo lo recorta, no lo reescribe.
+- Deshacer una tarea completada durante sus 3 segundos (§3.6) borra también la que nació y le
+  devuelve la regla a la de antes.
+- En la fila, un `↻` de 11px en `--ink-tertiary` junto a la prioridad. Antes de completarla es
+  lo único que separa «esto se acabó» de «esto vuelve el mes que viene».
+- En el detalle va pegada a la fecha, y la captura la entiende: `cada mes`, `cada 3 días`,
+  `cada martes`, `cada 2 semanas`.

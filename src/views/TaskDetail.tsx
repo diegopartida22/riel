@@ -5,6 +5,7 @@ import { tint } from "../design/palette";
 import { Checkbox } from "../ui/Checkbox";
 import { DueEditor } from "../ui/DueEditor";
 import { ChevronLeft, Plus, X } from "../ui/icons";
+import { RepeatEditor } from "../ui/RepeatEditor";
 import { TitleEditor } from "../ui/TitleEditor";
 
 export interface TaskDetailProps {
@@ -152,6 +153,24 @@ export function TaskDetail({
           onChange={(dueAt, hasTime) => onPatch({ dueAt, hasTime })}
         />
       </Field>
+
+      {/* Pegada a la fecha porque es la fecha lo que mueve: una repetición no es un atributo de
+          la tarea, es la regla con la que su día vuelve a ponerse solo. Separarlas —debajo de
+          las subtareas, por ejemplo— dejaría el «cada mes el 17» a media pantalla del 17.
+
+          Solo en las raíces: una subtarea no tiene detalle propio, y la vuelta siguiente se
+          lleva las hijas enteras. */}
+      {task.parentId === null && (
+        <Field label="Repetición">
+          <RepeatEditor
+            dueAt={task.dueAt}
+            repeat={task.repeat}
+            repeatFrom={task.repeatFrom}
+            onChange={(repeat) => onPatch({ repeat })}
+            onFromChange={(repeatFrom) => onPatch({ repeatFrom })}
+          />
+        </Field>
+      )}
 
       {/* Este es el único sitio donde nace una subtarea. En la lista no cabe —una fila ya tiene
           su casilla, su fecha y sus dos herramientas— y el campo de captura no las parsea: un

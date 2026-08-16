@@ -1,5 +1,6 @@
 import { execute, placeholders, select } from "./db";
 import { STEP, between, needsRenumber } from "./position";
+import { formatRepeat, nextDue, parseRepeat, parseRepeatFrom } from "./repeat";
 import { dayOf, localIso } from "./time";
 import type { Between, Completion, NewTask, Priority, Task, TaskPatch, TaskTree } from "./types";
 
@@ -15,10 +16,12 @@ interface Row {
   completed_at: string | null;
   position: number;
   created_at: string;
+  repeat: string | null;
+  repeat_from: string | null;
 }
 
 const COLUMNS =
-  "id, title, notes, project_id, parent_id, due_at, has_time, priority, completed_at, position, created_at";
+  "id, title, notes, project_id, parent_id, due_at, has_time, priority, completed_at, position, created_at, repeat, repeat_from";
 
 const toTask = (row: Row): Task => ({
   id: row.id,
@@ -32,6 +35,8 @@ const toTask = (row: Row): Task => ({
   completedAt: row.completed_at,
   position: row.position,
   createdAt: row.created_at,
+  repeat: parseRepeat(row.repeat),
+  repeatFrom: parseRepeatFrom(row.repeat_from),
 });
 
 /** Orden natural de una lista: la posición manda, y el empate lo rompe la antigüedad. */
@@ -230,7 +235,7 @@ export async function createTask(input: NewTask): Promise<Task> {
     `INSERT INTO tasks (${COLUMNS})
      SELECT $1, $2, $3, $4, $5, $6, $7, $8, NULL,
             COALESCE((SELECT MAX(position) FROM tasks WHERE parent_id IS $5), 0) + ${STEP},
-            $9`,
+            $9, $10, $11`,
     [
       id,
       input.title,
@@ -241,6 +246,10 @@ export async function createTask(input: NewTask): Promise<Task> {
       input.hasTime ? 1 : 0,
       input.priority ?? 0,
       localIso(),
+      // Una subtarea nunca lleva regla: la instancia siguiente se lleva las hijas enteras, así
+      // que una regla aquí repetiría dentro de algo que ya repite.
+      input.parentId ? null : formatRepeat(input.repeat ?? null),
+      input.repeatFrom ?? "fecha",
     ],
   );
 
@@ -256,26 +265,50 @@ const PATCH_COLUMNS: Record<keyof TaskPatch, string> = {
   dueAt: "due_at",
   hasTime: "has_time",
   priority: "priority",
+  repeat: "repeat",
+  repeatFrom: "repeat_from",
 };
 
-export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
+/** Lo que va al parámetro, para los tres campos cuya forma en la fila no es la del dominio. */
+function toColumn(key: keyof TaskPatch, value: NonNullable<TaskPatch[keyof TaskPatch]>): unknown {
+  if (key === "hasTime") return value ? 1 : 0;
+  if (key === "repeat") return formatRepeat(value as Task["repeat"]);
+  return value;
+}
+
+/**
+ * Edita campos sueltos.
+ *
+ * Con un efecto que no está en el parche: **quitar la fecha quita la regla**. Una repetición
+ * es una fecha que se mueve sola, así que sin fecha de la que partir no queda nada que mover;
+ * dejarla guardada sería un ajuste puesto que no hace nada y que reviviría solo al volver a
+ * poner una fecha cualquiera, meses después y sin que nadie lo pidiera.
+ */
+export async function updateTask(id: string, patch: TaskPatch): Promise<TaskPatch> {
+  const values: TaskPatch =
+    patch.dueAt === null && patch.repeat === undefined ? { ...patch, repeat: null } : patch;
+
   const assignments: string[] = [];
   const params: unknown[] = [];
 
   for (const [key, column] of Object.entries(PATCH_COLUMNS) as [keyof TaskPatch, string][]) {
-    const value = patch[key];
+    const value = values[key];
     if (value === undefined) continue;
     assignments.push(`${column} = $${params.length + 1}`);
-    params.push(key === "hasTime" ? (value ? 1 : 0) : value);
+    params.push(value === null ? null : toColumn(key, value));
   }
 
-  if (!assignments.length) return;
+  if (!assignments.length) return values;
 
   params.push(id);
   await execute(
     `UPDATE tasks SET ${assignments.join(", ")} WHERE id = $${params.length}`,
     params,
   );
+
+  // Lo que de verdad se escribió, que puede llevar algo que el parche no traía. Quien mantiene
+  // una copia en memoria de la fila la actualiza con esto y no con lo que pidió.
+  return values;
 }
 
 /**
@@ -323,6 +356,8 @@ export async function restoreTasks(tasks: Task[]): Promise<void> {
       task.completedAt,
       task.position,
       task.createdAt,
+      formatRepeat(task.repeat),
+      task.repeatFrom,
     ];
     const tuple = `(${placeholders(values.length, params.length + 1)})`;
     params.push(...values);
@@ -338,9 +373,15 @@ export async function restoreTasks(tasks: Task[]): Promise<void> {
  * en la misma transacción. Deshacer usa esa lista para no descompletar de más.
  *
  * Si la tarea ya estaba completada no cambia nada y la lista vuelve vacía.
+ *
+ * Y es donde vive la repetición: una tarea con regla deja detrás su instancia siguiente. Se
+ * hace aquí, en la capa de datos, y no en el manejador de la casilla, porque completar entra
+ * por más de una puerta — la fila, el detalle, el botón del aviso del sistema (§7)— y una
+ * repetición que dependiera de por dónde se entró no sería una regla, sería una casualidad.
  */
 export async function completeTask(id: string): Promise<Completion> {
   const at = localIso();
+  const before = await getTask(id);
   const pending = await select<{ id: string }>(
     `SELECT id FROM tasks WHERE parent_id = $1 AND completed_at IS NULL`,
     [id],
@@ -350,9 +391,96 @@ export async function completeTask(id: string): Promise<Completion> {
     `UPDATE tasks SET completed_at = $1 WHERE id = $2 AND completed_at IS NULL`,
     [at, id],
   );
-  if (!changed) return { ids: [], at };
+  if (!changed) return { ids: [], at, spawned: null };
 
-  return { ids: [id, ...pending.map((row) => row.id)], at };
+  return {
+    ids: [id, ...pending.map((row) => row.id)],
+    at,
+    spawned: before ? await spawnNext(before, at) : null,
+  };
+}
+
+/**
+ * La instancia siguiente de una tarea recurrente, o nula si no había regla, no había fecha, o
+ * la regla no llega a ninguna parte.
+ *
+ * **La regla se muda.** La tarea que se acaba de completar la pierde y la nueva la hereda, así
+ * que lo que queda en Completadas es un registro de lo que se hizo aquel día y no una plantilla
+ * viva. Sin esto, descompletar desde Completadas y volver a marcar fabricaría una segunda
+ * instancia de la misma vuelta, y la lista tendría dos «Pagar impuestos» de septiembre sin que
+ * nadie hubiera escrito la segunda.
+ *
+ * Las subtareas se copian sin completar: una tarea recurrente con lista de comprobación —los
+ * cuatro pasos de cerrar el mes— no sirve de nada si la vuelta siguiente llega con los cuatro
+ * ya tachados.
+ *
+ * La posición se copia tal cual. Es la misma escala para todas las tareas y el empate lo rompe
+ * la antigüedad (`ORDER`), así que la nueva cae exactamente en el hueco que deja la vieja al
+ * salir de la lista, sin renumerar nada y sin aterrizar al final.
+ */
+async function spawnNext(task: Task, completedAt: string): Promise<TaskTree | null> {
+  // Solo las raíces. Una subtarea no lleva regla (`createTask` la deja fuera), pero un archivo
+  // importado a mano sí podría traerla, y aquí es donde no cuesta nada ignorarla.
+  if (!task.repeat || !task.dueAt || task.parentId !== null) return null;
+
+  const due = nextDue(task.repeat, task.dueAt, task.repeatFrom, completedAt);
+  if (due === null) return null;
+
+  const id = crypto.randomUUID();
+  await execute(
+    `INSERT INTO tasks (${COLUMNS})
+     VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, NULL, $8, $9, $10, $11)`,
+    [
+      id,
+      task.title,
+      task.notes,
+      task.projectId,
+      due,
+      task.hasTime ? 1 : 0,
+      task.priority,
+      task.position,
+      localIso(),
+      formatRepeat(task.repeat),
+      task.repeatFrom,
+    ],
+  );
+
+  // La regla se va con la nueva. Se escribe después de insertarla: si el INSERT falla, la
+  // vieja conserva la suya y la vuelta siguiente sigue existiendo.
+  await execute(`UPDATE tasks SET repeat = NULL WHERE id = $1`, [task.id]);
+
+  const children = await subtasksOf([task.id]);
+  const born = await getTask(id);
+  if (!born) throw new Error("la repetición se insertó pero no se pudo releer");
+
+  const subtasks: Task[] = [];
+  for (const child of children) {
+    subtasks.push(
+      await createTask({
+        parentId: id,
+        title: child.title,
+        notes: child.notes,
+        priority: child.priority,
+      }),
+    );
+  }
+
+  return { ...born, subtasks };
+}
+
+/**
+ * Deshace la repetición que dejó `completeTask`: borra la instancia nueva y devuelve la regla
+ * a la tarea de la que salió.
+ *
+ * Es el par exacto de `spawnNext`, y por eso vive aquí y no en el manejador de la casilla: los
+ * tres segundos de gracia (§3.6) tienen que dejar la base como estaba, no *casi* como estaba.
+ */
+export async function undoSpawn(spawned: Task, source: Task): Promise<void> {
+  await execute(`DELETE FROM tasks WHERE id = $1`, [spawned.id]);
+  await execute(`UPDATE tasks SET repeat = $1 WHERE id = $2`, [
+    formatRepeat(source.repeat),
+    source.id,
+  ]);
 }
 
 /**

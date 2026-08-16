@@ -9,10 +9,20 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { listProjects } from "./projects";
+import { formatRepeat } from "./repeat";
 import { allTasks } from "./tasks";
 import { localIso } from "./time";
 import type { Project, Task } from "./types";
 
+/**
+ * Lo que `parseSnapshot` deja listo para escribir: ya validado y con la regla de repetición
+ * leída, que es la forma con la que la app trabaja.
+ *
+ * En el archivo esa regla va en su texto compacto —`"repeat": "mensual:1:17"`— y no como el
+ * objeto que circula por dentro. Es el único sitio donde las dos formas no coinciden, y es a
+ * propósito: el export es para leerlo, y tres campos anidados para decir «cada mes el 17»
+ * ocupan cuatro renglones donde cabía uno.
+ */
 export interface Snapshot {
   app: "Riel";
   exportedAt: string;
@@ -20,12 +30,19 @@ export interface Snapshot {
   tasks: Task[];
 }
 
+const toRecord = (task: Task) => ({ ...task, repeat: formatRepeat(task.repeat) });
+
 /** El nombre que propone el panel de guardar: ordena solo al listarlos por nombre. */
 export const exportName = () => `riel-${localIso().slice(0, 10)}.json`;
 
 export async function snapshot(): Promise<string> {
   const [projects, tasks] = await Promise.all([listProjects(), allTasks()]);
-  const data: Snapshot = { app: "Riel", exportedAt: localIso(), projects, tasks };
+  const data = {
+    app: "Riel",
+    exportedAt: localIso(),
+    projects,
+    tasks: tasks.map(toRecord),
+  };
   // Con sangría: un export que no se puede abrir y leer es medio export.
   return JSON.stringify(data, null, 2);
 }

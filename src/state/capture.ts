@@ -13,16 +13,28 @@
  * 14:30                   → hora (y entonces `has_time`)
  * #proyecto               → proyecto, solo si el nombre está completo
  * ! / !!                  → prioridad media / alta
+ * cada día · cada 2 semanas · cada mes · cada martes → repetición
  * ```
  *
  * Nada de esto se aplica a la fuerza: cada token sale como un chip y quitarlo devuelve su
  * texto literal al título.
  */
 
-import { localDay, nextDay, type NewTask, type Priority, type Project } from "../data";
+import {
+  MAX_EVERY,
+  describeRepeat,
+  localDay,
+  nextDay,
+  shortRepeat,
+  weekdayOf,
+  type NewTask,
+  type Priority,
+  type Project,
+  type Repeat,
+} from "../data";
 import { formatDue } from "../ui/dueDate";
 
-export type TokenKind = "dia" | "hora" | "proyecto" | "prioridad";
+export type TokenKind = "dia" | "hora" | "proyecto" | "prioridad" | "repeticion";
 
 export interface CaptureToken {
   kind: TokenKind;
@@ -98,6 +110,17 @@ const RE_SEMANA = /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|m
 /** El `!` tiene que ir suelto: si no, «¡Urgente!» saldría con prioridad media. */
 const RE_PRIORIDAD = /(^|\s)(!{1,2})(?=\s|$)/g;
 
+/**
+ * `cada mes`, `cada 2 semanas`, `cada martes`.
+ *
+ * Siempre detrás de un `cada`, y eso es lo que la hace segura: `semanal` suelto o un `martes`
+ * suelto son palabras que caben en el título de una tarea, y morderlas convertiría «Preparar
+ * el informe mensual» en una tarea que vuelve todos los meses. Con `cada` delante no hay
+ * ninguna frase en la que el token no signifique lo que dice.
+ */
+const RE_REPETICION =
+  /\bcada\s+(?:(\d{1,2})\s+)?(dias?|semanas?|meses|mes|anos?|lunes|martes|miercoles|jueves|viernes|sabado|domingo|lun|mar|mie|jue|vie|sab|dom)\b/g;
+
 interface Candidate extends CaptureToken {
   end: number;
   /** Lo que este token aporta al borrador si acaba aceptado. */
@@ -109,6 +132,14 @@ interface Draft {
   time: string | null;
   projectId: string | null;
   priority: Priority | null;
+  /**
+   * La regla, y si le falta el día.
+   *
+   * `cada mes` no dice cuál, y `cada semana` tampoco: los saca de la fecha de la tarea, que
+   * puede venir de otro token que aparezca *después* en el texto. Así que la regla se guarda a
+   * medias y se termina en `toDraft`, cuando ya se sabe con qué día se queda.
+   */
+  repeat: { rule: Repeat; fromDay: boolean } | null;
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -180,6 +211,25 @@ function projectAt(folded: string, hash: number, projects: Project[]): Project |
   return best;
 }
 
+/**
+ * La regla que sale de lo escrito tras el `cada`. Un día de la semana la fija en ese día; una
+ * periodicidad a secas la deja a medias, con el día por poner desde la fecha.
+ *
+ * El `1` del lunes es un relleno: `fromDay` marca que se sustituye en `toDraft`, y la etiqueta
+ * del chip —«Cada 2 semanas»— no mira los días.
+ */
+function ruleFor(word: string, every: number, weekday: number | undefined): Repeat | null {
+  if (weekday !== undefined) {
+    // `SEMANA` cuenta desde el domingo en 0, como `Date`; la regla cuenta 1 lunes … 7 domingo.
+    return { unit: "semanal", every, weekdays: [((weekday + 6) % 7) + 1] };
+  }
+  if (word.startsWith("dia")) return { unit: "diario", every };
+  if (word.startsWith("semana")) return { unit: "semanal", every, weekdays: [1] };
+  if (word === "mes" || word === "meses") return { unit: "mensual", every, day: 1 };
+  if (word.startsWith("ano")) return { unit: "anual", every };
+  return null;
+}
+
 export function parse(
   text: string,
   projects: Project[],
@@ -241,6 +291,25 @@ export function parse(
     });
   }
 
+  for (const match of folded.matchAll(RE_REPETICION)) {
+    const every = Math.min(MAX_EVERY, Math.max(1, Number(match[1] ?? 1) || 1));
+    const weekday = SEMANA[match[2]];
+    const rule = ruleFor(match[2], every, weekday);
+    if (rule === null) continue;
+
+    // El chip dice la interpretación y no lo tecleado: escrito el día, el chip lo nombra
+    // —«Cada semana los martes»— porque es justo lo que hay que poder desmentir de un vistazo.
+    // Sin día escrito, la frase larga repetiría un día que el texto no dijo.
+    const at = match.index;
+    const label = weekday === undefined ? shortRepeat(rule) : describeRepeat(rule, "fecha");
+    push("repeticion", at, at + match[0].length, label, (draft) => {
+      draft.repeat ??= { rule, fromDay: weekday === undefined };
+      // `cada martes` dice también cuándo es la primera: sin esto la tarea nacería hoy y la
+      // regla la mandaría al martes solo a partir de la segunda vuelta.
+      if (weekday !== undefined) draft.day ??= nextWeekday(today, weekday);
+    });
+  }
+
   for (let hash = folded.indexOf("#"); hash >= 0; hash = folded.indexOf("#", hash + 1)) {
     // Un `#` pegado a una palabra es parte de ella, no una etiqueta.
     if (hash > 0 && /[a-z0-9]/.test(folded[hash - 1])) continue;
@@ -262,7 +331,7 @@ export function parse(
   // `mar` de «12 mar» antes de que el día de la semana pueda reclamarlo.
   candidates.sort((a, b) => a.at - b.at || b.end - b.at - (a.end - a.at));
 
-  const draft: Draft = { day: null, time: null, projectId: null, priority: null };
+  const draft: Draft = { day: null, time: null, projectId: null, priority: null, repeat: null };
   const accepted: Candidate[] = [];
   let reach = 0;
 
@@ -278,7 +347,10 @@ export function parse(
   let title = "";
   let cut = 0;
   for (const token of accepted) {
-    title += text.slice(cut, token.at);
+    const before = title + text.slice(cut, token.at);
+    // Solo lo que presenta una fecha. Antes de un `#proyecto` el «de» es del título —«Revisar
+    // el PR de #auth»— y antes de un `!` no hay nada que presentar.
+    title = token.kind === "proyecto" || token.kind === "prioridad" ? before : trimLead(before);
     cut = token.end;
   }
   title += text.slice(cut);
@@ -291,6 +363,26 @@ export function parse(
 }
 
 /**
+ * Las palabras que solo estaban ahí para presentar la fecha. Quitado el «martes» de «Llamar a
+ * Ana el martes», el artículo se queda colgando al final del título, y con «a las 14:30» son
+ * dos. El chip se lleva su preámbulo o el título queda dicho a medias.
+ */
+const PREAMBULO = new Set(["el", "la", "los", "las", "del", "al", "a", "de", "en", "para"]);
+
+/**
+ * Come palabras de atrás hacia adelante y se para en la primera que no sea preámbulo, así que
+ * «Junta de equipo» conserva su «de» y «Mover la junta a mañana» pierde el «a» pero no el «la».
+ */
+function trimLead(text: string): string {
+  let out = text.replace(/\s+$/, "");
+  for (;;) {
+    const match = /(?:^|\s)(\S+)$/.exec(out);
+    if (!match || !PREAMBULO.has(fold(match[1]))) return out;
+    out = out.slice(0, match.index).replace(/\s+$/, "");
+  }
+}
+
+/**
  * Solo van las claves que el texto fijó. Un `dueAt: null` explícito pisaría la fecha que la
  * vista le pone por omisión a una tarea nueva — en Hoy, precisamente, hoy.
  */
@@ -300,15 +392,29 @@ function toDraft(draft: Draft, today: string): Omit<NewTask, "title"> {
   // Una hora suelta es hoy a esa hora: es lo que significa escribir «Llamar 14:30». El «hoy»
   // es el de la app y no el del reloj: si el panel lleva abierto desde ayer, el chip y lo que
   // se guarda tienen que decir el mismo día.
-  if (draft.day !== null || draft.time !== null) {
+  //
+  // Y una regla también pone fecha aunque no se haya escrito ninguna: una repetición sin fecha
+  // no tiene desde dónde contar, así que «Regar las plantas cada 3 días» empieza hoy. Es la
+  // misma regla que mantiene `updateTask` al quitar la fecha desde el detalle.
+  if (draft.day !== null || draft.time !== null || draft.repeat !== null) {
     const day = draft.day ?? today;
     out.dueAt = `${day}T${draft.time ?? "00:00"}:00`;
     out.hasTime = draft.time !== null;
+
+    if (draft.repeat !== null) out.repeat = complete(draft.repeat, day);
   }
   if (draft.projectId !== null) out.projectId = draft.projectId;
   if (draft.priority !== null) out.priority = draft.priority;
 
   return out;
+}
+
+/** Termina la regla a medias con el día que se quedó puesto. */
+function complete({ rule, fromDay }: NonNullable<Draft["repeat"]>, day: string): Repeat {
+  if (!fromDay) return rule;
+  if (rule.unit === "semanal") return { ...rule, weekdays: [weekdayOf(day)] };
+  if (rule.unit === "mensual") return { ...rule, day: Number(day.slice(8, 10)) };
+  return rule;
 }
 
 /**

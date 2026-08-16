@@ -1,9 +1,9 @@
 
-import type { Project, Task } from "../data";
+import { shortRepeat, type Project, type Task } from "../data";
 import { tint } from "../design/palette";
 import { Checkbox } from "./Checkbox";
 import { DueChip } from "./DueChip";
-import { Ellipsis, GripVertical } from "./icons";
+import { Ellipsis, GripVertical, Repeat } from "./icons";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
 import { TitleEditor } from "./TitleEditor";
@@ -143,6 +143,20 @@ export function TaskRow({
             <div className="task-row__meta">
               {showProjectDot && project && (
                 <ProjectDot color={project.color} title={project.name} />
+              )}
+              {/* Una tarea que vuelve no se distingue de una que no en ningún otro sitio, y la
+                  diferencia importa antes de completarla: es lo que separa «esto se acabó» de
+                  «esto vuelve el mes que viene». Del tamaño y el color del `!` de prioridad
+                  media — es un dato de la fila, no una alarma. */}
+              {task.repeat && (
+                <span
+                  className="task-row__repeat"
+                  role="img"
+                  aria-label={`Se repite: ${shortRepeat(task.repeat).toLowerCase()}`}
+                  title={shortRepeat(task.repeat)}
+                >
+                  <Repeat size={11} aria-hidden />
+                </span>
               )}
               <PriorityMark priority={task.priority} />
               {task.dueAt && <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />}

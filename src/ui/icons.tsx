@@ -22,6 +22,7 @@ import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon";
 import PanelLeftCloseIcon from "@hugeicons/core-free-icons/PanelLeftCloseIcon";
 import PanelLeftOpenIcon from "@hugeicons/core-free-icons/PanelLeftOpenIcon";
 import PlusSignIcon from "@hugeicons/core-free-icons/PlusSignIcon";
+import Refresh01Icon from "@hugeicons/core-free-icons/Refresh01Icon";
 import Search01Icon from "@hugeicons/core-free-icons/Search01Icon";
 import Settings02Icon from "@hugeicons/core-free-icons/Settings02Icon";
 import Sun03Icon from "@hugeicons/core-free-icons/Sun03Icon";
@@ -75,6 +76,9 @@ export const Check = glyph(Tick02Icon);
 export const X = glyph(Cancel01Icon);
 export const Ellipsis = glyph(MoreHorizontalIcon);
 export const GripVertical = glyph(DragDropVerticalIcon);
+/* La marca de una tarea que vuelve. La flecha en círculo y no el bucle de dos rayas del
+   reproductor: a 11px en una fila, dos rayas paralelas se funden en una mancha. */
+export const Repeat = glyph(Refresh01Icon);
 export const ChevronLeft = glyph(ArrowLeft01Icon);
 export const ChevronRight = glyph(ArrowRight01Icon);
 export const PanelLeftClose = glyph(PanelLeftCloseIcon);

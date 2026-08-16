@@ -26,6 +26,7 @@ import {
   setRetention as storeRetention,
   sweepCompleted,
   uncompleteTasks,
+  undoSpawn,
   updateTask,
   withSubtasks,
   type Between,
@@ -92,6 +93,16 @@ function startView(): SystemKind {
 
 /** Lo que se espera tras la última tecla antes de consultar. Una pulsación lee la base entera. */
 const TYPING_MS = 120;
+
+/**
+ * Cada cuánto se comprueba si ya es otro día.
+ *
+ * Un minuto porque el coste es leer el reloj: si el día no cambió, `setToday` recibe la misma
+ * cadena y React ni siquiera repinta. macOS estrangula los temporizadores de una webview sin
+ * ventana visible, así que con el panel cerrado esto despierta mucho menos de lo que dice — y
+ * da igual, porque quien de verdad refresca el día ahí es abrir el panel.
+ */
+const DAY_CHECK_MS = 60 * 1000;
 
 /**
  * Cuántos borrados recuerda ⌘Z. Acotado a propósito: lo que se deshace es «lo último», y una
@@ -239,7 +250,7 @@ function sortBetween<T extends { id: string }>(list: T[], id: string, after: str
  * cambio sobre el estado local, que es además lo que hace que el deshacer se sienta inmediato.
  */
 export function useRiel(): RielState {
-  const [today] = useState(localDay);
+  const [today, setToday] = useState(localDay);
   const [view, setView] = useState<View>(() => ({ kind: startView() }));
   const [start, setStart] = useState<SystemKind>(startView);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -266,8 +277,13 @@ export function useRiel(): RielState {
    * Por cada tarea completada, los temporizadores que la sacarán de la lista y la lista exacta
    * de ids que se completaron con ella — una padre arrastra a sus hijas pendientes, y deshacer
    * no puede descompletar a las que ya estaban tachadas de antes.
+   *
+   * Y, si se repetía, lo que hace falta para poder desandar la vuelta: la instancia que nació
+   * al completarla y la tarea de la que salió, con su regla todavía puesta.
    */
-  const pending = useRef(new Map<string, { ids: string[]; timers: number[] }>());
+  const pending = useRef(
+    new Map<string, { ids: string[]; timers: number[]; spawned: TaskTree | null; source: Task }>(),
+  );
 
   /**
    * La pila de ⌘Z. En una `ref` y no en el estado porque nadie la dibuja: no hay botón de
@@ -284,6 +300,13 @@ export function useRiel(): RielState {
    */
   const strayed = useRef(new Set<string>());
 
+  /**
+   * El día en que se barrieron las completadas por última vez. `null` hasta que el barrido de
+   * arranque termina, que es lo que impide que el barrido diario corra con la retención por
+   * omisión antes de saber cuál es la guardada.
+   */
+  const sweptOn = useRef<string | null>(null);
+
   const remember = useCallback((entry: Undoable) => {
     undoable.current.push(entry);
     if (undoable.current.length > UNDO_DEPTH) undoable.current.shift();
@@ -292,6 +315,30 @@ export function useRiel(): RielState {
   const clearTimers = useCallback(() => {
     for (const entry of pending.current.values()) entry.timers.forEach(clearTimeout);
     pending.current.clear();
+  }, []);
+
+  /**
+   * El día no se puede fijar al montar.
+   *
+   * El panel no se cierra, se oculta: este webview vive semanas entre reinicios. Con `today`
+   * congelado en el día del arranque, pasada la medianoche «Hoy» seguía enseñando lo de ayer
+   * bajo ese encabezado, «Próximas» se comía lo de hoy, y una tarea de hoy se dibujaba en
+   * `--ink-secondary` como si fuera del futuro. Es el fallo típico de una app que no se cierra
+   * nunca, y el único síntoma es que un día la lista está mal sin que nada la haya tocado.
+   *
+   * Dos disparadores por lo mismo que el actualizador (spec 11): abrir el panel es lo que de
+   * verdad pasa decenas de veces al día, y el reloj cubre al que se queda abierto cruzando la
+   * medianoche. Con el día igual, `setToday` recibe la misma cadena y no hay repintado.
+   */
+  useEffect(() => {
+    const refresh = () => setToday(localDay());
+    const timer = window.setInterval(refresh, DAY_CHECK_MS);
+    const unlisten = listen("riel://panel-abierto", refresh);
+
+    return () => {
+      clearInterval(timer);
+      void unlisten.then((off) => off()).catch((cause) => console.error(cause));
+    };
   }, []);
 
   const reloadProjects = useCallback(async () => {
@@ -311,6 +358,9 @@ export function useRiel(): RielState {
         const kept = await getRetention();
         if (alive) setRetention(kept);
         if (kept !== null) await sweepCompleted(kept);
+        // Con «siempre» se marca igual: no hay nada que barrer, pero el día queda apuntado y
+        // el barrido diario de abajo sabe que ya no le toca a este.
+        sweptOn.current = today;
 
         const total = await countTasks();
         await reloadProjects();
@@ -323,7 +373,33 @@ export function useRiel(): RielState {
     return () => {
       alive = false;
     };
+    // `today` se lee para sellar el barrido; releerlo al cambiar de día es cosa del efecto
+    // de abajo, no de este, que además cuenta tareas y relee proyectos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadProjects]);
+
+  /**
+   * El barrido de completadas es «de arranque» (spec 8), y el arranque de esta app puede quedar
+   * semanas atrás: el panel se oculta, no se cierra. Sin esto, quien deja Riel abierta desde
+   * marzo tiene un plazo de 30 días que no ha borrado nada desde marzo — y la vista Completadas
+   * creciendo sin fondo debajo.
+   *
+   * Se repite al cambiar el día porque es la única frontera que vuelve barrible algo que ayer
+   * no lo era. Y no antes de que el de arranque haya sellado su día: hasta que `getRetention`
+   * contesta, `retention` vale el valor por omisión, y barrer con él borraría lo que un
+   * «siempre» guardado pedía conservar.
+   */
+  useEffect(() => {
+    if (sweptOn.current === null || sweptOn.current === today) return;
+    sweptOn.current = today;
+    if (retention === null) return;
+
+    void sweepCompleted(retention)
+      .then((gone) => {
+        if (gone > 0) setEpoch((current) => current + 1);
+      })
+      .catch((cause) => console.error(cause));
+  }, [retention, today]);
 
   const projectsById = useMemo(
     () => new Map(projects.map((project) => [project.id, project])),
@@ -338,15 +414,28 @@ export function useRiel(): RielState {
 
   // El peso del glifo de la barra (spec 4). Se recalcula contra la base entera y no contra la
   // vista: en Casa puede no haber nada vencido y seguir habiéndolo en Infra.
+  //
+  // Y con reloj propio, no solo cuando cambian las tareas. Vencer es algo que le pasa a una
+  // tarea sin que nadie la toque: la de las 14:30 vence a las 14:30, y con el panel cerrado
+  // —que es justo cuando se mira la barra— no hay ningún cambio de estado que dispare la
+  // relectura. El glifo se quedaba en contorno hasta la próxima vez que se abriera el panel,
+  // o sea hasta después de que hiciera falta.
   useEffect(() => {
     let alive = true;
-    hasOverdue(localIso())
-      .then((overdue) => {
-        if (alive) void invoke("set_overdue", { overdue });
-      })
-      .catch((cause) => console.error(cause));
+
+    const check = () =>
+      hasOverdue(localIso())
+        .then((overdue) => {
+          if (alive) void invoke("set_overdue", { overdue });
+        })
+        .catch((cause) => console.error(cause));
+
+    void check();
+    const timer = window.setInterval(() => void check(), DAY_CHECK_MS);
+
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, [tasks]);
 
@@ -436,7 +525,7 @@ export function useRiel(): RielState {
     if (!entry) return null;
     entry.timers.forEach(clearTimeout);
     pending.current.delete(id);
-    return entry.ids;
+    return entry;
   }, []);
 
   const unmarkLeaving = useCallback((id: string) => {
@@ -447,25 +536,41 @@ export function useRiel(): RielState {
     setUndoing(without(id));
   }, []);
 
-  /** Saca la fila de la lista: una raíz se lleva a sus hijas, una hija sale sola. */
+  /**
+   * Cambia una fila raíz por otra en el mismo renglón, o la saca si no hay recambio.
+   *
+   * Es lo que hace que la vuelta siguiente de una tarea recurrente aparezca donde estaba la
+   * que se acaba de completar y no al final de la lista. En la base es gratis —la instancia
+   * nueva hereda la `position` de la vieja— pero aquí el orden lo lleva el arreglo, así que hay
+   * que poner una en el hueco de la otra.
+   */
+  const swap = useCallback((id: string, born: TaskTree | null) => {
+    setTasks((current) =>
+      current.flatMap((root) => {
+        if (root.id !== id) {
+          return root.subtasks.some((subtask) => subtask.id === id)
+            ? [{ ...root, subtasks: root.subtasks.filter((subtask) => subtask.id !== id) }]
+            : [root];
+        }
+        return born ? [born] : [];
+      }),
+    );
+  }, []);
+
+  /**
+   * Saca la fila de la lista: una raíz se lleva a sus hijas, una hija sale sola. Con `born`
+   * puesta, en su renglón queda la instancia siguiente de una tarea recurrente.
+   */
   const drop = useCallback(
-    (id: string) => {
+    (id: string, born: TaskTree | null = null) => {
       // Si estaba esperando a que se cerrara su detalle, ya no espera nada: se fue por otra vía
       // —completada, borrada— y dejarla apuntada haría que la próxima ronda buscara un fantasma.
       strayed.current.delete(id);
       unmarkLeaving(id);
       unmarkUndoing(id);
-      setTasks((current) =>
-        current
-          .filter((root) => root.id !== id)
-          .map((root) =>
-            root.subtasks.some((subtask) => subtask.id === id)
-              ? { ...root, subtasks: root.subtasks.filter((subtask) => subtask.id !== id) }
-              : root,
-          ),
-      );
+      swap(id, born);
     },
-    [unmarkLeaving, unmarkUndoing],
+    [swap, unmarkLeaving, unmarkUndoing],
   );
 
   const refreshCounts = useCallback(async () => {
@@ -511,13 +616,15 @@ export function useRiel(): RielState {
       setError(null);
       try {
         if (checked) {
-          const { ids, at } = await completeTask(task.id);
+          const { ids, at, spawned } = await completeTask(task.id);
           if (!ids.length) return;
 
           stamp(ids, at);
           setUndoing((current) => new Set(current).add(task.id));
           pending.current.set(task.id, {
             ids,
+            spawned,
+            source: task,
             timers: [
               window.setTimeout(
                 () => setLeaving((current) => new Set(current).add(task.id)),
@@ -530,15 +637,24 @@ export function useRiel(): RielState {
                 // detalle la enseña tachada. Es la misma razón por la que el barrido del
                 // arranque no las borra. Una raíz sí se va: para eso está Completadas.
                 if (task.parentId !== null) unmarkLeaving(task.id);
-                else drop(task.id);
+                // La vuelta siguiente entra aquí y no al completar, aunque ya lleve tres
+                // segundos escrita en la base: mientras la vieja sigue en pantalla tachada,
+                // enseñar las dos se lee como una tarea duplicada y no como una que volvió.
+                // Y solo si es de esta vista — completar en Hoy algo mensual deja la siguiente
+                // para el mes que viene, que en Hoy no pinta nada.
+                else drop(task.id, spawned && belongs(view, spawned, today) ? spawned : null);
                 unmarkUndoing(task.id);
               }, UNDO_MS + COLLAPSE_MS),
             ],
           });
         } else {
-          // Dentro de la ventana de gracia se repone tal cual estaba; fuera de ella —una fila
-          // de Completadas, por ejemplo— basta con ella misma.
-          const ids = forget(task.id) ?? [task.id];
+          // Dentro de la ventana de gracia se repone tal cual estaba, y eso incluye deshacer la
+          // vuelta que se hubiera generado. Fuera de ella —una fila de Completadas, por
+          // ejemplo— basta con ella misma: la regla ya se mudó a una instancia que lleva días
+          // viva, y quitársela para devolvérsela a esta dejaría dos tareas donde había una.
+          const entry = forget(task.id);
+          if (entry?.spawned) await undoSpawn(entry.spawned, entry.source);
+          const ids = entry?.ids ?? [task.id];
           await uncompleteTasks(ids);
           stamp(ids, null);
           unmarkLeaving(task.id);
@@ -550,7 +666,7 @@ export function useRiel(): RielState {
         setError("No se pudo guardar el cambio. Vuelve a intentarlo.");
       }
     },
-    [drop, forget, refreshCounts, stamp, unmarkLeaving, unmarkUndoing],
+    [drop, forget, refreshCounts, stamp, today, unmarkLeaving, unmarkUndoing, view],
   );
 
   const add = useCallback(
@@ -674,7 +790,10 @@ export function useRiel(): RielState {
     async (id: string, values: TaskPatch) => {
       setError(null);
       try {
-        await updateTask(id, values);
+        // Lo que devuelve puede llevar algo que el parche no traía: quitar la fecha se lleva
+        // por delante la regla de repetición, que sin fecha no tiene desde dónde contar. La
+        // copia en memoria se actualiza con lo escrito y no con lo pedido.
+        const written = await updateTask(id, values);
         if (values.hasTime) void ensurePermission(keepOpen);
 
         // Buscando no hay destierro: lo que se ve no es una vista, es la consulta, y cambiarle
@@ -686,13 +805,13 @@ export function useRiel(): RielState {
 
         setTasks((current) =>
           current.flatMap((root) => {
-            if (root.id === id) return exiled && !later ? [] : [{ ...root, ...values }];
+            if (root.id === id) return exiled && !later ? [] : [{ ...root, ...written }];
             if (!root.subtasks.some((subtask) => subtask.id === id)) return [root];
             return [
               {
                 ...root,
                 subtasks: root.subtasks.map((subtask) =>
-                  subtask.id === id ? { ...subtask, ...values } : subtask,
+                  subtask.id === id ? { ...subtask, ...written } : subtask,
                 ),
               },
             ];

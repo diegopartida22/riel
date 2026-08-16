@@ -490,3 +490,127 @@
 .due-editor__quick--end {
   margin-left: auto;
 }
+
+/* ── Repetición ──────────────────────────────────────────────────────────────────────── */
+
+.repeat-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Sin fecha no hay desde dónde contar, y en vez de un control apagado que no explica nada va
+   la frase que sí lo explica. Es una línea, y el selector de fecha está justo encima. */
+.repeat-editor__note {
+  margin: 0;
+  font-size: var(--text-meta);
+  color: var(--ink-tertiary);
+}
+
+/* El mismo panel del selector de fecha: una veladura sobre el vidrio, sin blur propio ni
+   superficie opaca (spec 4). Solo está cuando hay regla que ajustar. */
+.repeat-editor__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--layer-hover);
+}
+
+.repeat-editor__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.repeat-editor__label {
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+.repeat-editor__unit {
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+}
+
+/* Con caja, como la hora del selector de fecha y por lo mismo: es un sitio donde se escribe
+   dentro de algo que ya es superficie, y sin borde no se distinguiría del texto de al lado. */
+.repeat-editor__number {
+  width: 38px;
+  padding: 2px 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--field-bg);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+}
+
+.repeat-editor__number:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.repeat-editor__number:disabled {
+  background: none;
+  color: var(--ink-tertiary);
+}
+
+/* Siete columnas iguales, como la rejilla del calendario: las iniciales tienen anchos muy
+   distintos —una I y una M— y en fila suelta la semana quedaría torcida. */
+.repeat-editor__week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.repeat-editor__day {
+  padding: 3px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.repeat-editor__day:hover:not(:disabled) {
+  background: var(--layer-selected);
+}
+
+/* Del color del proyecto en contexto, igual que la casilla y el día elegido del calendario. */
+.repeat-editor__day.is-selected {
+  background: var(--project);
+  color: var(--on-project);
+  font-weight: 600;
+}
+
+/* El último día marcado no se puede desmarcar: una regla semanal sin días no vuelve nunca.
+   Apagado y no invisible — hace falta ver cuál es el que sostiene la regla. */
+.repeat-editor__day.is-selected:disabled {
+  opacity: 0.75;
+}
+
+/* La regla en palabras, al pie del panel y no arriba: se lee después de tocar los controles,
+   que es cuando sirve para desmentirlos. */
+.repeat-editor__summary {
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+}

@@ -474,6 +474,17 @@
   background: var(--project);
 }
 
+/* ── Repetición ──────────────────────────────────────────────────────────────────────── */
+
+/* La marca de que la tarea vuelve. En `--ink-tertiary` y no en el color del proyecto: dice qué
+   es la tarea, no que corra prisa, y en una lista de tareas recurrentes un color por fila la
+   convertiría en el semáforo que la prioridad baja evita (spec 3.5). */
+.task-row__repeat {
+  display: flex;
+  align-items: center;
+  color: var(--ink-tertiary);
+}
+
 /* ── Prioridad ───────────────────────────────────────────────────────────────────────── */
 
 .priority {

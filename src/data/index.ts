@@ -4,6 +4,7 @@
  */
 
 export * from "./types";
+export * from "./repeat";
 export * from "./projects";
 export * from "./tasks";
 export * from "./settings";
