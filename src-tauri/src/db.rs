@@ -31,5 +31,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/003_repeticion.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "carpeta de proyecto",
+            sql: include_str!("../migrations/004_carpeta.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

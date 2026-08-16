@@ -13,10 +13,12 @@
 
 import Calendar03Icon from "@hugeicons/core-free-icons/Calendar03Icon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
+import CodeIcon from "@hugeicons/core-free-icons/CodeIcon";
 import CheckmarkCircle02Icon from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import ArrowLeft01Icon from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import ArrowRight01Icon from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import DragDropVerticalIcon from "@hugeicons/core-free-icons/DragDropVerticalIcon";
+import Folder01Icon from "@hugeicons/core-free-icons/Folder01Icon";
 import LeftToRightListBulletIcon from "@hugeicons/core-free-icons/LeftToRightListBulletIcon";
 import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon";
 import PanelLeftCloseIcon from "@hugeicons/core-free-icons/PanelLeftCloseIcon";
@@ -79,6 +81,10 @@ export const GripVertical = glyph(DragDropVerticalIcon);
 /* La marca de una tarea que vuelve. La flecha en círculo y no el bucle de dos rayas del
    reproductor: a 11px en una fila, dos rayas paralelas se funden en una mancha. */
 export const Repeat = glyph(Refresh01Icon);
+
+/** El modo desarrollo (spec 13): la carpeta que se vincula y el editor con el que se abre. */
+export const Folder = glyph(Folder01Icon);
+export const Code = glyph(CodeIcon);
 export const ChevronLeft = glyph(ArrowLeft01Icon);
 export const ChevronRight = glyph(ArrowRight01Icon);
 export const PanelLeftClose = glyph(PanelLeftCloseIcon);

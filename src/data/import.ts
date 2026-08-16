@@ -109,9 +109,28 @@ function project(value: unknown, index: number): Project {
     id: text(value, "id", where),
     name: text(value, "name", where),
     color,
+    folder: folder(value, where),
     position: number(value, "position", where),
     createdAt: stamp(value, "createdAt", where),
   };
+}
+
+/**
+ * La carpeta vinculada, que puede no venir: los archivos exportados antes de que existiera son
+ * respaldos válidos. Ausente y nulo significan lo mismo — este proyecto no tiene carpeta.
+ *
+ * No se comprueba que exista, igual que al elegirla (spec 13): un respaldo se restaura muchas
+ * veces en otra máquina, y ahí ninguna ruta del archivo va a existir. Rechazar por eso haría
+ * que un export dejara de poder importarse por haber cambiado de ordenador, que es justo
+ * cuando más falta hace.
+ */
+function folder(row: Record<string, unknown>, where: string): string | null {
+  const value = row.folder;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`${where}: «folder» tiene que ser texto o nulo.`);
+  }
+  return value || null;
 }
 
 /**
@@ -394,7 +413,7 @@ export async function planImport(snapshot: Snapshot): Promise<
  */
 const MAX_PARAMS = 900;
 
-const PROJECT_COLUMNS = "id, name, color, position, created_at";
+const PROJECT_COLUMNS = "id, name, color, folder, position, created_at";
 const TASK_COLUMNS =
   "id, title, notes, project_id, parent_id, due_at, has_time, priority, completed_at, position, created_at, repeat, repeat_from";
 
@@ -425,6 +444,7 @@ const projectRow = (each: Project, offset: number): unknown[] => [
   each.id,
   each.name,
   each.color,
+  each.folder,
   each.position + offset,
   each.createdAt,
 ];

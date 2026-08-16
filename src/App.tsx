@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "./data";
 import { tint } from "./design/palette";
+import { useDevMode } from "./state/editors";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
 import { acceptsNew } from "./state/views";
@@ -31,6 +32,7 @@ const NUMBERED = ["hoy", "proximas", "todas", "completadas"] as const;
 export default function App() {
   const riel = useRiel();
   const updates = useUpdates();
+  const dev = useDevMode();
   const composer = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Editing>(null);
@@ -197,6 +199,9 @@ export default function App() {
           onRowText={riel.setRowText}
           trayGlyph={riel.trayGlyph}
           onTrayGlyph={riel.setTrayGlyph}
+          editors={dev.editors}
+          editor={dev.editor}
+          onEditor={dev.setEditor}
           updates={updates}
           onImport={() => {
             // La hoja se lo lleva todo el área de contenido, así que lo que hubiera puesto ahí
@@ -238,7 +243,10 @@ export default function App() {
               pendingCount={
                 editing.project ? (riel.counts.get(editing.project.id) ?? 0) : 0
               }
-              onSave={(name, color) => riel.saveProject(editing.project, name, color)}
+              onSave={(name, color, folder) =>
+                riel.saveProject(editing.project, name, color, folder)
+              }
+              onPickFolder={dev.pickFolder}
               onDelete={async () => {
                 if (editing.project) await riel.removeProject(editing.project.id);
                 setEditing(null);
@@ -286,7 +294,10 @@ export default function App() {
               projectsById={riel.projectsById}
               today={riel.today}
               loading={riel.loading}
-              error={riel.error}
+              /* El fallo de abrir la carpeta sale por el mismo renglón que los de la lista:
+                 es el único sitio donde ese botón está, y dos avisos distintos en la misma
+                 vista serían dos sitios donde mirar. */
+              error={riel.error ?? dev.error}
               leaving={riel.leaving}
               undoing={riel.undoing}
               toggle={riel.toggle}
@@ -296,6 +307,8 @@ export default function App() {
               addAfter={riel.addAfter}
               onOpen={riel.openDetail}
               onCapture={() => composer.current?.focus()}
+              editorName={dev.editor?.name}
+              onOpenFolder={dev.openFolder}
             />
           )}
         </main>

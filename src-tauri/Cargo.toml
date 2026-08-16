@@ -52,6 +52,10 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSResponder",
   "NSView",
   "NSWindow",
+  # `NSWorkspace`: qué editores de código hay instalados (spec 13). Se pregunta al registro de
+  # Launch Services por identificador de paquete, que es lo único que no cambia cuando una app
+  # se renombra o se instala fuera de `/Applications`.
+  "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",

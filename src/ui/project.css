@@ -41,6 +41,75 @@
   outline-offset: 2px;
 }
 
+/* ── Carpeta vinculada (spec 13) ─────────────────────────────────────────────────────── */
+
+.editor__folder {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Alineado con el campo de nombre y no con su relleno: es un renglón de texto, no un campo,
+     y sangrarlo 8px lo dejaría fuera de la columna que forman el título y el selector. */
+  margin-top: -2px;
+  min-width: 0;
+}
+
+.editor__link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.editor__link:hover {
+  background: var(--layer-hover);
+  color: var(--ink-primary);
+}
+
+.editor__link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* La ruta en mono, como las fechas y los contadores (spec 3.3): es un dato y no una etiqueta,
+   y con las barras a paso fijo se lee de un vistazo dónde acaba cada tramo. */
+.editor__path span {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-data);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor__unlink {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.editor__unlink:hover {
+  background: var(--layer-hover);
+  color: var(--danger);
+}
+
+.editor__unlink:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 .editor__actions {
   display: flex;
   justify-content: flex-end;

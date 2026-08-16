@@ -4,6 +4,8 @@
 /* ── Encabezado de grupo ─────────────────────────────────────────────────────────────── */
 
 .group-header {
+  display: flex;
+  align-items: center;
   margin: 0;
   padding: 12px 8px 4px;
   font-family: var(--font-data);
@@ -12,6 +14,31 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-tertiary);
+}
+
+/* El botón de la carpeta (spec 13), al otro extremo del encabezado. Pegado al borde derecho de
+   la lista y no al texto: es el único de su fila, y colgando del título parecería parte de él.
+   Del peso del encabezado que lo lleva, no del de una fila — nombra la vista, no una tarea. */
+.group-header__tool {
+  display: flex;
+  align-items: center;
+  margin: -4px 0 -4px auto;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-tertiary);
+  cursor: default;
+}
+
+.group-header__tool:hover {
+  background: var(--layer-hover);
+  color: var(--ink-secondary);
+}
+
+.group-header__tool:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 
 /* ── Fila ────────────────────────────────────────────────────────────────────────────── */

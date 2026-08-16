@@ -7,16 +7,18 @@ interface Row {
   id: string;
   name: string;
   color: string;
+  folder: string | null;
   position: number;
   created_at: string;
 }
 
-const COLUMNS = "id, name, color, position, created_at";
+const COLUMNS = "id, name, color, folder, position, created_at";
 
 const toProject = (row: Row): Project => ({
   id: row.id,
   name: row.name,
   color: row.color,
+  folder: row.folder,
   position: row.position,
   createdAt: row.created_at,
 });
@@ -35,19 +37,24 @@ export async function getProject(id: string): Promise<Project | null> {
  * El proyecto nuevo va al final del riel. La posición se calcula dentro del propio INSERT
  * para no leer el máximo y escribirlo en dos viajes.
  */
-export async function createProject(name: string, color: string): Promise<Project> {
+export async function createProject(
+  name: string,
+  color: string,
+  folder: string | null = null,
+): Promise<Project> {
   const project: Project = {
     id: crypto.randomUUID(),
     name,
     color,
+    folder,
     position: 0, // lo fija el INSERT; se relee abajo
     createdAt: localIso(),
   };
 
   await execute(
-    `INSERT INTO projects (id, name, color, position, created_at)
-     VALUES ($1, $2, $3, COALESCE((SELECT MAX(position) FROM projects), 0) + ${STEP}, $4)`,
-    [project.id, project.name, project.color, project.createdAt],
+    `INSERT INTO projects (id, name, color, folder, position, created_at)
+     VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position) FROM projects), 0) + ${STEP}, $5)`,
+    [project.id, project.name, project.color, project.folder, project.createdAt],
   );
 
   return (await getProject(project.id)) ?? project;
@@ -59,6 +66,11 @@ export async function renameProject(id: string, name: string): Promise<void> {
 
 export async function setProjectColor(id: string, color: string): Promise<void> {
   await execute(`UPDATE projects SET color = $1 WHERE id = $2`, [color, id]);
+}
+
+/** La carpeta vinculada, o `null` para desvincularla (spec 13). */
+export async function setProjectFolder(id: string, folder: string | null): Promise<void> {
+  await execute(`UPDATE projects SET folder = $1 WHERE id = $2`, [folder, id]);
 }
 
 /** Lo que se llevó por delante borrar un proyecto. Es lo que necesita ⌘Z para reponerlo. */
@@ -93,10 +105,11 @@ export async function deleteProject(id: string): Promise<RemovedProject | null> 
  * UPDATE si la fila a la que apunta todavía no existe.
  */
 export async function restoreProject({ project, taskIds }: RemovedProject): Promise<void> {
-  await execute(`INSERT INTO projects (${COLUMNS}) VALUES ($1, $2, $3, $4, $5)`, [
+  await execute(`INSERT INTO projects (${COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`, [
     project.id,
     project.name,
     project.color,
+    project.folder,
     project.position,
     project.createdAt,
   ]);

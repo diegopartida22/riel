@@ -25,6 +25,7 @@ Dentro:
   hace que los datos sean del usuario es poder devolverlos.
 - Tareas recurrentes (§12). Entraron después de la v1, y no por capricho: sin ellas lo que se
   repite se escribe a mano cada vez, que es justo lo que una lista tendría que ahorrar.
+- La carpeta de un proyecto y el botón que la abre en el editor (§13).
 
 Fuera de la v1, no lo construyas:
 
@@ -662,3 +663,43 @@ Reglas:
   lo único que separa «esto se acabó» de «esto vuelve el mes que viene».
 - En el detalle va pegada a la fecha, y la captura la entiende: `cada mes`, `cada 3 días`,
   `cada martes`, `cada 2 semanas`.
+
+---
+
+## 13. La carpeta de un proyecto
+
+Añadido después de la v1. Un proyecto de Riel y una carpeta del disco son la misma cosa muchas
+veces —«riel» es la lista de tareas y también el repositorio— y lo que se hace con la segunda es
+siempre lo mismo: abrirla en el editor. Vinculadas, eso es un clic desde donde ya se está
+mirando la lista.
+
+Una columna, y ningún índice: la ruta se lee con el proyecto y nunca se busca por ella.
+
+```sql
+ALTER TABLE projects ADD COLUMN folder TEXT;
+```
+
+Reglas:
+
+- **Se señala, no se teclea.** La ruta la pone el panel del sistema, que es lo único que
+  garantiza que la que se guarda existía al elegirla. El renglón vive en el editor de proyecto,
+  debajo del color: sin carpeta invita a ponerla, con una puesta la enseña —abreviada, con el
+  `~` del usuario y comida por delante—, la abre en el Finder al pulsarla y la quita con la `✕`.
+- **No se comprueba que siga estando**, ni al guardarla ni al importar. Una carpeta se renombra,
+  se mueve o vive en un disco que no está enchufado, y romper el vínculo por eso obligaría a
+  volver a elegirla cada vez. Se comprueba al abrir, que es cuando importa y cuando hay a quién
+  decírselo: «La carpeta ya no está ahí. Vuelve a elegirla en el proyecto.»
+- **El botón va en el encabezado de la vista del proyecto**, al otro extremo del nombre, y solo
+  con las dos condiciones puestas: hay carpeta y hay editor instalado. Con la lista vacía el
+  encabezado aparece solo si trae el botón — un proyecto recién creado es justo cuando hace
+  falta abrir su carpeta.
+- **Qué editores hay lo contesta Rust**, preguntándole a Launch Services por identificador de
+  paquete: así cuenta igual el instalado por Homebrew o fuera de `/Applications`. La lista es
+  cerrada, y eso es lo que valida lo que llega del webview antes de acabar en un `open -b`. No
+  se usa `tauri-plugin-shell`: ejecutar programas desde JavaScript es justo lo que una app que
+  no sale a la red no tiene por qué poder hacer.
+- **Cuál se usa es una preferencia de la máquina**, en `localStorage` con el riel y la vista de
+  arranque. Sale en Ajustes solo con dos o más instalados: con uno, un segmentado de una opción
+  no es una elección, es un rótulo. Es la única fila del popover que puede no estar, así que va
+  la última de las preferencias y las cinco de siempre no cambian de sitio según la máquina.
+- Nada de git, ramas ni estado del repositorio. Eso es otra app.

@@ -8,6 +8,8 @@ export interface Project {
   name: string;
   /** Hex `#RRGGBB`. */
   color: string;
+  /** La carpeta vinculada, absoluta y sin abreviar (spec 13). Nula en la mayoría. */
+  folder: string | null;
   position: number;
   createdAt: string;
 }

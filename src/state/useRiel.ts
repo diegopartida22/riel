@@ -23,6 +23,7 @@ import {
   restoreProject,
   restoreTasks,
   setProjectColor,
+  setProjectFolder,
   setRetention as storeRetention,
   sweepCompleted,
   uncompleteTasks,
@@ -177,7 +178,12 @@ export interface RielState {
   term: string;
 
   /** Crea si `project` es nulo, actualiza si no. Falso si la escritura falló. */
-  saveProject: (project: Project | null, name: string, color: string) => Promise<boolean>;
+  saveProject: (
+    project: Project | null,
+    name: string,
+    color: string,
+    folder: string | null,
+  ) => Promise<boolean>;
   removeProject: (id: string) => Promise<void>;
   /** Mueve un proyecto en el riel, entre los dos que se le indiquen. */
   reorderProject: (id: string, between: Between) => Promise<void>;
@@ -896,16 +902,17 @@ export function useRiel(): RielState {
   );
 
   const saveProject = useCallback(
-    async (project: Project | null, name: string, color: string) => {
+    async (project: Project | null, name: string, color: string, folder: string | null) => {
       setError(null);
       try {
         if (project) {
-          // Dos sentencias y no una: el nombre y el color son campos independientes y no hay
+          // Una sentencia por campo y no una sola con los tres: son independientes y no hay
           // ningún momento intermedio que se vea mal si solo una llegara.
           if (name !== project.name) await renameProject(project.id, name);
           if (color !== project.color) await setProjectColor(project.id, color);
+          if (folder !== project.folder) await setProjectFolder(project.id, folder);
         } else {
-          const created = await createProject(name, color);
+          const created = await createProject(name, color, folder);
           setView({ kind: "proyecto", id: created.id });
         }
         await reloadProjects();

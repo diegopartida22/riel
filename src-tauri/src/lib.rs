@@ -1,6 +1,7 @@
 mod accent;
 mod autostart;
 mod db;
+mod editor;
 mod glass;
 mod notify;
 mod panel;
@@ -103,6 +104,20 @@ fn autostart_state(app: tauri::AppHandle) -> autostart::Estado {
     autostart::estado(&app)
 }
 
+/// Los editores de código instalados (spec 13). Lo pregunta el frontend una vez al arrancar:
+/// la lista solo cambia si se instala uno, y para eso hay que salir de la app.
+#[tauri::command]
+fn editors() -> Vec<editor::Editor> {
+    editor::installed()
+}
+
+/// Abre la carpeta de un proyecto en el editor elegido. El error que devuelve es el que se
+/// enseña tal cual, así que ya viene dicho en castellano.
+#[tauri::command]
+fn open_in_editor(editor: String, path: String) -> Result<(), String> {
+    self::editor::open(&editor, &path)
+}
+
 /// `granted`, `denied`, `default` o `unavailable` (spec 7). Lo consulta Ajustes para saber
 /// si dibuja la nota del enlace a Preferencias del Sistema.
 #[tauri::command]
@@ -181,6 +196,8 @@ pub fn run() {
             read_import,
             write_backup,
             autostart_state,
+            editors,
+            open_in_editor,
             notification_permission,
             request_notification_permission,
             set_reminders,

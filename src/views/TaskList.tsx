@@ -5,6 +5,7 @@ import { tint } from "../design/palette";
 import { emptyMessage, titleOf, type View } from "../state/views";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
+import { Code } from "../ui/icons";
 import { RowMenu } from "../ui/RowMenu";
 import { TaskRow } from "../ui/TaskRow";
 import { TitleEditor } from "../ui/TitleEditor";
@@ -30,6 +31,10 @@ export interface TaskListProps {
   onOpen: (id: string) => void;
   /** Lleva el foco al campo de captura desde el botón del estado vacío. */
   onCapture: () => void;
+  /** El editor puesto, para nombrar el botón de la carpeta. Nulo si no hay ninguno (spec 13). */
+  editorName?: string | null;
+  /** Abre la carpeta del proyecto en ese editor. */
+  onOpenFolder?: (folder: string) => void;
 }
 
 /** Qué fila tiene el menú abierto y dónde anclarlo. */
@@ -61,6 +66,8 @@ export function TaskList({
   addAfter,
   onOpen,
   onCapture,
+  editorName,
+  onOpenFolder,
 }: TaskListProps) {
   const project = view.kind === "proyecto" ? projectsById.get(view.id) : undefined;
   const title = titleOf(view, project?.name);
@@ -168,6 +175,28 @@ export function TaskList({
     if (created) setRestore(created);
   };
 
+  /**
+   * El botón que abre la carpeta del proyecto en el editor (spec 13). Solo aparece con las dos
+   * condiciones puestas —hay carpeta vinculada y hay editor instalado— porque cualquiera de las
+   * dos sin la otra lo deja prometiendo algo que no puede hacer, que es lo mismo que ya decide
+   * si una fila dibuja su manija de arrastre.
+   *
+   * Lo nombra el editor y no la carpeta: lo que hace falta saber antes de pulsar es en qué se
+   * va a abrir, y la ruta ya está en el editor del proyecto, que es donde se puso.
+   */
+  const openFolder =
+    project?.folder && editorName && onOpenFolder ? (
+      <button
+        type="button"
+        className="group-header__tool"
+        title={`Abrir en ${editorName}`}
+        aria-label={`Abrir «${project.name}» en ${editorName}`}
+        onClick={() => onOpenFolder(project.folder as string)}
+      >
+        <Code size={13} aria-hidden />
+      </button>
+    ) : undefined;
+
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
   if (loading) return <div className="view" />;
 
@@ -178,14 +207,22 @@ export function TaskList({
       {error && <p className="notice notice--error">{error}</p>}
 
       {visible.length === 0 ? (
-        <EmptyState
-          message={emptyMessage(view)}
-          action={view.kind === "hoy" ? "Agregar tarea" : undefined}
-          onAction={onCapture}
-        />
+        <>
+          {/* Con la lista vacía el encabezado solo sale si trae el botón. Un proyecto recién
+              creado y vinculado a su carpeta es exactamente cuando hace falta abrirla, y sin
+              esto el botón desaparecía justo ahí; sin botón, en cambio, repetir el nombre que
+              ya está marcado en el riel sobre un «Este proyecto está vacío» son dos renglones
+              para no decir nada. */}
+          {openFolder && <GroupHeader action={openFolder}>{title}</GroupHeader>}
+          <EmptyState
+            message={emptyMessage(view)}
+            action={view.kind === "hoy" ? "Agregar tarea" : undefined}
+            onAction={onCapture}
+          />
+        </>
       ) : (
         <>
-          <GroupHeader>{title}</GroupHeader>
+          <GroupHeader action={openFolder}>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
             {visible.map((task) => (
               <Fragment key={task.id}>

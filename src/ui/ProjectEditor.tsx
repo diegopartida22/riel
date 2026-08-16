@@ -1,16 +1,21 @@
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useState, type FormEvent } from "react";
 
 import type { Project } from "../data";
 import { PALETTE, tint } from "../design/palette";
+import { shortPath } from "../state/editors";
 import { ColorPicker } from "./ColorPicker";
+import { Folder, X } from "./icons";
 
 export interface ProjectEditorProps {
   /** Nulo para uno nuevo. */
   project: Project | null;
   /** Cuántas tareas se quedarían sin proyecto al borrarlo. */
   pendingCount: number;
-  onSave: (name: string, color: string) => Promise<boolean>;
+  onSave: (name: string, color: string, folder: string | null) => Promise<boolean>;
   onDelete: () => Promise<void>;
+  /** Abre el panel del sistema para elegir carpeta. Nulo si se cerró sin elegir (spec 13). */
+  onPickFolder: () => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -27,10 +32,12 @@ export function ProjectEditor({
   pendingCount,
   onSave,
   onDelete,
+  onPickFolder,
   onClose,
 }: ProjectEditorProps) {
   const [name, setName] = useState(project?.name ?? "");
   const [color, setColor] = useState(project?.color ?? PALETTE[0].light);
+  const [folder, setFolder] = useState(project?.folder ?? null);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -40,7 +47,7 @@ export function ProjectEditor({
 
     setSaving(true);
     try {
-      if (await onSave(name.trim(), color)) onClose();
+      if (await onSave(name.trim(), color, folder)) onClose();
     } finally {
       setSaving(false);
     }
@@ -63,6 +70,46 @@ export function ProjectEditor({
       />
 
       <ColorPicker value={color} onChange={setColor} />
+
+      {/* La carpeta (spec 13). Un renglón y no un campo de texto: una ruta no se teclea, se
+          señala, y el panel del sistema es lo único que garantiza que la que quede guardada
+          existe. Sin carpeta puesta el renglón invita a ponerla; con una puesta se lee, se
+          abre en el Finder al pulsarla y se quita con la `✕`. */}
+      <div className="editor__folder">
+        {folder === null ? (
+          <button
+            type="button"
+            className="editor__link"
+            onClick={() => void onPickFolder().then((picked) => picked && setFolder(picked))}
+          >
+            <Folder size={13} aria-hidden />
+            Vincular una carpeta
+          </button>
+        ) : (
+          <>
+            {/* La ruta entera en el `title`: lo que se ve va recortado por delante, y el
+                principio comido es justo lo que hace falta para saber si es la de este
+                proyecto o la de otro con el mismo nombre. */}
+            <button
+              type="button"
+              className="editor__link editor__path"
+              title={folder}
+              onClick={() => void revealItemInDir(folder).catch((cause) => console.error(cause))}
+            >
+              <Folder size={13} aria-hidden />
+              <span>{shortPath(folder)}</span>
+            </button>
+            <button
+              type="button"
+              className="editor__unlink"
+              aria-label="Quitar la carpeta"
+              onClick={() => setFolder(null)}
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="editor__actions">
         <button type="button" className="editor__button" onClick={onClose}>

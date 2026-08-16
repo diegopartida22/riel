@@ -13,6 +13,7 @@ import {
   snapshot,
   type Retention,
 } from "../data";
+import type { Editor } from "../state/editors";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
 import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
@@ -31,6 +32,10 @@ export interface SettingsPopoverProps {
   onRowText: (value: RowText) => void;
   trayGlyph: TrayGlyph;
   onTrayGlyph: (value: TrayGlyph) => void;
+  /** Los editores de código instalados y el puesto (spec 13). */
+  editors: Editor[];
+  editor: Editor | null;
+  onEditor: (id: string) => void;
   updates: Updates;
   /** Abre la hoja de importación, que vive en el área de contenido y no aquí dentro. */
   onImport: () => void;
@@ -224,6 +229,9 @@ export function SettingsPopover({
   onRowText,
   trayGlyph,
   onTrayGlyph,
+  editors,
+  editor,
+  onEditor,
   updates,
   onImport,
   onClose,
@@ -264,7 +272,7 @@ export function SettingsPopover({
       top: Math.max(EDGE, Math.min(anchor.bottom + 6, window.innerHeight - own.height - EDGE)),
       left: Math.min(Math.max(EDGE, anchor.right - own.width), window.innerWidth - own.width - EDGE),
     });
-  }, [anchor, version, autostart, notify, updates.state, pruning]);
+  }, [anchor, version, autostart, notify, updates.state, pruning, editors]);
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -444,6 +452,20 @@ export function SettingsPopover({
         onPick={onTrayGlyph}
         caption
       />
+
+      {/* Con qué editor se abre la carpeta de un proyecto (spec 13). Solo con dos o más
+          instalados: con uno, un segmentado de una opción no es una elección, es un rótulo, y
+          con ninguno la preferencia decidiría sobre algo que no puede pasar. Es la única fila
+          del popover que puede no estar, y por eso va la última de las preferencias: así las
+          cinco de siempre no cambian de sitio según la máquina. */}
+      {editors.length > 1 && (
+        <Choices
+          label="Abrir carpetas en"
+          options={editors.map((each) => ({ value: each.id, label: each.name, content: each.name }))}
+          value={editor?.id ?? null}
+          onPick={onEditor}
+        />
+      )}
 
       <Choices
         label="Conservar completadas"
