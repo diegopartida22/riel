@@ -93,8 +93,9 @@ export function ProjectMenu({
       aria-label={`Opciones de ${project.name}`}
       style={box ? { top: box.top, left: box.left } : { top: -9999, left: -9999 }}
     >
+      {/* Sin hueco de palomita: aquí no hay ninguna opción que pueda estar marcada, y el hueco
+          vacío se leía como un icono que falta. */}
       <button type="button" className="menu__item" role="menuitem" onClick={onEdit}>
-        <span className="menu__check" />
         Editar proyecto
       </button>
 
@@ -107,7 +108,6 @@ export function ProjectMenu({
         disabled={!canRaise}
         onClick={onRaise}
       >
-        <span className="menu__check" />
         Subir
       </button>
       <button
@@ -117,7 +117,6 @@ export function ProjectMenu({
         disabled={!canLower}
         onClick={onLower}
       >
-        <span className="menu__check" />
         Bajar
       </button>
     </div>

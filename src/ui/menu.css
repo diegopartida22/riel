@@ -22,10 +22,24 @@
   position: fixed;
   min-width: 176px;
 
-  /* La sangría única de la que cuelga todo lo del popover (spec 8): el relleno del renglón,
-     más el hueco de la palomita, más su separación. Escrita una vez y no repetida en cada
-     regla, porque el popover mezcla renglones de dos clases —los de menú y los de preferencia—
-     y basta con que una se quede atrás para que se lean dos columnas donde hay una. */
+  /* La sangría única de la que cuelga todo lo que hay dentro. Escrita una vez y no repetida en
+     cada regla, porque el popover de Ajustes mezcla renglones de dos clases —los de menú y los
+     de preferencia— y basta con que una se quede atrás para que se lean dos columnas donde hay
+     una.
+
+     Su valor es solo el relleno del renglón, sin hueco reservado: un menú donde ninguna opción
+     puede estar marcada no tiene por qué dejar sitio para una marca. Reservarlo igual es lo que
+     hacía que el `⋯` de un proyecto se viera «como si faltara un icono» —faltaba, porque el
+     hueco estaba y nunca se llenaba— y lo que le robaba veinte píxeles de ancho a Ajustes por
+     una columna que no existe. Los menús del sistema hacen esto mismo: la sangría de la
+     palomita sale cuando hay algo que marcar, y no antes. */
+  --indent: 6px;
+}
+
+/* El menú que sí marca: el del `⋯` de una fila, donde la prioridad puesta lleva palomita. Ahí
+   el hueco se gana —14 del glifo más sus 6 de separación— y tiene que existir también en los
+   renglones sin marca, o las etiquetas bailarían al cambiar de prioridad. */
+.menu--estados {
   --indent: 26px;
 }
 
@@ -61,8 +75,9 @@
   color: var(--danger);
 }
 
-/* El hueco de la palomita existe en todos los renglones, marcados o no: sin él las etiquetas
-   bailarían 18px según cuál sea la prioridad puesta. */
+/* El hueco de la palomita existe en todos los renglones de `.menu--estados`, marcados o no: sin
+   él las etiquetas bailarían 20px según cuál sea la prioridad puesta. Donde nada se marca no se
+   dibuja, y por eso el resto de menús ni lo ponen en el marcado. */
 .menu__check {
   flex: 0 0 auto;
   display: flex;
@@ -149,8 +164,7 @@
   min-height: calc(var(--choice-height) + var(--track-pad) * 2 + 6px);
 }
 
-/* La misma fila, fuera del popover. La sangría de la izquierda es el hueco de la palomita de
-   `.menu__item`, y en la hoja de importación no hay ninguna palomita con la que alinearse. */
+/* La misma fila, fuera del popover, donde no hay renglones de menú con los que alinearse. */
 .settings__row--flush {
   margin: 0;
 }

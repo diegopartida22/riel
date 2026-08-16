@@ -1,6 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { disable, enable } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -41,6 +41,21 @@ const EDGE = 8;
 
 /** El panel de Notificaciones de Ajustes del Sistema, para la nota de permiso denegado. */
 const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notifications";
+
+/**
+ * Lo que contesta Rust sobre el arranque al iniciar sesión.
+ *
+ * `disponible` es falso corriendo en `tauri dev`, donde el binario vive suelto en `target/` sin
+ * `.app` alrededor: registrarlo en `launchd` no deja puesta Riel, deja puesto el binario de
+ * desarrollo, que al iniciar sesión arranca contra un servidor de Vite que no existe. Es un
+ * estado que el usuario no puede cambiar pulsando, así que el interruptor no acepta el clic.
+ */
+interface Autostart {
+  disponible: boolean;
+  puesto: boolean;
+}
+
+const autostartState = () => invoke<Autostart>("autostart_state");
 
 /** La salida manual cuando el actualizador no puede: bajar el `.dmg` a mano siempre funciona. */
 const RELEASES = "https://github.com/diegopartida22/riel/releases/latest";
@@ -169,10 +184,13 @@ function Choices<T>({
 function Switch({
   label,
   value,
+  disabled = false,
   onPick,
 }: {
   label: string;
   value: boolean | null;
+  /** Aparte de `value === null`: el estado se conoce, pero esta copia no puede cambiarlo. */
+  disabled?: boolean;
   onPick: (value: boolean) => void;
 }) {
   return (
@@ -184,7 +202,7 @@ function Switch({
         role="switch"
         aria-label={label}
         aria-checked={value ?? false}
-        disabled={value === null}
+        disabled={disabled || value === null}
         onClick={() => onPick(!value)}
       >
         <span className="switch__thumb" />
@@ -215,7 +233,7 @@ export function SettingsPopover({
   const box = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const [version, setVersion] = useState<string | null>(null);
-  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostart, setAutostart] = useState<Autostart | null>(null);
   /** `null` mientras se consulta: sin saberlo, la nota de permiso denegado no se dibuja. */
   const [notify, setNotify] = useState<Permission | null>(null);
   const [busy, setBusy] = useState(false);
@@ -227,7 +245,7 @@ export function SettingsPopover({
 
   useEffect(() => {
     getVersion().then(setVersion, (cause) => console.error(cause));
-    isEnabled().then(setAutostart, (cause) => console.error(cause));
+    autostartState().then(setAutostart, (cause) => console.error(cause));
     notificationPermission().then(setNotify, (cause) => console.error(cause));
   }, []);
 
@@ -272,16 +290,16 @@ export function SettingsPopover({
   }, [onClose]);
 
   const pickAutostart = async (next: boolean) => {
-    if (next === autostart) return;
+    if (!autostart?.disponible || next === autostart.puesto) return;
     // Optimista, y se corrige con lo que diga el sistema: la opción tiene que responder al
     // clic, pero quien manda sobre si el agente quedó puesto es `launchd`, no nosotros.
-    setAutostart(next);
+    setAutostart({ ...autostart, puesto: next });
     try {
       await (next ? enable() : disable());
     } catch (cause) {
       console.error(cause);
     }
-    isEnabled().then(setAutostart, (cause) => console.error(cause));
+    autostartState().then(setAutostart, (cause) => console.error(cause));
   };
 
   /**
@@ -360,9 +378,20 @@ export function SettingsPopover({
           estado que el control puede *tener* no hace falta además escribirlo. */}
       <Switch
         label="Abrir al iniciar sesión"
-        value={autostart}
+        value={autostart ? autostart.puesto : null}
+        disabled={autostart !== null && !autostart.disponible}
         onPick={(next) => void pickAutostart(next)}
       />
+
+      {/* Solo en desarrollo, donde el binario corre suelto sin `.app`. Encenderlo ahí dejaba
+          registrado `target/debug/riel`, y al iniciar sesión `launchd` arrancaba el binario de
+          desarrollo contra un Vite que no estaba: la app se abría, pero no era esta. */}
+      {autostart?.disponible === false && (
+        <p className="settings__note">
+          Esta copia corre desde el proyecto, no desde la app instalada. Solo la instalada puede
+          abrirse al iniciar sesión.
+        </p>
+      )}
 
       {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
           quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que
@@ -445,7 +474,6 @@ export function SettingsPopover({
               setPruning(null);
             }}
           >
-            <span className="menu__check" />
             Sí, borrar {pruning.count === 1 ? "1 tarea" : `${pruning.count} tareas`}
           </button>
           <button
@@ -456,7 +484,6 @@ export function SettingsPopover({
               wanted.current = retention;
             }}
           >
-            <span className="menu__check" />
             Cancelar
           </button>
         </>
@@ -473,7 +500,6 @@ export function SettingsPopover({
             Las notificaciones están desactivadas, así que las tareas con hora no van a avisar.
           </p>
           <button type="button" className="menu__item" onClick={() => void openUrl(NOTIFICATIONS_PANE)}>
-            <span className="menu__check" />
             Abrir Ajustes del Sistema
           </button>
         </>
@@ -482,7 +508,6 @@ export function SettingsPopover({
       <h2 className="settings__section">Datos</h2>
 
       <button type="button" className="menu__item" disabled={busy} onClick={() => void exportJson()}>
-        <span className="menu__check" />
         {/* Los puntos suspensivos son los de macOS: la acción no ocurre al pulsar, primero
             pregunta dónde guardar. Los otros tres renglones actúan de inmediato y por eso no
             los llevan. */}
@@ -502,7 +527,6 @@ export function SettingsPopover({
           onClose();
         }}
       >
-        <span className="menu__check" />
         Importar desde JSON…
       </button>
       <button
@@ -515,7 +539,6 @@ export function SettingsPopover({
           onClose();
         }}
       >
-        <span className="menu__check" />
         Mostrar los datos en Finder
       </button>
 
@@ -529,7 +552,6 @@ export function SettingsPopover({
           que va a estar casi siempre. */}
       {update.stage === "disponible" && (
         <button type="button" className="menu__item" onClick={updates.install}>
-          <span className="menu__check" />
           Actualizar a {update.version}
         </button>
       )}
@@ -538,7 +560,6 @@ export function SettingsPopover({
           al que reemplaza, y así el popover no cambia de alto ni se reancla al pulsar. */}
       {(update.stage === "bajando" || update.stage === "lista") && (
         <button type="button" className="menu__item" disabled>
-          <span className="menu__check" />
           {update.stage === "lista" ? (
             "Reiniciando…"
           ) : (
@@ -560,14 +581,12 @@ export function SettingsPopover({
         update.stage === "aldia" ||
         update.stage === "incomunicada") && (
         <button type="button" className="menu__item" onClick={updates.check}>
-          <span className="menu__check" />
           Buscar actualizaciones
         </button>
       )}
 
       {update.stage === "buscando" && (
         <button type="button" className="menu__item" disabled>
-          <span className="menu__check" />
           Buscando…
         </button>
       )}
@@ -588,7 +607,6 @@ export function SettingsPopover({
             La que tienes sigue puesta y funcionando.
           </p>
           <button type="button" className="menu__item" onClick={() => void openUrl(RELEASES)}>
-            <span className="menu__check" />
             Bajarla a mano
           </button>
         </>
@@ -601,7 +619,6 @@ export function SettingsPopover({
         className="menu__item"
         onClick={() => void invoke("quit").catch((cause) => console.error(cause))}
       >
-        <span className="menu__check" />
         Salir de Riel
       </button>
     </div>

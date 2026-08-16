@@ -1,4 +1,5 @@
 mod accent;
+mod autostart;
 mod db;
 mod glass;
 mod notify;
@@ -93,6 +94,15 @@ fn write_backup(app: tauri::AppHandle, name: String, contents: String) -> Result
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Si esta copia puede abrirse al iniciar sesión, y si ya está puesta.
+///
+/// Lo pregunta Ajustes en vez de `isEnabled()` del plugin, que solo mira si el plist existe y
+/// contesta que sí a uno que apunta al binario de desarrollo.
+#[tauri::command]
+fn autostart_state(app: tauri::AppHandle) -> autostart::Estado {
+    autostart::estado(&app)
+}
+
 /// `granted`, `denied`, `default` o `unavailable` (spec 7). Lo consulta Ajustes para saber
 /// si dibuja la nota del enlace a Preferencias del Sistema.
 #[tauri::command]
@@ -170,6 +180,7 @@ pub fn run() {
             write_export,
             read_import,
             write_backup,
+            autostart_state,
             notification_permission,
             request_notification_permission,
             set_reminders,
@@ -186,6 +197,11 @@ pub fn run() {
             let window = app
                 .get_webview_window("main")
                 .expect("la ventana `main` está declarada en tauri.conf.json");
+
+            // Antes que nada de lo que se ve: si el registro de `launchd` quedó apuntando a
+            // otro ejecutable, este arranque es el único momento en que se sabe cuál es el
+            // bueno. No hace nada en el caso normal.
+            autostart::reparar(app.handle());
 
             let material = panel::apply_glass(&window)?;
             app.manage(material);

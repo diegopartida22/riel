@@ -87,7 +87,9 @@ export function RowMenu({ task, anchor, onOpen, onPriority, onDelete, onClose }:
   return (
     <div
       ref={menu}
-      className="menu"
+      /* `--estados` es lo que reserva el hueco de la palomita: es el único menú de la app
+         donde una opción puede estar marcada — la prioridad puesta. */
+      className="menu menu--estados"
       role="menu"
       tabIndex={-1}
       aria-label={`Opciones de ${task.title}`}
