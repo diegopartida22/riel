@@ -218,6 +218,13 @@ export function TaskList({
 
   const open = menu && visible.find((task) => task.id === menu.id);
 
+  /**
+   * La carpeta del proyecto de la tarea que tiene el menú abierto (spec 13). En una vista mixta
+   * cada fila puede ser de un proyecto distinto, así que se resuelve por la tarea y no por la
+   * vista — que es justo lo que hace que valga desde Hoy.
+   */
+  const openFolderOf = open?.projectId ? projectsById.get(open.projectId)?.folder : null;
+
   return (
     <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
       {error && <p className="notice notice--error">{error}</p>}
@@ -316,6 +323,15 @@ export function TaskList({
             setMenu(null);
             onOpen(open.id);
           }}
+          editorName={openFolderOf && onOpenFolder ? editorName : null}
+          onOpenFolder={
+            openFolderOf && onOpenFolder
+              ? () => {
+                  setMenu(null);
+                  onOpenFolder(openFolderOf);
+                }
+              : undefined
+          }
           onPriority={(priority: Priority) => {
             setMenu(null);
             patch(open.id, { priority });

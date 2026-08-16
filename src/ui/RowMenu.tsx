@@ -8,6 +8,13 @@ export interface RowMenuProps {
   /** Rectángulo del `⋯` que lo abrió, en coordenadas de ventana. */
   anchor: DOMRect;
   onOpen: () => void;
+  /**
+   * El editor puesto, para nombrar la acción de abrir la carpeta del proyecto de esta tarea
+   * (spec 13). Nulo si la tarea no tiene proyecto, si su proyecto no tiene carpeta o si no hay
+   * editor instalado — que son las mismas tres condiciones del botón del encabezado.
+   */
+  editorName?: string | null;
+  onOpenFolder?: () => void;
   onPriority: (priority: Priority) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -33,7 +40,16 @@ const EDGE = 8;
  * toca lo bastante seguido como para no querer entrar al detalle— y eliminar. Todo lo demás
  * vive en el detalle, que es donde hay sitio para explicarlo.
  */
-export function RowMenu({ task, anchor, onOpen, onPriority, onDelete, onClose }: RowMenuProps) {
+export function RowMenu({
+  task,
+  anchor,
+  onOpen,
+  editorName,
+  onOpenFolder,
+  onPriority,
+  onDelete,
+  onClose,
+}: RowMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ top: number; left: number } | null>(null);
   /** Eliminar pide confirmación dentro del propio menú: mientras no exista ⌘Z (spec 5) esto
@@ -99,6 +115,20 @@ export function RowMenu({ task, anchor, onOpen, onPriority, onDelete, onClose }:
         <span className="menu__check" />
         Ver detalle
       </button>
+
+      {/* Pegado a «Ver detalle» porque son lo mismo: las dos únicas que llevan a otro sitio en
+          vez de cambiar la tarea. Y aquí y no solo en el encabezado del proyecto porque el
+          trabajo se decide desde Hoy, mirando la tarea — tener que entrar al proyecto para
+          abrir su carpeta es el viaje que el vínculo existía para ahorrar.
+
+          Lo nombra el editor y no la carpeta, igual que el botón del encabezado: lo que hace
+          falta saber antes de pulsar es en qué se va a abrir. */}
+      {editorName && onOpenFolder && (
+        <button type="button" className="menu__item" role="menuitem" onClick={onOpenFolder}>
+          <span className="menu__check" />
+          Abrir en {editorName}
+        </button>
+      )}
 
       <div className="menu__rule" role="separator" />
 

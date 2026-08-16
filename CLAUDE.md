@@ -698,6 +698,14 @@ Reglas:
   con las dos condiciones puestas: hay carpeta y hay editor instalado. Con la lista vacía el
   encabezado aparece solo si trae el botón — un proyecto recién creado es justo cuando hace
   falta abrir su carpeta.
+- **Y en el menú del `⋯` de la fila**, pegado a «Ver detalle», con las mismas condiciones
+  resueltas por la tarea y no por la vista. El encabezado solo sirve estando dentro del
+  proyecto, y el trabajo se decide desde Hoy: entrar al proyecto para poder abrir su carpeta es
+  exactamente el viaje que el vínculo existía para ahorrar. Sale también dentro del proyecto,
+  donde convive con el botón, y eso no es lo mismo que el punto de proyecto de §3.5 — aquel se
+  oculta por ser información que ya se sabe, y una acción duplicada no informa de nada: ahorra.
+  Las dos se nombran por el editor y no por la carpeta: lo que hace falta saber antes de pulsar
+  es en qué se va a abrir.
 - **Qué editores hay lo contesta Rust**, preguntándole a Launch Services por identificador de
   paquete: así cuenta igual el instalado por Homebrew o fuera de `/Applications`. La lista es
   cerrada, y eso es lo que valida lo que llega del webview antes de acabar en un `open -b`. No
