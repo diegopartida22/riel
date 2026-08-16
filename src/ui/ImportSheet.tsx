@@ -36,7 +36,13 @@ type Stage =
   | { kind: "resumen"; plan: ImportPlan; name: string }
   | { kind: "escribiendo" }
   | { kind: "hecho"; added: number; backup: string }
-  | { kind: "problema"; problem: string };
+  /**
+   * `backup` es lo que separa un fallo que no llegó a escribir de uno que sí: `null` mientras
+   * nada se ha tocado —elegir el archivo, validarlo, planearlo— y la ruta de la copia en cuanto
+   * la escritura pudo empezar. No es un detalle de presentación: sin transacción que deshaga un
+   * volcado a medias (spec 8), es la diferencia entre poder prometer que todo sigue igual y no.
+   */
+  | { kind: "problema"; problem: string; backup: string | null };
 
 /** Cuántas tareas del plan entran de verdad, según el modo. */
 const arriving = (plan: ImportPlan, mode: ImportMode) =>
@@ -75,13 +81,13 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
         const contents = await invoke<string>("read_import", { path });
         const parsed = parseSnapshot(contents);
         if (!parsed.ok) {
-          setStage({ kind: "problema", problem: parsed.problem });
+          setStage({ kind: "problema", problem: parsed.problem, backup: null });
           return;
         }
 
         const planned = await planImport(parsed.snapshot);
         if (!planned.ok) {
-          setStage({ kind: "problema", problem: planned.problem });
+          setStage({ kind: "problema", problem: planned.problem, backup: null });
           return;
         }
 
@@ -95,6 +101,7 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
         setStage({
           kind: "problema",
           problem: `No se pudo leer el archivo. ${String(cause)}`,
+          backup: null,
         });
       } finally {
         await invoke("set_keep_open", { value: false }).catch((cause) => console.error(cause));
@@ -105,10 +112,13 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
   const run = async (plan: ImportPlan) => {
     const added = arriving(plan, mode);
     setStage({ kind: "escribiendo" });
+    // Fuera del `try` a propósito: si lo que falla es el propio respaldo sigue valiendo `null`,
+    // y eso es exactamente lo que hay que saber después — que no se escribió nada.
+    let backup: string | null = null;
     try {
       // Antes de tocar nada. Si lo que falla es el propio respaldo, la importación no empieza:
       // escribir sin red justo en la operación que puede borrarlo todo es lo que no se hace.
-      const backup = await safetyBackup();
+      backup = await safetyBackup();
       await applyImport(plan, mode);
       onImported();
       setStage({ kind: "hecho", added, backup });
@@ -118,8 +128,15 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
       setStage({
         kind: "problema",
         problem: `No se pudo completar la importación. ${String(cause)}`,
+        backup,
       });
     }
+  };
+
+  /** Acepta el `null` del estado sin estrecharlo fuera: el botón solo existe cuando hay ruta. */
+  const reveal = (path: string | null) => {
+    if (path === null) return;
+    void revealItemInDir(path).catch((cause) => console.error(cause));
   };
 
   return (
@@ -132,13 +149,37 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
 
       {stage.kind === "problema" && (
         <>
-          {/* Qué pasó y qué hacer, sin disculpas (spec 3.8). Lo segundo es que no se tocó nada:
-              es la primera pregunta de quien ve fallar algo que iba a escribir en su base. */}
+          {/* Qué pasó y qué hacer, sin disculpas (spec 3.8). Lo segundo es en qué quedaron los
+              datos, que es la primera pregunta de quien ve fallar algo que iba a escribir en su
+              base — y la respuesta no es la misma según dónde falló.
+
+              Fallando antes de escribir, la base está intacta y decirlo cierra el asunto. Una
+              vez empezado el volcado no hay transacción que lo deshaga (spec 8), así que puede
+              haber quedado a medias: prometer ahí que todo sigue igual sería mentir justo donde
+              más caro sale, y en «reemplazar» —que borra las dos tablas antes de insertar— la
+              mentira podría estar tapando una base vacía. Lo que sirve entonces no es una frase
+              sino la copia, que es el deshacer de esto. */}
           <p className="editor__confirm-text">{stage.problem}</p>
-          <p className="editor__confirm-text">
-            Tus tareas siguen como estaban. Revisa el archivo y vuelve a intentarlo.
-          </p>
+          {stage.backup === null ? (
+            <p className="editor__confirm-text">
+              Tus tareas siguen como estaban. Revisa el archivo y vuelve a intentarlo.
+            </p>
+          ) : (
+            <p className="editor__confirm-text">
+              La escritura se quedó a medias, así que puede haber entrado parte de lo del
+              archivo. La copia de cómo estaba todo antes es lo que devuelve Riel a como estaba.
+            </p>
+          )}
           <div className="editor__actions">
+            {stage.backup !== null && (
+              <button
+                type="button"
+                className="editor__button"
+                onClick={() => reveal(stage.backup)}
+              >
+                Ver la copia
+              </button>
+            )}
             <button type="button" className="editor__button" onClick={onClose}>
               Cerrar
             </button>
@@ -162,7 +203,7 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
             <button
               type="button"
               className="editor__button"
-              onClick={() => void revealItemInDir(stage.backup).catch((cause) => console.error(cause))}
+              onClick={() => reveal(stage.backup)}
             >
               Ver la copia
             </button>
@@ -217,19 +258,32 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
             </div>
           </div>
 
-          <p className="editor__confirm-text">
-            {mode === "combinar"
-              ? `Combinar no borra nada: entra lo que falte y lo que ya está se queda como está. ${
-                  arriving(stage.plan, "combinar") === 0
-                    ? "Con este archivo no entraría nada nuevo."
-                    : `Entrarían ${plural(arriving(stage.plan, "combinar"), "tarea", "tareas")}.`
-                }`
-              : `Reemplazar borra ${plural(stage.plan.currentTasks, "tarea", "tareas")} y ${plural(
-                  stage.plan.currentProjects,
-                  "proyecto",
-                  "proyectos",
-                )} de Riel, y deja solo lo del archivo.`}
-          </p>
+          {/* El nivel único, dicho aquí y no al fallar. Combinar deja intacto lo que ya está por
+              id, así que una tarea que el archivo trae como raíz pero que en Riel ya es subtarea
+              no entra, y su hija acabaría colgando de una subtarea: el disparador lo ataja, pero
+              a media escritura. Reemplazar sí puede, porque vacía Riel antes de escribir — por
+              eso esto no rechaza el archivo, solo cierra el modo que no cabe. */}
+          {mode === "combinar" && stage.plan.mergeBlocked !== null ? (
+            <p className="editor__confirm-text">
+              «{stage.plan.mergeBlocked}» cuelga de una tarea que en Riel ya es subtarea, y solo
+              hay un nivel. Combinar la dejaría sin sitio. Reemplazar sí puede con este archivo,
+              porque vacía Riel antes de escribir.
+            </p>
+          ) : (
+            <p className="editor__confirm-text">
+              {mode === "combinar"
+                ? `Combinar no borra nada: entra lo que falte y lo que ya está se queda como está. ${
+                    arriving(stage.plan, "combinar") === 0
+                      ? "Con este archivo no entraría nada nuevo."
+                      : `Entrarían ${plural(arriving(stage.plan, "combinar"), "tarea", "tareas")}.`
+                  }`
+                : `Reemplazar borra ${plural(stage.plan.currentTasks, "tarea", "tareas")} y ${plural(
+                    stage.plan.currentProjects,
+                    "proyecto",
+                    "proyectos",
+                  )} de Riel, y deja solo lo del archivo.`}
+            </p>
+          )}
 
           <div className="editor__actions">
             <button type="button" className="editor__button" onClick={onClose}>
@@ -249,6 +303,7 @@ export function ImportSheet({ onImported, onClose }: ImportSheetProps) {
               <button
                 type="button"
                 className={`editor__button editor__button--${mode === "reemplazar" ? "danger" : "primary"}`}
+                disabled={mode === "combinar" && stage.plan.mergeBlocked !== null}
                 onClick={() => void run(stage.plan)}
               >
                 {mode === "reemplazar" ? "Sí, borrar y reemplazar" : "Importar"}

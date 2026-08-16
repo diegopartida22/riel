@@ -48,6 +48,12 @@ export interface ImportPlan {
   currentTasks: number;
   /** Cuántas entran sin proyecto porque el suyo no estaba. Se dice en el resumen. */
   orphaned: number;
+  /**
+   * La subtarea que impide combinar, por su nombre, o `null` si no hay ninguna. Reemplazar sí
+   * puede con ella: vacía las dos tablas antes de escribir, así que lo que la estorba deja de
+   * estar. Por eso viaja en el plan en vez de tumbar el archivo — el modo se elige después.
+   */
+  mergeBlocked: string | null;
 }
 
 // ── Validación ─────────────────────────────────────────────────────────────────────────
@@ -270,22 +276,45 @@ export async function planImport(snapshot: Snapshot): Promise<
     (each, index) => each.projectId === null && snapshot.tasks[index].projectId !== null,
   ).length;
 
+  /**
+   * El nivel único (spec 2) cruzado con la base, que es lo que el archivo no puede comprobar
+   * por sí solo. Hay dos casos y no fallan igual.
+   *
+   * Si el padre no viene en el archivo, tiene que estar puesto y ser raíz. Que no esté, o que
+   * ya sea subtarea, no lo arregla ningún modo: el archivo se rechaza aquí.
+   *
+   * Si el padre sí viene, y viene como raíz, depende del modo. Reemplazando entra como raíz
+   * porque la base se vació antes. Combinando no entra siquiera: `applyImport` se salta por id
+   * lo que ya está, a propósito —un respaldo de hace un mes no revive un título editado ayer—
+   * así que si esa misma id ya es subtarea en Riel, la hija acabaría colgando de ella. El
+   * disparador de la migración lo ataja, pero abortando a media escritura y con un error de
+   * SQLite; nombrar la tarea es justo lo que este paso existe para poder hacer (spec 8).
+   */
+  let mergeBlocked: string | null = null;
+
   for (const each of snapshot.tasks) {
     if (each.parentId === null) continue;
 
-    if (!fileRoots.has(each.parentId)) {
-      if (!taskIds.has(each.parentId)) {
-        return {
-          ok: false,
-          problem: `La subtarea «${each.title}» cuelga de una tarea que no está ni en el archivo ni en Riel.`,
-        };
+    if (fileRoots.has(each.parentId)) {
+      // Solo estorba si la hija fuera a entrar de verdad: la que ya está por id tampoco se
+      // inserta al combinar, así que no cuelga de nada nuevo.
+      if (mergeBlocked === null && existingSubtasks.has(each.parentId) && !taskIds.has(each.id)) {
+        mergeBlocked = each.title;
       }
-      if (existingSubtasks.has(each.parentId)) {
-        return {
-          ok: false,
-          problem: `La subtarea «${each.title}» cuelga de una tarea que en Riel ya es subtarea, y solo hay un nivel.`,
-        };
-      }
+      continue;
+    }
+
+    if (!taskIds.has(each.parentId)) {
+      return {
+        ok: false,
+        problem: `La subtarea «${each.title}» cuelga de una tarea que no está ni en el archivo ni en Riel.`,
+      };
+    }
+    if (existingSubtasks.has(each.parentId)) {
+      return {
+        ok: false,
+        problem: `La subtarea «${each.title}» cuelga de una tarea que en Riel ya es subtarea, y solo hay un nivel.`,
+      };
     }
   }
 
@@ -299,6 +328,7 @@ export async function planImport(snapshot: Snapshot): Promise<
       currentProjects: existingProjects.length,
       currentTasks: existingTasks.length,
       orphaned,
+      mergeBlocked,
     },
   };
 }
