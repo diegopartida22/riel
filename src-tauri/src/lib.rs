@@ -1,6 +1,7 @@
 mod accent;
 mod autostart;
 mod db;
+mod deeplink;
 mod editor;
 mod glass;
 mod notify;
@@ -118,6 +119,16 @@ fn open_in_editor(editor: String, path: String) -> Result<(), String> {
     self::editor::open(&editor, &path)
 }
 
+/// Los `riel://` que han llegado y que todavía no se han atendido (spec 14).
+///
+/// Es una cola y no un evento con carga por el mismo motivo que las pulsaciones de un banner:
+/// el enlace puede ser justo lo que arrancó la app, y entonces llega antes de que el webview
+/// exista. El frontend la vacía al montar y cada vez que se le avisa.
+#[tauri::command]
+fn take_links() -> Vec<String> {
+    deeplink::take()
+}
+
 /// `granted`, `denied`, `default` o `unavailable` (spec 7). Lo consulta Ajustes para saber
 /// si dibuja la nota del enlace a Preferencias del Sistema.
 #[tauri::command]
@@ -198,6 +209,7 @@ pub fn run() {
             autostart_state,
             editors,
             open_in_editor,
+            take_links,
             notification_permission,
             request_notification_permission,
             set_reminders,
@@ -268,6 +280,14 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // `build` y no `run` para poder mirar los eventos del bucle. El único que interesa es
+        // el de abajo, que es como llega un `riel://` (spec 14).
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(move |_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                deeplink::received(_app, urls);
+            }
+        });
 }

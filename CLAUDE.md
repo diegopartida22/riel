@@ -26,6 +26,7 @@ Dentro:
 - Tareas recurrentes (§12). Entraron después de la v1, y no por capricho: sin ellas lo que se
   repite se escribe a mano cada vez, que es justo lo que una lista tendría que ahorrar.
 - La carpeta de un proyecto y el botón que la abre en el editor (§13).
+- El esquema `riel://`, para escribir una tarea desde otra app sin abrir el panel (§14).
 
 Fuera de la v1, no lo construyas:
 
@@ -703,3 +704,68 @@ Reglas:
   no es una elección, es un rótulo. Es la única fila del popover que puede no estar, así que va
   la última de las preferencias y las cinco de siempre no cambian de sitio según la máquina.
 - Nada de git, ramas ni estado del repositorio. Eso es otra app.
+
+---
+
+## 14. El esquema `riel://`
+
+Añadido después de la v1. Es la segunda cosa que cruza el borde de la app, y al revés que el
+actualizador (§11) no toca la red: lo que entra viene de otra app de esta misma máquina —Atajos,
+Raycast, Alfred, un `open` en la terminal— y lo hace por Launch Services, que es el mismo camino
+por el que se abre un `.pdf`.
+
+Existe porque el panel se abre con un clic en la barra, y hay un momento en el que eso ya es
+demasiado: se está escribiendo en otra app, la tarea es de esa app, y el viaje de ida y vuelta
+al panel es lo que hace que la tarea no se apunte. Un enlace la escribe sin moverse de sitio.
+
+La gramática, entera:
+
+```
+riel://nueva?texto=Renovar+dominio+ma%C3%B1ana+!!   crea la tarea y no abre el panel
+riel://nueva?texto=…&notas=…                        `notas` entra tal cual, sin parsear
+riel://buscar?q=dominio                             abre el panel con la búsqueda puesta
+riel://hoy · riel://abrir?vista=hoy                 abre el panel en esa vista
+riel://                                             abre el panel
+```
+
+Reglas:
+
+- **`texto` pasa por el parser del campo de captura (§6)**, y eso es lo que hace que el esquema
+  valga la pena: `mañana`, `14:30`, `#infra`, `!!` y `cada mes` significan exactamente lo mismo
+  desde un atajo que escritos a mano. Un esquema con un parámetro por campo —`fecha=`, `hora=`,
+  `prioridad=`— sería otra gramática que mantener al lado de la que ya hay, y la de la app es
+  además la que el usuario ya se sabe.
+- **Lo que el texto no diga, no lo pone nadie.** Una tarea escrita en el panel hereda de la
+  vista —en Hoy nace con fecha de hoy, dentro de un proyecto nace con el suyo (§6)— y una que
+  entra por un enlace no puede: llega con el panel cerrado, y heredar de la vista que quedó
+  abierta hace tres días es heredar de un azar.
+- **Crear no abre el panel, y es lo único que no lo abre.** El enlace se dispara desde otra app,
+  y lo que se quiere de ahí es que la tarea quede escrita sin dejar de estar donde se estaba;
+  quien lo dispara —el atajo, el lanzador— ya da su propio acuse. Todo lo demás es pedir mirar
+  la lista, así que el panel lo abre Rust al recibir el enlace y no esperando a que el webview
+  arranque y lo pida de vuelta.
+- **Rust recoge, el webview interpreta.** La cola vive en Rust porque el caso normal es el que
+  peor lo tiene: un `riel://` con Riel cerrada arranca la app, y el enlace llega antes de que el
+  webview exista. Así que el evento es solo un aviso y la cola es la verdad, con un único
+  consumidor —el mismo trato que las pulsaciones de un banner (§7)— que es lo que impide atender
+  dos veces el mismo enlace. Y la gramática se escribe una sola vez, del lado que ya tiene el
+  parser y el estado.
+- **Un verbo que no se reconoce no es un error que enseñar.** El panel ya está abierto —lo abre
+  Rust para todo lo que no sea `nueva`— así que se cae en la lista de siempre. Un aviso por un
+  enlace disparado desde fuera saldría sin nada alrededor que explique de dónde vino. Sin
+  `texto`, `nueva` no hace nada: una fila sin título en una lista que nadie está mirando es peor
+  que no hacer nada.
+- **Nada de `tauri-plugin-deep-link`.** En macOS el plugin escucha el mismo evento que el
+  runtime ya emite con solo declarar el esquema en el `Info.plist`; lo que añadiría son los
+  registros de Windows y Linux, que aquí no existen, y un permiso más.
+- **El permiso de notificaciones no se pide desde aquí**, aunque la tarea traiga hora. El
+  diálogo del sistema saldría sin panel delante y sin que nadie lo haya provocado, que es lo
+  contrario de lo que pide §7. Se pedirá la próxima vez que se ponga una hora a mano.
+- **Nada de un verbo que borre o complete.** Lo que entra por aquí no se confirma con nadie, y
+  crear una tarea de más se arregla borrándola. Un `riel://completar?id=…` sería una acción
+  destructiva disparada desde fuera, sin panel delante y sin nada que deshacer a la vista.
+
+En Atajos es la acción «Abrir URL» con el texto codificado —la propia app trae «Codificar como
+URL»— y con eso ya se puede dictar una tarea al asistente o mandarla desde la hoja de compartir.
+No hay una extensión de App Intents, y no es un descuido: sería un binario aparte dentro del
+paquete, firmado y con su propio ciclo de vida, para exponer lo que este renglón ya expone.

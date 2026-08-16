@@ -4,5 +4,22 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<!-- El esquema `riel://` (spec 14). Es lo único que hace falta para que Launch Services
+	     mande aquí un `open riel://…`: el runtime ya trae el `application:openURLs:` que lo
+	     recibe. Sin esta declaración el enlace no llega, no falla — el sistema contesta que
+	     nadie sabe abrirlo. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.riel.app</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>riel</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

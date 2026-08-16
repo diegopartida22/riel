@@ -39,6 +39,8 @@ import {
   type TaskPatch,
   type TaskTree,
 } from "../data";
+import { parse as parseCapture } from "./capture";
+import { LINK_EVENT, parseLink, takeLinks, type Link } from "./links";
 import {
   DONE_EVENT,
   ensurePermission,
@@ -615,6 +617,78 @@ export function useRiel(): RielState {
     drain();
     const off = listen(DONE_EVENT, drain);
     return () => void off.then((stop) => stop()).catch((cause) => console.error(cause));
+  }, [refreshCounts]);
+
+  /**
+   * Los `riel://` que llegan de fuera (spec 14), por la misma mecánica que las pulsaciones de
+   * un banner: Rust encola y avisa, y aquí solo se vacía la cola.
+   *
+   * Ni los proyectos ni el día se leen del estado, sino de la base y del reloj en el momento de
+   * atender. No es rodeo: este oyente se registra una sola vez —depender de `projects` lo daría
+   * de baja y de alta con cada cambio, y el enlace que cayera en ese hueco sería justo el que
+   * importa— y el enlace que arranca la app llega antes de que los proyectos estén cargados, así
+   * que un `#casa` leído del estado no habría encontrado nada.
+   *
+   * Lo que se escribe se relee entero en vez de meterse a mano en la lista: un enlace llega con
+   * el panel casi siempre cerrado, así que no hay ninguna animación en curso que una relectura
+   * pueda cortar, y sí puede haber una vista que ya no cuadra con lo que hay en la base.
+   */
+  useEffect(() => {
+    let alive = true;
+
+    const drain = async () => {
+      const links = (await takeLinks())
+        .map(parseLink)
+        .filter((link): link is Link => link !== null);
+      if (!alive || !links.length) return;
+
+      // Una sola lectura para todos los `nueva` del lote, y ninguna si no hay ninguno.
+      const projects = links.some((link) => link.kind === "nueva") ? await listProjects() : [];
+      const day = localDay();
+      let created = false;
+
+      for (const link of links) {
+        if (link.kind === "nueva") {
+          // El mismo parser del campo de captura, así que `mañana`, `#proyecto` y `!!` valen
+          // igual desde un atajo. Lo que no da el texto no lo pone la vista en curso: una
+          // tarea que entra por un enlace no puede depender de qué se estuviera mirando.
+          const { title, draft } = parseCapture(link.text, projects, day);
+          if (!title) continue;
+          await createTask({ ...draft, title, notes: link.notes });
+          created = true;
+        } else if (link.kind === "buscar") {
+          setDetailId(null);
+          setQuery(link.query);
+        } else if (link.kind === "vista") {
+          setDetailId(null);
+          setQuery("");
+          setView((current) =>
+            sameView(current, { kind: link.view }) ? current : { kind: link.view },
+          );
+        }
+      }
+
+      if (!created || !alive) return;
+      setFirstRun(false);
+      setEpoch((current) => current + 1);
+      void refreshCounts();
+    };
+
+    // El permiso de notificaciones no se pide desde aquí aunque la tarea traiga hora (spec 7):
+    // el diálogo del sistema saldría sin panel delante y sin que nadie lo haya provocado. Se
+    // pedirá la próxima vez que se ponga una hora a mano, que es cuando se ve para qué es.
+    const run = () =>
+      void drain().catch((cause) => {
+        console.error(cause);
+        if (alive) setError("No se pudo crear la tarea del enlace. Vuelve a intentarlo.");
+      });
+
+    run();
+    const off = listen(LINK_EVENT, run);
+    return () => {
+      alive = false;
+      void off.then((stop) => stop()).catch((cause) => console.error(cause));
+    };
   }, [refreshCounts]);
 
   const toggle = useCallback(
