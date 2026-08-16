@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "./data";
 import { tint } from "./design/palette";
+import { useAgenda } from "./state/agenda";
 import { useDevMode } from "./state/editors";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
@@ -33,6 +34,7 @@ export default function App() {
   const riel = useRiel();
   const updates = useUpdates();
   const dev = useDevMode();
+  const agenda = useAgenda(riel.today);
   const composer = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Editing>(null);
@@ -202,6 +204,9 @@ export default function App() {
           editors={dev.editors}
           editor={dev.editor}
           onEditor={dev.setEditor}
+          agenda={agenda.enabled}
+          onAgenda={agenda.setEnabled}
+          calendar={agenda.permission}
           updates={updates}
           onImport={() => {
             // La hoja se lo lleva todo el área de contenido, así que lo que hubiera puesto ahí
@@ -309,6 +314,7 @@ export default function App() {
               onCapture={() => composer.current?.focus()}
               editorName={dev.editor?.name}
               onOpenFolder={dev.openFolder}
+              events={agenda.events}
             />
           )}
         </main>

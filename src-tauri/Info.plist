@@ -8,6 +8,15 @@
 	     mande aquí un `open riel://…`: el runtime ya trae el `application:openURLs:` que lo
 	     recibe. Sin esta declaración el enlace no llega, no falla — el sistema contesta que
 	     nadie sabe abrirlo. -->
+	<!-- La agenda del día (spec 15). Es lo que macOS enseña dentro de su propia pregunta, así
+	     que va escrito para leerse ahí y no aquí: dice qué se hace con los eventos y, sobre
+	     todo, que no se escribe ninguno. Sin estas claves la app no es que no tenga permiso —
+	     pedirlo levanta una excepción y se lleva el proceso, que es peor que no ofrecerlo.
+	     Dos porque la clave cambió en macOS 14 y la app se instala desde la 13. -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Riel enseña los eventos de hoy encima de tus tareas. Solo los lee: no crea, edita ni borra nada, y no sale nada de esta Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Riel enseña los eventos de hoy encima de tus tareas. Solo los lee: no crea, edita ni borra nada, y no sale nada de esta Mac.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

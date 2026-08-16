@@ -1,4 +1,5 @@
 mod accent;
+mod agenda;
 mod autostart;
 mod db;
 mod deeplink;
@@ -158,6 +159,29 @@ fn take_completed() -> Vec<String> {
     notify::take_completed()
 }
 
+/// El estado del permiso del Calendario, con el mismo vocabulario que el de los avisos.
+#[tauri::command]
+fn calendar_permission() -> String {
+    agenda::permission()
+}
+
+/// La pregunta del sistema, la primera vez que se enciende la agenda en Ajustes.
+///
+/// Se pregunta ahí y no al arrancar por lo mismo que con los avisos (spec 7): un permiso se
+/// entiende cuando ya se sabe para qué es, y una app de tareas que pide el calendario en su
+/// primer arranque parece que va a hacer algo con él.
+#[tauri::command]
+fn request_calendar_permission() -> bool {
+    agenda::request()
+}
+
+/// Los eventos de un rango, en segundos desde epoch. El rango lo calcula el webview, que es
+/// quien sabe qué día está enseñando.
+#[tauri::command]
+fn agenda(from: f64, to: f64) -> Vec<agenda::Event> {
+    agenda::events(from, to)
+}
+
 /// Cierra la app desde Ajustes.
 ///
 /// Sin Dock y sin ⌘Tab (spec 4), una app de la barra no tiene ⌘Q ni menú de aplicación, así
@@ -214,6 +238,9 @@ pub fn run() {
             request_notification_permission,
             set_reminders,
             take_completed,
+            calendar_permission,
+            request_calendar_permission,
+            agenda,
             quit,
             restart
         ])

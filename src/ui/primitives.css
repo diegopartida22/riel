@@ -552,6 +552,79 @@
   color: var(--ink-secondary);
 }
 
+/* ── Agenda del día ──────────────────────────────────────────────────────────────────── */
+
+/* Los eventos del Calendario, encima de las tareas en Hoy (spec 15). Se parecen a una fila y
+   no lo son: sin casilla, sin punto de proyecto, sin herramientas al pasar por encima y sin
+   fondo de hover, porque aquí no hay nada que pulsar. Lo que una fila de tarea gasta a la
+   izquierda en su casilla, esta lo gasta en la hora, que es lo que ordena un día. */
+.agenda {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Por la línea base y no por el centro: la hora es mono de 11 y el título es de 13, y
+   centrarlos uno contra otro dejaría la hora flotando medio píxel por encima de su renglón. */
+.agenda__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+/* `5ch` es exactamente `14:30` en una fuente monoespaciada — no una medida aproximada en px
+   que haya que retocar si cambia la fuente de datos. Es un mínimo y no un ancho fijo porque
+   el `letter-spacing` del rol de datos empuja un pelo por fuera de esos cinco caracteres. */
+.agenda__time {
+  flex: 0 0 auto;
+  min-width: 5ch;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+}
+
+/* Un peso por debajo del título de una tarea, que sigue en `--ink-primary`: el evento es el
+   contexto del día y la tarea es el trabajo. Si los dos pesaran igual, la lista de Hoy tendría
+   dos primeros planos y ninguno mandaría. */
+.agenda__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-secondary);
+}
+
+/* Lo que está pasando ahora mismo sube al primer plano, y es lo único de este bloque que lo
+   hace. A media mañana es el renglón más relevante del panel entero. */
+.agenda__row.is-now .agenda__time,
+.agenda__row.is-now .agenda__title {
+  color: var(--ink-primary);
+}
+
+/* Lo que ya terminó se queda, apagado: una agenda que va borrando lo cumplido obliga a
+   recordar si la junta de las diez estaba ahí, y lo que se lee de un vistazo es por dónde va
+   el día. Al nivel de tinta de la hora, que es donde ya estaba. */
+.agenda__row.is-past .agenda__title {
+  color: var(--ink-tertiary);
+}
+
+/* El ajuste de «Texto de las tareas» vale también aquí: el título de un evento se corta por
+   el mismo sitio que el de una tarea, y quien pidió verlos enteros los pidió todos. */
+.panel[data-texto="completo"] .agenda__title {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
 /* ── Foco ────────────────────────────────────────────────────────────────────────────── */
 
 /* Siempre visible, del acento en contexto, con 2px de separación. Nunca `outline: none`

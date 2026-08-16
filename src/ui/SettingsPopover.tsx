@@ -36,6 +36,10 @@ export interface SettingsPopoverProps {
   editors: Editor[];
   editor: Editor | null;
   onEditor: (id: string) => void;
+  /** La agenda del día en Hoy y el permiso del Calendario (spec 15). */
+  agenda: boolean;
+  onAgenda: (value: boolean) => void;
+  calendar: Permission | null;
   updates: Updates;
   /** Abre la hoja de importación, que vive en el área de contenido y no aquí dentro. */
   onImport: () => void;
@@ -46,6 +50,9 @@ const EDGE = 8;
 
 /** El panel de Notificaciones de Ajustes del Sistema, para la nota de permiso denegado. */
 const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notifications";
+
+/** El de Privacidad → Calendarios, para lo mismo con la agenda (spec 15). */
+const CALENDAR_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars";
 
 /**
  * Lo que contesta Rust sobre el arranque al iniciar sesión.
@@ -174,17 +181,19 @@ function Choices<T>({
 }
 
 /**
- * El interruptor del arranque automático.
+ * El interruptor de las dos preferencias booleanas: el arranque automático y la agenda.
  *
- * Es la única preferencia booleana del popover, y un segmentado de «Sí / No» era pedirle al
+ * Para las dos, un segmentado de «Sí / No» era pedirle al
  * lector que tradujera dos palabras a un estado que el control ya puede *tener*. Un interruptor
  * lo dice sin leer nada: la posición del pulgar es el valor. Las medidas son las de macOS —38×22
  * con pulgar de 18, y 150ms de recorrido— porque un interruptor con otras proporciones es de lo
  * primero que delata que un control está hecho a mano.
  *
- * Mientras `launchd` no conteste va apagado y sin aceptar clics: no hay posición para «todavía
- * no se sabe», y dejarlo pulsable antes de conocer el estado convertiría el primer clic en un
- * volado. Contesta en milisegundos.
+ * Mientras `launchd` no conteste, el del arranque va apagado y sin aceptar clics: no hay
+ * posición para «todavía no se sabe», y dejarlo pulsable antes de conocer el estado convertiría
+ * el primer clic en un volado. El de la agenda sabe su valor desde el primer pintado —vive en
+ * `localStorage`— pero tampoco se pulsa hasta que el sistema diga cómo está el permiso, que es
+ * lo que decide qué pasa al encenderlo. Los dos contestan en milisegundos.
  */
 function Switch({
   label,
@@ -232,6 +241,9 @@ export function SettingsPopover({
   editors,
   editor,
   onEditor,
+  agenda,
+  onAgenda,
+  calendar,
   updates,
   onImport,
   onClose,
@@ -272,7 +284,7 @@ export function SettingsPopover({
       top: Math.max(EDGE, Math.min(anchor.bottom + 6, window.innerHeight - own.height - EDGE)),
       left: Math.min(Math.max(EDGE, anchor.right - own.width), window.innerWidth - own.width - EDGE),
     });
-  }, [anchor, version, autostart, notify, updates.state, pruning, editors]);
+  }, [anchor, version, autostart, notify, updates.state, pruning, editors, agenda, calendar]);
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -381,9 +393,11 @@ export function SettingsPopover({
           preferencias es el único sin rótulo porque es para lo que existe el popover; ponerle
           «PREFERENCIAS» encima sería rotular la caja entera desde dentro.
 
-          El arranque automático es el único booleano de los cinco, y va con interruptor y no
-          con un segmentado de «Sí / No»: es el control con el que el sistema dice esto, y un
-          estado que el control puede *tener* no hace falta además escribirlo. */}
+          Los dos booleanos van primero y juntos, con interruptor y no con un segmentado de
+          «Sí / No»: es el control con el que el sistema dice esto, y un estado que el control
+          puede *tener* no hace falta además escribirlo. Juntos, además, dejan las de lista
+          cerrada en un bloque seguido; intercalado, un interruptor entre dos segmentados parte
+          en dos la columna de opciones que estos alinean contra el borde derecho. */}
       <Switch
         label="Abrir al iniciar sesión"
         value={autostart ? autostart.puesto : null}
@@ -399,6 +413,34 @@ export function SettingsPopover({
           Esta copia corre desde el proyecto, no desde la app instalada. Solo la instalada puede
           abrirse al iniciar sesión.
         </p>
+      )}
+
+      {/* La agenda del día en Hoy (spec 15). Apagada de fábrica: encenderla es lo que levanta la
+          pregunta del Calendario, y un permiso que se pide sin que nadie lo haya pedido es justo
+          lo que hace desconfiar de una app que dice no salir de la máquina. El nombre dice de
+          dónde salen los eventos para que el diálogo del sistema no llegue de sorpresa.
+
+          No acepta clics mientras no se sepa el permiso —milisegundos— ni corriendo desde el
+          proyecto: sin `.app` no hay identificador al que conceder nada y EventKit no contesta.
+          Es el mismo caso que la nota de aquí arriba, así que no lleva una segunda. */}
+      <Switch
+        label="Eventos del calendario"
+        value={agenda}
+        disabled={calendar === null || calendar === "unavailable"}
+        onPick={onAgenda}
+      />
+
+      {/* Solo con la agenda encendida. Apagada, el permiso no hace falta, y una advertencia
+          sobre algo que nadie está pidiendo es ruido. */}
+      {agenda && calendar === "denied" && (
+        <>
+          <p className="settings__note">
+            Riel no tiene acceso al Calendario, así que la agenda de hoy sale vacía.
+          </p>
+          <button type="button" className="menu__item" onClick={() => void openUrl(CALENDAR_PANE)}>
+            Abrir Ajustes del Sistema
+          </button>
+        </>
       )}
 
       {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se

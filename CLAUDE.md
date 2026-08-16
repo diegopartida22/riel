@@ -27,6 +27,7 @@ Dentro:
   repite se escribe a mano cada vez, que es justo lo que una lista tendría que ahorrar.
 - La carpeta de un proyecto y el botón que la abre en el editor (§13).
 - El esquema `riel://`, para escribir una tarea desde otra app sin abrir el panel (§14).
+- La agenda del día: los eventos del Calendario de hoy, encima de la lista de Hoy (§15).
 
 Fuera de la v1, no lo construyas:
 
@@ -769,3 +770,68 @@ En Atajos es la acción «Abrir URL» con el texto codificado —la propia app t
 URL»— y con eso ya se puede dictar una tarea al asistente o mandarla desde la hoja de compartir.
 No hay una extensión de App Intents, y no es un descuido: sería un binario aparte dentro del
 paquete, firmado y con su propio ciclo de vida, para exponer lo que este renglón ya expone.
+
+---
+
+## 15. La agenda del día
+
+Añadido después de la v1, y de las tres cosas que cruzan el borde de la app es la única que ni
+sale a la red ni recibe nada de fuera: lee el Calendario de esta Mac por EventKit, que es de
+donde lo lee Calendario.app.
+
+Existe porque una lista de Hoy sin el día delante miente por omisión. La tarde con tres juntas y
+la tarde libre se ven exactamente igual en una lista de tareas, y lo que se decide mirando Hoy no
+es qué hay que hacer —eso ya se sabe— sino qué cabe. Poner los eventos encima cuesta cuatro
+renglones y contesta esa pregunta sin abrir otra app.
+
+Reglas:
+
+- **Solo lee.** No crea, no edita, no borra y no marca nada en el Calendario, y no hay ningún
+  camino en la app que lo haga. Los eventos tampoco se guardan en SQLite: se piden al abrir el
+  panel y viven en memoria hasta que se cierra. Una copia en la base sería un segundo original
+  que se queda viejo, y además metería en el export de §8 datos que no son de Riel.
+- **Viene apagada, y encenderla es lo que pregunta.** El interruptor está en Ajustes, junto al
+  del arranque al iniciar sesión, y es el que levanta el diálogo del sistema. Por lo mismo que
+  con los avisos (§7): un permiso se entiende cuando ya se sabe para qué es, y una app de tareas
+  que pide el calendario en su primer arranque parece que va a hacer algo con él. Mientras el
+  sistema no diga cómo está el permiso, el interruptor no se pulsa.
+- **`NSCalendarsFullAccessUsageDescription` y `NSCalendarsUsageDescription` en el `Info.plist`,
+  las dos.** La clave cambió en macOS 14 y la app se instala desde la 13. Sin ellas no es que no
+  haya permiso: pedirlo levanta una excepción y se lleva el proceso. El texto se escribe para
+  leerse dentro del diálogo del sistema, y dice sobre todo lo que no se hace.
+- **Denegado se dice una vez y no se insiste.** Con la agenda encendida y el permiso denegado,
+  una nota en Ajustes con el enlace a Privacidad → Calendarios, igual que la de los avisos. El
+  interruptor se queda encendido: lo que dice es que se quiere ver la agenda, y apagarlo porque
+  el sistema contestó que no borraría la petición y dejaría la nota hablando sola. Concederlo
+  ahí y volver al panel trae los eventos sin reiniciar nada.
+- **Se quedan fuera cuatro cosas, y ninguna es un descuido**: los calendarios de cumpleaños y los
+  suscritos —festivos, calendarios de equipos, lo que uno no puso ahí a mano—, porque son eventos
+  de día entero que llenarían la agenda todos los días con lo mismo; los cancelados, que ya no
+  son el día de nadie; y las invitaciones que uno declinó, porque contestar que no es decir que
+  ese rato no es tuyo.
+- **No es una fila de tarea y no lo finge.** Sin casilla, sin manija de arrastre, sin `⋯`, sin
+  punto de proyecto y sin entrar en el recorrido de ↑↓. Un evento no se completa ni se reordena
+  desde aquí, y darle los gestos de una tarea sería prometer cinco cosas que ninguna funciona.
+  Lo único que hace es estar.
+- **La hora a la izquierda, en mono, y solo la de entrada.** Es la columna que ordena un día, y
+  es donde la fila de tarea pone su casilla. El rango entero está en el tooltip, que es donde no
+  le cuesta ancho a nadie. Un evento de día entero —o uno que empezó en un día anterior— no tiene
+  hora que enseñar hoy: la columna se queda vacía y el título arranca donde arrancan los demás.
+  Escribir «todo el día» costaría el doble de ancho que la hora más larga y torcería la única
+  columna que hay. Van primero, que es el orden en que se lee un día.
+- **Lo que ya pasó se queda, apagado; lo que está pasando sube a `--ink-primary`.** Una agenda
+  que va borrando lo cumplido obliga a recordar si la junta de las diez estaba ahí, y a media
+  mañana el renglón de lo que está pasando ahora es lo más relevante del panel entero. El resto
+  va un peso por debajo del título de una tarea: el evento es el contexto y la tarea es el
+  trabajo, y si los dos pesaran igual Hoy tendría dos primeros planos y ninguno mandaría.
+- **Solo en Hoy.** En Próximas serían los eventos de otro día y en un proyecto no vienen a
+  cuento. Sin eventos, el bloque no existe: ni rótulo ni hueco. Y con la lista de tareas vacía
+  el rótulo HOY sí sale, aunque normalmente no salga, o «Nada para hoy» colgaría de AGENDA y se
+  leería como que no hay más eventos.
+- **Se relee al abrir el panel y al cambiar de día, no con un temporizador.** Por lo mismo que
+  los avisos (§7) y el chequeo de actualizaciones (§11): con el panel cerrado la webview está
+  estrangulada, y un `setInterval` de un minuto no dispara cuando toca sino todo junto al volver.
+  Abrir el panel es además el único momento en que la agenda se ve.
+- **Ninguna tarea se crea desde un evento y ningún evento desde una tarea.** Serían dos originales
+  de lo mismo, y entonces habría que decidir qué pasa al editar uno de los dos, al borrar el otro
+  y al desactivar el permiso — que es una sincronización, no una lectura, y no es esto.

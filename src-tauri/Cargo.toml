@@ -94,4 +94,17 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
   "UNNotificationTrigger",
   "UNUserNotificationCenter",
 ] }
+# La agenda del día (spec 15). Es la misma API de la que lee Calendario.app, y se usa solo para
+# leer: nada de crear, editar ni borrar eventos.
+objc2-event-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "EKCalendar",
+  "EKCalendarItem",
+  "EKEvent",
+  "EKEventStore",
+  "EKObject",
+  "EKParticipant",
+  "EKTypes",
+] }
 block2 = "0.6"

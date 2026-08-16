@@ -2,7 +2,9 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 
 import type { Between, Priority, Project, Task, TaskPatch, TaskTree } from "../data";
 import { tint } from "../design/palette";
+import type { CalendarEvent } from "../state/agenda";
 import { emptyMessage, titleOf, type View } from "../state/views";
+import { Agenda } from "../ui/Agenda";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
 import { Code } from "../ui/icons";
@@ -35,6 +37,8 @@ export interface TaskListProps {
   editorName?: string | null;
   /** Abre la carpeta del proyecto en ese editor. */
   onOpenFolder?: (folder: string) => void;
+  /** Los eventos del Calendario de hoy, si la agenda está encendida (spec 15). */
+  events?: CalendarEvent[];
 }
 
 /** Qué fila tiene el menú abierto y dónde anclarlo. */
@@ -68,6 +72,7 @@ export function TaskList({
   onCapture,
   editorName,
   onOpenFolder,
+  events,
 }: TaskListProps) {
   const project = view.kind === "proyecto" ? projectsById.get(view.id) : undefined;
   const title = titleOf(view, project?.name);
@@ -197,6 +202,17 @@ export function TaskList({
       </button>
     ) : undefined;
 
+  /**
+   * La agenda del día, y solo en Hoy (spec 15). En Próximas serían los eventos de otro día, y
+   * en un proyecto no vienen a cuento: lo que este bloque contesta es qué le queda al día que
+   * se está repartiendo, y ese día es hoy.
+   *
+   * Va encima del encabezado y no dentro de la lista: son dos cosas distintas —lo que ya está
+   * comprometido y lo que hay que hacer— y meterlas bajo el mismo rótulo haría que HOY nombrara
+   * dos gramáticas de fila a la vez.
+   */
+  const agenda = view.kind === "hoy" && events?.length ? <Agenda events={events} /> : null;
+
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
   if (loading) return <div className="view" />;
 
@@ -208,12 +224,17 @@ export function TaskList({
 
       {visible.length === 0 ? (
         <>
+          {agenda}
           {/* Con la lista vacía el encabezado solo sale si trae el botón. Un proyecto recién
               creado y vinculado a su carpeta es exactamente cuando hace falta abrirla, y sin
               esto el botón desaparecía justo ahí; sin botón, en cambio, repetir el nombre que
               ya está marcado en el riel sobre un «Este proyecto está vacío» son dos renglones
-              para no decir nada. */}
-          {openFolder && <GroupHeader action={openFolder}>{title}</GroupHeader>}
+              para no decir nada.
+
+              Con la agenda delante sí sale siempre: sin él, «Nada para hoy» colgaría del
+              rótulo AGENDA y se leería como que no hay más eventos, que es lo contrario de lo
+              que dice. */}
+          {(openFolder || agenda) && <GroupHeader action={openFolder}>{title}</GroupHeader>}
           <EmptyState
             message={emptyMessage(view)}
             action={view.kind === "hoy" ? "Agregar tarea" : undefined}
@@ -222,6 +243,7 @@ export function TaskList({
         </>
       ) : (
         <>
+          {agenda}
           <GroupHeader action={openFolder}>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
             {visible.map((task) => (
