@@ -140,7 +140,7 @@
 
 .topbar__clear:focus-visible,
 .topbar__gear:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -149,6 +149,10 @@
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* El rebote de la lista se queda —macOS lo hace en cualquier `NSScrollView`— y lo que se
+     corta es que al llegar al tope siga tirando del documento, que es lo que despega el
+     panel de su marco. */
+  overscroll-behavior: contain;
 }
 
 .view {

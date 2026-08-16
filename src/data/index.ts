@@ -8,5 +8,6 @@ export * from "./projects";
 export * from "./tasks";
 export * from "./settings";
 export * from "./backup";
+export * from "./import";
 export { localDay, localIso, dayOf, nextDay } from "./time";
 export { db, dbPath } from "./db";

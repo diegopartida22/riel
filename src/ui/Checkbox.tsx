@@ -2,9 +2,10 @@
  * La casilla: círculo de 15px con borde de 1.5px, que al hover toma el color del proyecto de
  * su tarea y al completarse se llena con él y traza la palomita (spec 3.5 y 3.6).
  *
- * Es un `button` con `role="checkbox"` y no un `input`: la casilla nativa de macOS trae su
- * propio azul de sistema, y el criterio de aceptación 9 dice que ese azul no aparece en
- * ninguna superficie de la app.
+ * Es un `button` con `role="checkbox"` y no un `input`: la casilla nativa se llena con el
+ * acento del sistema, y esta tiene que llenarse con el color del proyecto de su tarea. Que la
+ * app haya adoptado el acento del sistema (spec 3.1) no cambia nada aquí — el acento colorea
+ * los controles de la app, y una casilla dice de qué proyecto es.
  */
 export function Checkbox({
   checked,

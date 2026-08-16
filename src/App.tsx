@@ -10,6 +10,7 @@ import { acceptsNew } from "./state/views";
 import { Composer } from "./ui/Composer";
 import { useFocoDeTeclado } from "./ui/foco";
 import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
+import { ImportSheet } from "./ui/ImportSheet";
 import { ProjectEditor } from "./ui/ProjectEditor";
 import { Rail } from "./ui/Rail";
 import { SettingsPopover } from "./ui/SettingsPopover";
@@ -34,6 +35,7 @@ export default function App() {
   const field = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const [settings, setSettings] = useState<DOMRect | null>(null);
+  const [importing, setImporting] = useState(false);
   const [wantsCapture, setWantsCapture] = useState(false);
 
   useFocoDeTeclado();
@@ -64,6 +66,7 @@ export default function App() {
     const unlisten = listen("riel://panel-abierto", () => {
       setSettings(null);
       setEditing(null);
+      setImporting(false);
       select({ kind: startView });
     });
     return () => {
@@ -96,6 +99,8 @@ export default function App() {
         event.preventDefault();
         if (riel.query) {
           riel.setQuery("");
+        } else if (importing) {
+          setImporting(false);
         } else if (editing) {
           setEditing(null);
         } else if (riel.detail) {
@@ -144,7 +149,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, riel]);
+  }, [editing, importing, riel]);
 
   // Dentro de un proyecto, el acento de todo el panel es el suyo (spec 3.1). Fuera, se queda
   // el grafito neutro y el color solo aparece en el punto de cada fila.
@@ -193,6 +198,14 @@ export default function App() {
           trayGlyph={riel.trayGlyph}
           onTrayGlyph={riel.setTrayGlyph}
           updates={updates}
+          onImport={() => {
+            // La hoja se lo lleva todo el área de contenido, así que lo que hubiera puesto ahí
+            // se cierra: importar puede borrar la tarea que se estaba leyendo o el proyecto que
+            // se estaba editando, y volver a ellos después sería volver a un fantasma.
+            setEditing(null);
+            riel.closeDetail();
+            setImporting(true);
+          }}
           onClose={() => setSettings(null)}
         />
       )}
@@ -213,7 +226,12 @@ export default function App() {
         />
 
         <main className="panel__body">
-          {editing ? (
+          {importing ? (
+            <ImportSheet
+              onImported={() => void riel.reloadAll()}
+              onClose={() => setImporting(false)}
+            />
+          ) : editing ? (
             <ProjectEditor
               key={editing.project?.id ?? "nuevo"}
               project={editing.project}
@@ -301,9 +319,9 @@ export default function App() {
           </button>
         </div>
 
-        {/* El pie no captura mientras se edita un proyecto ni mientras se lee el detalle de
-            una tarea: en ninguno de los dos casos hay una lista delante a la que agregar. */}
-        {!editing && !riel.detail && acceptsNew(riel.view) && (
+        {/* El pie no captura mientras se edita un proyecto, se importa un archivo o se lee el
+            detalle de una tarea: en ninguno de los tres hay una lista delante a la que agregar. */}
+        {!editing && !importing && !riel.detail && acceptsNew(riel.view) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}

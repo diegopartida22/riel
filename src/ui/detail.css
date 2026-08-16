@@ -83,7 +83,7 @@
 
 .detail__title:focus-visible,
 .detail__notes:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -442,7 +442,7 @@
 }
 
 .due-editor__time:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 

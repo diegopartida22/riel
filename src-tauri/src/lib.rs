@@ -1,3 +1,4 @@
+mod accent;
 mod db;
 mod glass;
 mod notify;
@@ -36,6 +37,60 @@ fn set_tray_glyph(app: tauri::AppHandle, glyph: String) -> Result<(), String> {
 #[tauri::command]
 fn write_export(path: String, contents: String) -> Result<(), String> {
     std::fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+/// El tope de lo que se acepta importar.
+///
+/// Existe porque el archivo acaba entero en el webview como una cadena y de ahí en `JSON.parse`:
+/// sin tope, elegir por error un archivo de varios giga cuelga el panel en vez de dar un error
+/// que se pueda leer. Un export de Riel con cien mil tareas no llega a diez megas.
+const MAX_IMPORT: u64 = 64 * 1024 * 1024;
+
+/// Lee el archivo que eligió el panel de abrir, para la importación.
+///
+/// Contraparte de `write_export` y por lo mismo un comando propio: `tauri-plugin-fs` daría
+/// permiso de lectura sobre el disco entero para leer un archivo que el usuario acaba de
+/// señalar a mano.
+#[tauri::command]
+fn read_import(path: String) -> Result<String, String> {
+    let size = std::fs::metadata(&path)
+        .map_err(|error| error.to_string())?
+        .len();
+
+    if size > MAX_IMPORT {
+        return Err(format!(
+            "el archivo pesa {} MB y el máximo son {} MB",
+            size / (1024 * 1024),
+            MAX_IMPORT / (1024 * 1024)
+        ));
+    }
+
+    std::fs::read_to_string(path).map_err(|error| error.to_string())
+}
+
+/// Guarda una copia del estado actual antes de una importación, en `Backups/` dentro del
+/// directorio de datos. Devuelve la ruta escrita, que es lo que la app enseña después.
+///
+/// No reusa `write_export` porque esta ruta no la elige nadie en un panel: la decide la app.
+/// Dejar que el frontend mandara la ruta entera significaría que cualquier cadena acaba en un
+/// `std::fs::write`; aquí solo llega el nombre del archivo, y lo que no sea un nombre se rechaza.
+#[tauri::command]
+fn write_backup(app: tauri::AppHandle, name: String, contents: String) -> Result<String, String> {
+    if name.is_empty() || name.starts_with('.') || name.contains('/') || name.contains('\\') {
+        return Err(format!("nombre de respaldo inválido: {name}"));
+    }
+
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("Backups");
+
+    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+
+    let path = dir.join(name);
+    std::fs::write(&path, contents).map_err(|error| error.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 /// `granted`, `denied`, `default` o `unavailable` (spec 7). Lo consulta Ajustes para saber
@@ -113,6 +168,8 @@ pub fn run() {
             set_overdue,
             set_tray_glyph,
             write_export,
+            read_import,
+            write_backup,
             notification_permission,
             request_notification_permission,
             set_reminders,
@@ -142,6 +199,11 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             notify::install(app.handle());
 
+            // El acento del sistema, que a partir de aquí se vuelve a publicar solo cada vez
+            // que alguien lo cambie en Ajustes del Sistema.
+            #[cfg(target_os = "macos")]
+            accent::watch(app.handle());
+
             // En desarrollo el panel se muestra solo al arrancar: si hubiera que abrirlo
             // a mano desde la barra en cada recarga, iterar sobre la UI sería un castigo.
             if cfg!(debug_assertions) {
@@ -153,10 +215,24 @@ pub fn run() {
         .on_page_load(|webview, _payload| {
             let material = *webview.state::<glass::Material>();
             glass::publish_to_css(&webview, material);
+
+            // El acento del sistema va por aquí y no por `setup` por lo mismo que el material:
+            // es el único momento con la página lista y antes del primer pintado, y así cubre
+            // también las recargas de Vite.
+            if let Some(accent) = accent::current() {
+                let _ = webview.eval(&accent::css_script(&accent));
+            }
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Focused(false) = event {
-                panel::on_focus_lost(window);
+            if let tauri::WindowEvent::Focused(active) = event {
+                // Antes de ocultar: mientras KEEP_OPEN esté en alto el panel sigue delante, y
+                // es justo el caso en el que hay que verse inactivo.
+                if let Some(panel) = window.get_webview_window("main") {
+                    glass::publish_active_to_css(&panel, *active);
+                }
+                if !active {
+                    panel::on_focus_lost(window);
+                }
             }
         })
         .run(tauri::generate_context!())

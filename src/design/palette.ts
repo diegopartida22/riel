@@ -105,6 +105,33 @@ export function inkOn(hex: string): string {
 }
 
 /**
+ * El fondo efectivo del panel en cada modo. El vidrio es translúcido, así que no hay un valor
+ * exacto; estos son los extremos contra los que algo dibujado encima tiene que verse.
+ */
+const SURFACE_LIGHT = "#FFFFFF";
+const SURFACE_DARK = "#1C1C1E";
+
+/** `--ink-accent` en cada modo, que es a donde cae el anillo cuando el color no alcanza. */
+const ACCENT_LIGHT = "#3A3A3C";
+const ACCENT_DARK = "#E8E8EA";
+
+/**
+ * De qué color se dibuja el anillo de foco dentro de un proyecto.
+ *
+ * Normalmente el del proyecto, que es la regla de la sección 3.1. Pero la 3.2 deja elegir un
+ * hex manual con poco contraste —avisa y no bloquea, porque es su decisión— y un amarillo
+ * claro como anillo sobre vidrio claro es un anillo que no existe. La 3.2 permite que alguien
+ * se complique la lectura de su proyecto; no puede dejarle perder el foco del teclado, que la
+ * 5 promete visible siempre.
+ *
+ * Se mide contra el fondo y no contra `--ink-primary` como el aviso de la 3.2: aquello mide un
+ * color que va a llevar texto encima, y esto mide una línea dibujada sobre el panel.
+ */
+function focusOn(hex: string, surface: string, fallback: string): string {
+  return contrast(hex, surface) >= 3 ? hex : fallback;
+}
+
+/**
  * Las dos variantes como propiedades en línea, para que la regla de `.tinted` elija según el
  * modo. Sin color — una tarea sin proyecto — devuelve nada y el acento neutro se queda, con la
  * palomita que le corresponde.
@@ -119,5 +146,7 @@ export function tint(hex: string | null | undefined): CSSProperties {
     "--project-light": light,
     "--project-dark": dark,
     "--on-project": curated ? ON_DARK : inkOn(hex),
+    "--focus-light": focusOn(light, SURFACE_LIGHT, ACCENT_LIGHT),
+    "--focus-dark": focusOn(dark, SURFACE_DARK, ACCENT_DARK),
   } as CSSProperties;
 }

@@ -519,6 +519,10 @@
 /* Siempre visible, del acento en contexto, con 2px de separación. Nunca `outline: none`
    sin reemplazo (spec, sección 5).
 
+   `--focus` y no `--accent`: son el mismo color salvo dentro de un proyecto cuyo hex manual no
+   llegue a 3:1 contra el fondo, donde el anillo cae al neutro. La 3.2 deja elegir un color que
+   cueste leer —avisa y no bloquea— pero eso no puede llevarse por delante la promesa de la 5.
+
    Dos selectores para la misma regla porque `:focus-visible` solo no alcanza. El recorrido de
    la lista mueve el foco desde código, y ahí el navegador no decide por la tecla sino por si
    el elemento anterior estaba marcado: una vez que la cadena arranca del `body`, el anillo no
@@ -531,7 +535,7 @@
    solos — un `input` es enfocable sin `tabindex`, así que este selector nunca los alcanzó. */
 :where(button, [tabindex], a):focus-visible,
 :root[data-teclado] :where(button, [tabindex], a):not(.menu):focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 3px;
 }

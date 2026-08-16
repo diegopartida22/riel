@@ -3,15 +3,22 @@ import { invoke } from "@tauri-apps/api/core";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { RETENTIONS, dbPath, exportName, snapshot, type Retention } from "../data";
+import {
+  RETENTIONS,
+  countSweepable,
+  dbPath,
+  exportName,
+  snapshot,
+  type Retention,
+} from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
 import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
 import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
-import { Check } from "./icons";
+import { SYSTEM_ICONS } from "./Rail";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
@@ -25,6 +32,8 @@ export interface SettingsPopoverProps {
   trayGlyph: TrayGlyph;
   onTrayGlyph: (value: TrayGlyph) => void;
   updates: Updates;
+  /** Abre la hoja de importación, que vive en el área de contenido y no aquí dentro. */
+  onImport: () => void;
   onClose: () => void;
 }
 
@@ -35,6 +44,154 @@ const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notif
 
 /** La salida manual cuando el actualizador no puede: bajar el `.dmg` a mano siempre funciona. */
 const RELEASES = "https://github.com/diegopartida22/riel/releases/latest";
+
+interface Choice<T> {
+  value: T;
+  /** Lo que se lee: el tooltip, y el nombre para quien no ve el glifo. */
+  label: string;
+  /** Lo que se ve: un texto corto o un icono. */
+  content: ReactNode;
+}
+
+/**
+ * Una preferencia: su nombre a la izquierda, sus opciones a la derecha.
+ *
+ * Las cinco del popover son listas cerradas de dos a cinco opciones, y como renglones con
+ * palomita costaban quince líneas: el popover pasaba de los 580px del panel y la lista quedaba
+ * tapada de arriba abajo. En fila cuestan una línea cada una, y de paso dejan de existir dos
+ * gramáticas para lo mismo —la fila de glifos ya era esto, y al lado de los renglones parecía
+ * pegada con cinta.
+ *
+ * El precio es que las etiquetas tienen que ser cortas, y dos de las cinco no caben en texto.
+ * Ahí van dibujos —los iconos del riel, los glifos de la barra— y con ellos la leyenda de
+ * `caption`: un dibujo de 15px se distingue de sus vecinos pero no se lee, y sin pasar el ratón
+ * por cada uno no había forma de saber cuál está puesto.
+ *
+ * El grupo entero es una sola parada del tabulador y por dentro se recorre con las flechas,
+ * que es como se comporta un control segmentado del sistema y lo que pide ARIA para un
+ * `radiogroup`. Con cada opción tabulable, cruzar el popover costaba dieciocho tabuladores
+ * para ocho cosas que tocar.
+ */
+function Choices<T>({
+  label,
+  options,
+  value,
+  onPick,
+  caption = false,
+}: {
+  label: string;
+  options: readonly Choice<T>[];
+  /** `null` cuando todavía no se sabe: el arranque automático lo contesta `launchd`, y hasta
+      entonces no hay nada marcado — mejor eso que marcar algo que quizá no es. */
+  value: T | null;
+  onPick: (value: T) => void;
+  /** Escribe debajo el nombre de lo elegido. Solo para las dos filas que dibujan en vez de
+      escribir; en las de texto repetiría palabra por palabra el botón que está al lado. */
+  caption?: boolean;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const current = options.findIndex((option) => option.value === value);
+  /** Sin nada marcado —el arranque automático tarda en contestar— entra por la primera. */
+  const stop = current < 0 ? 0 : current;
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (!step) return;
+    // Se para aquí: el panel de detrás también escucha flechas para recorrer la lista, y sin
+    // esto una flecha en Ajustes movería además la fila enfocada debajo del popover.
+    event.preventDefault();
+    event.stopPropagation();
+    const next = (stop + step + options.length) % options.length;
+    onPick(options[next].value);
+    row.current?.querySelectorAll("button")[next]?.focus();
+  };
+
+  return (
+    <div className="settings__row">
+      <span className="settings__label">{label}</span>
+      <div className="settings__group">
+        <div
+          ref={row}
+          className="settings__choices"
+          role="radiogroup"
+          aria-label={label}
+          onKeyDown={onKeyDown}
+        >
+          {options.map((option, index) => (
+            <button
+              key={String(option.value)}
+              type="button"
+              className={`settings__choice${option.value === value ? " is-selected" : ""}`}
+              role="radio"
+              aria-checked={option.value === value}
+              tabIndex={index === stop ? 0 : -1}
+              /* Solo cuando dice algo que no esté ya a la vista: en «Una línea» el tooltip
+                 repetiría el botón, y un globo que no informa es ruido. En un glifo, o en el
+                 «7 d» que abrevia «7 días», sí es lo único que lo nombra. */
+              title={option.content === option.label ? undefined : option.label}
+              aria-label={option.label}
+              onClick={() => onPick(option.value)}
+            >
+              {option.content}
+            </button>
+          ))}
+        </div>
+        {/* Oculto a los lectores de pantalla: la opción marcada ya se anuncia por su
+            `aria-label`, y esto le sumaría el mismo nombre dos veces seguidas. */}
+        {caption && current >= 0 && (
+          <span className="settings__caption" aria-hidden>
+            {options[current].label}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * El interruptor del arranque automático.
+ *
+ * Es la única preferencia booleana del popover, y un segmentado de «Sí / No» era pedirle al
+ * lector que tradujera dos palabras a un estado que el control ya puede *tener*. Un interruptor
+ * lo dice sin leer nada: la posición del pulgar es el valor. Las medidas son las de macOS —38×22
+ * con pulgar de 18, y 150ms de recorrido— porque un interruptor con otras proporciones es de lo
+ * primero que delata que un control está hecho a mano.
+ *
+ * Mientras `launchd` no conteste va apagado y sin aceptar clics: no hay posición para «todavía
+ * no se sabe», y dejarlo pulsable antes de conocer el estado convertiría el primer clic en un
+ * volado. Contesta en milisegundos.
+ */
+function Switch({
+  label,
+  value,
+  onPick,
+}: {
+  label: string;
+  value: boolean | null;
+  onPick: (value: boolean) => void;
+}) {
+  return (
+    <div className="settings__row">
+      <span className="settings__label">{label}</span>
+      <button
+        type="button"
+        className="switch"
+        role="switch"
+        aria-label={label}
+        aria-checked={value ?? false}
+        disabled={value === null}
+        onClick={() => onPick(!value)}
+      >
+        <span className="switch__thumb" />
+      </button>
+    </div>
+  );
+}
 
 /**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
@@ -50,6 +207,7 @@ export function SettingsPopover({
   trayGlyph,
   onTrayGlyph,
   updates,
+  onImport,
   onClose,
 }: SettingsPopoverProps) {
   /** Sacado del objeto para que TypeScript pueda estrechar la unión dentro del JSX. */
@@ -61,6 +219,11 @@ export function SettingsPopover({
   /** `null` mientras se consulta: sin saberlo, la nota de permiso denegado no se dibuja. */
   const [notify, setNotify] = useState<Permission | null>(null);
   const [busy, setBusy] = useState(false);
+  /** El plazo pulsado que está esperando un sí, con lo que se llevaría por delante. */
+  const [pruning, setPruning] = useState<{ retention: Retention; count: number } | null>(null);
+  /** El último plazo pulsado. Recorrer la fila con las flechas dispara una cuenta por tecla, y
+      sin esto la más lenta podría revivir la confirmación de un plazo ya abandonado. */
+  const wanted = useRef<Retention>(retention);
 
   useEffect(() => {
     getVersion().then(setVersion, (cause) => console.error(cause));
@@ -70,14 +233,20 @@ export function SettingsPopover({
 
   // Se remide cuando cambia el alto: la nota de permisos y el estado de arranque llegan
   // asíncronos, y sin esto el popover quedaría anclado a la altura que tenía vacío.
+  //
+  // El alto se sujeta contra el borde de abajo igual que el ancho contra el de la derecha. El
+  // popover cabe de sobra en su forma normal, pero las notas —permiso denegado, un fallo del
+  // actualizador— se suman a lo que ya hay, y sin esto la última se dibujaba fuera del panel:
+  // una ventana sin decoración no tiene dónde desbordarse, así que lo que se sale no se ve.
+  // Subirlo lo mete entero; si ni así cupiera, el `max-height` del CSS lo deja recorrer.
   useLayoutEffect(() => {
     const own = box.current?.getBoundingClientRect();
     if (!own) return;
     setAt({
-      top: anchor.bottom + 6,
+      top: Math.max(EDGE, Math.min(anchor.bottom + 6, window.innerHeight - own.height - EDGE)),
       left: Math.min(Math.max(EDGE, anchor.right - own.width), window.innerWidth - own.width - EDGE),
     });
-  }, [anchor, version, autostart, notify, updates.state]);
+  }, [anchor, version, autostart, notify, updates.state, pruning]);
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -102,9 +271,9 @@ export function SettingsPopover({
     };
   }, [onClose]);
 
-  const toggleAutostart = async () => {
-    const next = !autostart;
-    // Optimista, y se corrige con lo que diga el sistema: la casilla tiene que responder al
+  const pickAutostart = async (next: boolean) => {
+    if (next === autostart) return;
+    // Optimista, y se corrige con lo que diga el sistema: la opción tiene que responder al
     // clic, pero quien manda sobre si el agente quedó puesto es `launchd`, no nosotros.
     setAutostart(next);
     try {
@@ -113,6 +282,39 @@ export function SettingsPopover({
       console.error(cause);
     }
     isEnabled().then(setAutostart, (cause) => console.error(cause));
+  };
+
+  /**
+   * Bajar el plazo de conservación borra completadas en el momento y eso no se deshace: el
+   * barrido no pasa por la pila de ⌘Z. Es la única preferencia del popover que destruye datos,
+   * así que es la única que pregunta — y solo cuando de verdad hay algo que perder. Subirlo,
+   * poner «siempre» o bajarlo sin que caiga nada se guardan de una: una confirmación que sale
+   * siempre se aprende a pulsar sin leerla, y entonces ya no protege de nada.
+   *
+   * Mientras espera el sí, la opción pulsada se dibuja marcada aunque no esté guardada. Es lo
+   * que se está decidiendo, y dejar la marca en la vieja haría parecer que el clic no llegó.
+   */
+  const pickRetention = (next: Retention) => {
+    setPruning(null);
+    wanted.current = next;
+    if (next === null || (retention !== null && next >= retention)) {
+      onRetention(next);
+      return;
+    }
+
+    void countSweepable(next).then(
+      (count) => {
+        if (wanted.current !== next) return;
+        if (count === 0) onRetention(next);
+        else setPruning({ retention: next, count });
+      },
+      (cause) => {
+        // Sin poder contar no hay nada que enseñar, así que se guarda igual. Si además falla
+        // la escritura, lo dice `changeRetention`: no hacen falta dos avisos para un fallo.
+        console.error(cause);
+        if (wanted.current === next) onRetention(next);
+      },
+    );
   };
 
   /**
@@ -146,115 +348,119 @@ export function SettingsPopover({
       aria-label="Ajustes"
       style={at ?? { top: -9999, left: -9999 }}
     >
-      <button
-        type="button"
-        className="menu__item"
-        role="menuitemcheckbox"
-        aria-checked={autostart === true}
-        onClick={() => void toggleAutostart()}
-      >
-        <span className="menu__check">
-          {autostart && <Check size={13} aria-hidden />}
-        </span>
-        Abrir al iniciar sesión
-      </button>
+      {/* Las cinco preferencias van seguidas y sin separadores entre ellas: cada una se lee
+          entera en su renglón. Los grupos de después —notificaciones, datos, la app— se separan
+          con su rótulo y no con una hairline: tres reglas en un popover de doscientos píxeles lo
+          convertían en una reja, y una regla dice que hay un corte pero no de qué. El bloque de
+          preferencias es el único sin rótulo porque es para lo que existe el popover; ponerle
+          «PREFERENCIAS» encima sería rotular la caja entera desde dentro.
 
-      <div className="menu__rule" role="separator" />
+          El arranque automático es el único booleano de los cinco, y va con interruptor y no
+          con un segmentado de «Sí / No»: es el control con el que el sistema dice esto, y un
+          estado que el control puede *tener* no hace falta además escribirlo. */}
+      <Switch
+        label="Abrir al iniciar sesión"
+        value={autostart}
+        onPick={(next) => void pickAutostart(next)}
+      />
 
       {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
           quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que
           decidir a dónde caer cuando se borre, y eso sería un ajuste que cambia solo. */}
-      <p className="settings__label">Vista al abrir</p>
-      {SYSTEM_VIEWS.map(({ kind, label }) => (
-        <button
-          key={kind}
-          type="button"
-          className="menu__item"
-          role="menuitemradio"
-          aria-checked={kind === startView}
-          onClick={() => onStartView(kind)}
-        >
-          <span className="menu__check">
-            {kind === startView && <Check size={13} aria-hidden />}
-          </span>
-          {label}
-        </button>
-      ))}
-
-      <div className="menu__rule" role="separator" />
+      <Choices
+        label="Vista al abrir"
+        options={SYSTEM_VIEWS.map(({ kind, label }) => {
+          const Icon = SYSTEM_ICONS[kind];
+          return { value: kind, label, content: <Icon size={15} aria-hidden /> };
+        })}
+        value={startView}
+        onPick={onStartView}
+        caption
+      />
 
       {/* Un título largo cortado a la mitad obliga a abrir el detalle para saber de qué tarea
           se trata; uno entero gasta dos o tres renglones por fila y hace que quepan menos.
           Ninguna de las dos es la respuesta correcta para todo el mundo, así que se elige una
           vez y vale para toda la app. */}
-      <p className="settings__label">Texto de las tareas</p>
-      {ROW_TEXTS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className="menu__item"
-          role="menuitemradio"
-          aria-checked={option.value === rowText}
-          onClick={() => onRowText(option.value)}
-        >
-          <span className="menu__check">
-            {option.value === rowText && <Check size={13} aria-hidden />}
-          </span>
-          {option.label}
-        </button>
-      ))}
+      <Choices
+        label="Texto de las tareas"
+        options={ROW_TEXTS.map((option) => ({ ...option, content: option.label }))}
+        value={rowText}
+        onPick={onRowText}
+      />
 
-      <div className="menu__rule" role="separator" />
+      {/* Los glifos y no sus nombres: «Cuadro» no dice qué va a salir en la barra, y lo que se
+          está eligiendo es precisamente cómo se ve. El que importa no es el más bonito sino el
+          que no se confunda con los vecinos que ya haya arriba, y eso solo se decide
+          mirándolos.
 
-      {/* Una fila de glifos y no cinco renglones con sus nombres: «Cuadro» no dice qué va a
-          salir en la barra, y lo que se está eligiendo es precisamente cómo se ve. El que
-          importa no es el más bonito sino el que no se confunda con los vecinos que ya haya
-          arriba, y eso solo se decide mirándolos. */}
-      <p className="settings__label">Icono de la barra</p>
-      <div className="settings__glyphs" role="radiogroup" aria-label="Icono de la barra">
-        {TRAY_GLYPHS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`settings__glyph${option.value === trayGlyph ? " is-selected" : ""}`}
-            role="radio"
-            aria-checked={option.value === trayGlyph}
-            title={option.label}
-            aria-label={option.label}
-            onClick={() => onTrayGlyph(option.value)}
-          >
-            {/* Máscara y no `img`: el PNG es una imagen *template* —negro y alfa— y en modo
-                oscuro un negro sobre el vidrio oscuro no se vería. Pintar el alfa con la
-                tinta de la app es lo mismo que hace macOS con la barra. */}
+          Máscara y no `img`: el PNG es una imagen *template* —negro y alfa— y en modo oscuro
+          un negro sobre el vidrio oscuro no se vería. Pintar el alfa con la tinta de la app es
+          lo mismo que hace macOS con la barra. */}
+      <Choices
+        label="Icono de la barra"
+        options={TRAY_GLYPHS.map((option) => ({
+          ...option,
+          content: (
             <span
-              className="settings__glyph-tinta"
+              className="settings__glifo"
               style={{
                 maskImage: `url(/tray/${option.value}.png)`,
                 WebkitMaskImage: `url(/tray/${option.value}.png)`,
               }}
             />
+          ),
+        }))}
+        value={trayGlyph}
+        onPick={onTrayGlyph}
+        caption
+      />
+
+      <Choices
+        label="Conservar completadas"
+        options={RETENTIONS.map((option) => ({ ...option, content: option.short }))}
+        /* Ternario y no `??`: «siempre» es `null` como valor legítimo, y aunque hoy nunca llegue
+           a `pruning` —alargar el plazo no pregunta— con `??` una futura confirmación de
+           «siempre» se dibujaría marcando el plazo viejo. */
+        value={pruning ? pruning.retention : retention}
+        onPick={pickRetention}
+      />
+
+      {/* La misma forma que eliminar una tarea desde el `⋯`: primero qué se va a perder, luego
+          el sí en rojo y la salida. Sin `autoFocus`, al revés que allí — allí la confirmación
+          nace de un clic en «Eliminar», y aquí de recorrer una fila de opciones, donde robar
+          el foco dejaría a quien navega con flechas fuera del grupo a media vuelta. */}
+      {pruning && (
+        <>
+          <p className="settings__note">
+            Conservar {RETENTIONS.find((option) => option.value === pruning.retention)?.label} borra
+            ahora {pruning.count} {pruning.count === 1 ? "tarea completada" : "tareas completadas"},
+            y eso no se deshace.
+          </p>
+          <button
+            type="button"
+            className="menu__item menu__item--danger"
+            onClick={() => {
+              onRetention(pruning.retention);
+              setPruning(null);
+            }}
+          >
+            <span className="menu__check" />
+            Sí, borrar {pruning.count === 1 ? "1 tarea" : `${pruning.count} tareas`}
           </button>
-        ))}
-      </div>
-
-      <div className="menu__rule" role="separator" />
-
-      <p className="settings__label">Conservar completadas</p>
-      {RETENTIONS.map((option) => (
-        <button
-          key={option.label}
-          type="button"
-          className="menu__item"
-          role="menuitemradio"
-          aria-checked={option.value === retention}
-          onClick={() => onRetention(option.value)}
-        >
-          <span className="menu__check">
-            {option.value === retention && <Check size={13} aria-hidden />}
-          </span>
-          {option.label}
-        </button>
-      ))}
+          <button
+            type="button"
+            className="menu__item"
+            onClick={() => {
+              setPruning(null);
+              wanted.current = retention;
+            }}
+          >
+            <span className="menu__check" />
+            Cancelar
+          </button>
+        </>
+      )}
 
       {/* Solo cuando se sabe que está denegado. Mientras se consulta no hay nota, porque una
           advertencia que parpadea en cada apertura del popover es peor que ninguna. Y solo
@@ -262,7 +468,7 @@ export function SettingsPopover({
           ni siquiera figura en la lista de Ajustes del Sistema. */}
       {notify === "denied" && (
         <>
-          <div className="menu__rule" role="separator" />
+          <h2 className="settings__section">Notificaciones</h2>
           <p className="settings__note">
             Las notificaciones están desactivadas, así que las tareas con hora no van a avisar.
           </p>
@@ -273,11 +479,31 @@ export function SettingsPopover({
         </>
       )}
 
-      <div className="menu__rule" role="separator" />
+      <h2 className="settings__section">Datos</h2>
 
       <button type="button" className="menu__item" disabled={busy} onClick={() => void exportJson()}>
         <span className="menu__check" />
-        Exportar a JSON
+        {/* Los puntos suspensivos son los de macOS: la acción no ocurre al pulsar, primero
+            pregunta dónde guardar. Los otros tres renglones actúan de inmediato y por eso no
+            los llevan. */}
+        Exportar a JSON…
+      </button>
+      {/* Justo debajo del export y no en otro grupo: son la misma operación en los dos
+          sentidos, y un export sin forma de volver a entrar no es un respaldo, es un archivo.
+          Lleva puntos suspensivos por lo mismo que su gemelo — lo primero que hace es
+          preguntar cuál. El resto del flujo no cabe aquí: el resumen de lo que trae el archivo
+          y la elección entre combinar y reemplazar necesitan sitio para leerse, así que salen
+          al área de contenido como el editor de proyecto. */}
+      <button
+        type="button"
+        className="menu__item"
+        onClick={() => {
+          onImport();
+          onClose();
+        }}
+      >
+        <span className="menu__check" />
+        Importar desde JSON…
       </button>
       <button
         type="button"
@@ -293,24 +519,14 @@ export function SettingsPopover({
         Mostrar los datos en Finder
       </button>
 
-      <div className="menu__rule" role="separator" />
+      {/* La versión es el rótulo del grupo y no una línea suelta al final: lo que cuelga de
+          ella —actualizar, salir— son las dos cosas que se le hacen a la app misma, y las dos
+          contestan a lo mismo que la versión, que es qué hay puesto. Colgando sola debajo de
+          «Buscar actualizaciones» se leía como el número que ese botón acababa de encontrar. */}
+      <h2 className="settings__section">Riel {version ?? "—"}</h2>
 
-      {/* Sin Dock y sin ⌘Tab (spec 4), Riel no tiene menú de aplicación ni ⌘Q: sin este
-          botón, pararla obligaba a ir al Monitor de Actividad. */}
-      <button
-        type="button"
-        className="menu__item"
-        onClick={() => void invoke("quit").catch((cause) => console.error(cause))}
-      >
-        <span className="menu__check" />
-        Salir de Riel
-      </button>
-
-      <div className="menu__rule" role="separator" />
-
-      {/* La actualización cuelga de la versión porque son la misma pregunta: qué hay puesto y
-          qué hay disponible. Al día —o sin haber podido preguntar— aquí no se dibuja nada, que
-          es el estado en el que va a estar casi siempre. */}
+      {/* Al día —o sin haber podido preguntar— aquí no se dibuja nada, que es el estado en el
+          que va a estar casi siempre. */}
       {update.stage === "disponible" && (
         <button type="button" className="menu__item" onClick={updates.install}>
           <span className="menu__check" />
@@ -366,7 +582,10 @@ export function SettingsPopover({
             {update.stage === "fallo"
               ? "No se pudo instalar la actualización."
               : "No se pudo comprobar si hay una versión nueva."}{" "}
-            Riel {version ?? "—"} sigue puesto y funcionando.
+            {/* El número ya está en el rótulo del grupo, dos renglones más arriba: repetirlo
+                aquí sería decirlo dos veces en cuatro palabras. Lo que hace falta decir es que
+                sigue puesto, que es la primera pregunta de quien ve fallar un actualizador. */}
+            La que tienes sigue puesta y funcionando.
           </p>
           <button type="button" className="menu__item" onClick={() => void openUrl(RELEASES)}>
             <span className="menu__check" />
@@ -375,7 +594,16 @@ export function SettingsPopover({
         </>
       )}
 
-      <p className="settings__version">Riel {version ?? "—"}</p>
+      {/* Sin Dock y sin ⌘Tab (spec 4), Riel no tiene menú de aplicación ni ⌘Q: sin este
+          botón, pararla obligaba a ir al Monitor de Actividad. */}
+      <button
+        type="button"
+        className="menu__item"
+        onClick={() => void invoke("quit").catch((cause) => console.error(cause))}
+      >
+        <span className="menu__check" />
+        Salir de Riel
+      </button>
     </div>
   );
 }

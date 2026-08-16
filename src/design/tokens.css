@@ -33,14 +33,53 @@
   --menu-bg: #f7f7f8;
   --menu-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 
+  /* El sólido que sustituye al vidrio cuando Accesibilidad pide menos transparencia. El
+     material lo pinta el sistema por debajo del webview y desde CSS no hay forma de apagarlo,
+     así que lo que hace la casilla es taparlo: un fondo opaco de punta a punta sobre el que
+     las veladuras de arriba siguen valiendo tal cual — un 5% de negro se lee igual de bien
+     sobre un gris fijo que sobre el vidrio. Más claro que `--menu-bg` porque esto es la
+     ventana y aquello lo que flota encima: si fueran el mismo gris, el menú desaparecería
+     dentro del panel justo en el modo donde ya no hay blur que los separe. */
+  --panel-solid: #ececee;
+
   /* La sombra de lo que se levanta de la lista: la fila en vuelo de un arrastre. Va aquí y no
      escrita en el componente porque cambia con el modo — un 14% de negro sobre vidrio oscuro
      no se ve, y la fila arrastrada se quedaría sin despegar del resto. */
   --shadow-lift: 0 6px 16px rgb(0 0 0 / 14%);
 
-  /* La app no tiene acento propio (sección 3.1): el acento es el grafito neutro salvo
-     dentro de la vista de un proyecto, que lo sobreescribe con el suyo. */
-  --accent: var(--ink-accent);
+  /* El acento del sistema — el que se elige en Ajustes del Sistema → Apariencia — salvo dentro
+     de la vista de un proyecto, que lo sobreescribe con el suyo.
+
+     Lo publica Rust en `on_page_load` y cada vez que cambia, porque desde CSS no se puede leer:
+     `accent-color: auto` lo aplica a los `<input>` nativos pero no lo expone como valor, y aquí
+     los controles están hechos a mano. Llegan las dos variantes a la vez y elige la media query
+     de abajo, igual que hacen los colores de proyecto con su pareja claro/oscuro: releerlo desde
+     JavaScript al cambiar el modo es justo lo que hace parpadear el cambio (criterio 5).
+
+     El grafito de `--ink-accent` sigue siendo el respaldo, y es lo que se ve si el acento no se
+     pudo leer o fuera de macOS. También sigue siendo un valor por derecho propio donde el acento
+     no vendría a cuento: el punto de versión nueva del `⚙︎` (sección 11) es de la app y no del
+     proyecto que se esté mirando, y el anillo de foco cae a él cuando el color del proyecto no
+     llega a 3:1 (sección 5). */
+  --accent: var(--system-accent-light, var(--ink-accent));
+
+  /* El mismo acento, pero el que **no** sobreescribe el proyecto en cuya vista se esté. Ajustes
+     cuelga del `⚙︎` y se dibuja dentro de `.panel`, así que dentro de un proyecto heredaría su
+     color — y ninguna preferencia del popover es de un proyecto (sección 8). Con `--accent` a
+     secas, el interruptor del arranque automático se pondría del color del proyecto que se
+     estuviera mirando por detrás del popover, que es exactamente lo que no significa nada. */
+  --accent-app: var(--system-accent-light, var(--ink-accent));
+
+  /* El anillo de foco. Es el acento salvo cuando el acento no se vería, que solo puede pasar
+     dentro de un proyecto de color manual — ahí `.tinted` lo sustituye por el neutro (spec 5). */
+  --focus: var(--accent);
+
+  /* La pista de un grupo de opciones de Ajustes y el fondo del elegido. Dos capas con alfa y
+     no un panel opaco: encima del vidrio, cualquier cosa sólida lo apaga (spec 3.2). El
+     elegido va más claro que su pista, que es como macOS dibuja un segmentado. */
+  --track-bg: rgb(0 0 0 / 6%);
+  --track-on: rgb(255 255 255 / 85%);
+  --track-lift: 0 1px 2px rgb(0 0 0 / 10%);
 
   /* Tipografía. Dos roles: la del sistema para la interfaz, mono para los datos — fechas,
      horas, contadores, encabezados de grupo — para que las columnas no bailen. */
@@ -53,10 +92,35 @@
   --text-group: 10px;
 
   /* Geometría recurrente */
+
+  /* Los dos radios de lo que flota, y en este orden a propósito. El popover de Ajustes es una
+     superficie con rótulos y secciones —lo que macOS redondea a 10–12— mientras que el menú del
+     `⋯` y el autocompletado del `#` son desplegables, que llevan menos arco: cuanto más
+     pequeño y más efímero es lo que flota, menos esquina se le da. Compartiendo los 8 de antes,
+     Ajustes se leía como un menú largo en vez de como el panel que es. */
+  --popover-radius: 10px;
+  --menu-radius: 8px;
+
   --row-radius: 6px;
   --checkbox-size: 15px;
   --dot-size: 6px;
   --subtask-indent: 22px;
+
+  /* Las métricas del segmentado. Van aquí y no en la regla del popover porque el mismo control
+     lo usan dos superficies —las preferencias de Ajustes y el «Qué hacer» de la importación— y
+     la segunda vive fuera del popover: scopeadas a `.settings`, allí no existirían y el renglón
+     se quedaría sin alto.
+
+     Las cuatro se persiguen, y por eso están juntas: el radio del chip es el de la pista menos
+     su relleno, o los dos arcos no son concéntricos; y el alto del renglón es el del chip más
+     la pista más el aire, o el segmentado toca los renglones de arriba y de abajo. Repartidas
+     en cinco reglas, tocar el alto del chip obligaba a acordarse de otros dos sitios — y
+     acordarse a mano es de donde salen los espaciados de 1px de más que avisa la sección 10. */
+  --choice-height: 26px;
+  --track-pad: 3px;
+  --track-gap: 2px;
+  --track-radius: 8px;
+  --choice-radius: calc(var(--track-radius) - var(--track-pad));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,6 +130,11 @@
     --ink-tertiary: rgb(255 255 255 / 36%);
     --ink-accent: #e8e8ea;
     --on-accent: #1c1c1e;
+
+    /* La otra mitad del acento del sistema. `controlAccentColor` es un color dinámico y bajo
+       Dark Aqua no da el mismo hex, así que Rust resuelve los dos y aquí se elige. */
+    --accent: var(--system-accent-dark, var(--ink-accent));
+    --accent-app: var(--system-accent-dark, var(--ink-accent));
 
     --layer-hover: rgb(255 255 255 / 7%);
     --layer-selected: rgb(255 255 255 / 12%);
@@ -77,7 +146,34 @@
     --menu-bg: #2c2c2e;
     --menu-shadow: 0 8px 24px rgb(0 0 0 / 44%);
     --shadow-lift: 0 6px 16px rgb(0 0 0 / 42%);
+
+    /* Más oscuro que `--menu-bg`, al revés que en claro: en oscuro lo que flota se aclara. */
+    --panel-solid: #1e1e20;
+
+    /* En oscuro la pista se hunde y el elegido se levanta con blanco, al revés que en claro.
+       La sombra desaparece: una sombra negra sobre un fondo oscuro no levanta nada. */
+    --track-bg: rgb(0 0 0 / 20%);
+    --track-on: rgb(255 255 255 / 16%);
+    --track-lift: none;
   }
+}
+
+/* La ventana inactiva. macOS desatura los controles de acento de una ventana que no es la clave,
+   y aquí eso no puede salir solo: el material heredado sí se apaga con `FollowsWindowActiveState`,
+   pero lo que pintamos nosotros —el interruptor, el anillo de foco, el cursor, la selección— no
+   sabe nada de la ventana, y `NSGlassEffectView` no tiene siquiera un estado de ventana. Lo pone
+   Rust en `on_window_event`.
+
+   Se cambia el acento por el grafito y nada más. Los puntos de proyecto y el color de una vista
+   de proyecto se quedan: son contenido y no controles, y macOS tampoco despinta el contenido de
+   una ventana inactiva — solo deja de decir «esto se pulsa» en algo que ahora mismo no se pulsa.
+
+   Casi nunca se ve, porque perder el foco oculta el panel (spec 4). Se ve mientras hay un modal
+   o el selector de fecha delante, que es cuando el panel sigue en pantalla sin ser la ventana
+   que manda. */
+:root[data-window="inactivo"] {
+  --accent: var(--ink-accent);
+  --accent-app: var(--ink-accent);
 }
 
 /* El color de un proyecto viene en pareja: la versión clara se apaga sobre vidrio oscuro, así
@@ -86,6 +182,9 @@
    — que es lo que hace que cambiar de claro a oscuro con el panel abierto no parpadee. */
 .tinted {
   --project: var(--project-light, var(--ink-accent));
+  /* El anillo cae al neutro cuando el color del proyecto no llega a 3:1 contra el fondo. Lo
+     decide `tint()`, que es quien tiene los dos hex; aquí solo se elige la variante del modo. */
+  --focus: var(--focus-light, var(--ink-accent));
   /* Sin proyecto el color es el acento neutro, así que la palomita usa su contraria. Con
      proyecto, `tint()` la sobreescribe en línea. */
   --on-project: var(--on-accent);
@@ -94,5 +193,6 @@
 @media (prefers-color-scheme: dark) {
   .tinted {
     --project: var(--project-dark, var(--ink-accent));
+    --focus: var(--focus-dark, var(--ink-accent));
   }
 }

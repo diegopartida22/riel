@@ -187,11 +187,32 @@ export async function hasOverdue(now: string): Promise<boolean> {
  * a sus espaldas. Las hijas de una raíz barrida se van con ella por el `ON DELETE CASCADE`.
  */
 export async function sweepCompleted(days: number): Promise<number> {
-  const cutoff = localIso(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
   return execute(
-    "DELETE FROM tasks WHERE parent_id IS NULL AND completed_at IS NOT NULL AND completed_at < $1",
-    [cutoff],
+    `DELETE FROM tasks WHERE ${SWEEPABLE}`,
+    [sweepCutoff(days)],
   );
+}
+
+/** La frontera del barrido: lo completado antes de esto se va. */
+const sweepCutoff = (days: number) =>
+  localIso(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+
+/** Escrito una vez porque contar y borrar tienen que mirar exactamente las mismas filas. */
+const SWEEPABLE = "parent_id IS NULL AND completed_at IS NOT NULL AND completed_at < $1";
+
+/**
+ * Cuántas se llevaría el barrido con esa retención, sin borrar nada.
+ *
+ * Es lo que hace posible preguntar antes de bajar el plazo (spec 8). Una confirmación que
+ * dijera «se van a borrar tareas» sin la cifra no informa de nada: la diferencia entre tres y
+ * trescientas es justo la que decide si alguien acepta o exporta primero.
+ */
+export async function countSweepable(days: number): Promise<number> {
+  const rows = await select<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM tasks WHERE ${SWEEPABLE}`,
+    [sweepCutoff(days)],
+  );
+  return rows[0]?.total ?? 0;
 }
 
 /**

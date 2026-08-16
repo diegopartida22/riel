@@ -11,6 +11,7 @@
     "sql:allow-execute",
     "autostart:default",
     "dialog:allow-save",
+    "dialog:allow-open",
     "updater:default"
   ]
 }

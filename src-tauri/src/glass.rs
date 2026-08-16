@@ -62,16 +62,24 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
 
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
-        // `Active` y no `FollowsWindowActiveState`: seguir el estado de la ventana apaga
-        // la vibrancy en cuanto el panel deja de ser la ventana clave y lo deja plano y
-        // blanco. Normalmente no se vería, porque perder el foco lo oculta — pero sí se
-        // ve mientras KEEP_OPEN está en alto (un modal o el selector de fecha se llevan
-        // el foco y el panel sigue visible), y puede colarse un fotograma plano entre
-        // `show()` y `set_focus()` al abrir.
+        // `FollowsWindowActiveState` es lo que hace macOS con cualquier ventana: al dejar de
+        // ser la clave, la vibrancy se desatura. Aquí casi no se ve, porque perder el foco
+        // oculta el panel — se ve mientras KEEP_OPEN está en alto, que es cuando un modal o el
+        // selector de fecha se llevan el foco y el panel sigue delante, y ahí desaturarse es
+        // justamente lo correcto: la ventana que manda es la otra.
+        //
+        // El precio, y está medido: entre `show()` y `set_focus()` puede colarse un fotograma
+        // con el material apagado. `show()` los llama seguidos, así que es un fotograma y no
+        // un parpadeo — pero es el motivo por el que esto estuvo en `Active`.
+        //
+        // Esto solo alcanza al camino heredado. `NSGlassEffectView` no tiene un estado
+        // equivalente, así que en Tahoe lo que refleja la ventana inactiva es el intercambio
+        // de tokens de `data-window` (ver `publish_active_to_css`), que además vale para los
+        // dos caminos.
         apply_vibrancy(
             window,
             NSVisualEffectMaterial::Popover,
-            Some(NSVisualEffectState::Active),
+            Some(NSVisualEffectState::FollowsWindowActiveState),
             Some(Material::Popover.corner_radius()),
         )
         .expect("la vibrancy de macOS requiere 10.10 o superior");
@@ -97,6 +105,23 @@ pub fn publish_to_css<R: Runtime>(webview: &tauri::Webview<R>, material: Materia
         material.corner_radius(),
     );
     let _ = webview.eval(&script);
+}
+
+/// Le dice al CSS si la ventana es la clave, para que el contenido refleje lo que el material
+/// ya refleja por su cuenta.
+///
+/// macOS desatura los controles de acento de una ventana inactiva, y el material heredado se
+/// desatura solo con `FollowsWindowActiveState`. Lo que no se desatura solo es lo que pintamos
+/// nosotros — el interruptor, el anillo de foco, el cursor, la selección — ni el vidrio de
+/// `NSGlassEffectView`, que no tiene estado de ventana. De eso se encarga esto: con
+/// `data-window="inactivo"`, `tokens.css` cambia el acento por el grafito neutro.
+///
+/// Un atributo y no una clase por lo mismo que `data-glass`: lo mira solo el CSS.
+pub fn publish_active_to_css<R: Runtime>(window: &WebviewWindow<R>, active: bool) {
+    let value = if active { "activo" } else { "inactivo" };
+    let _ = window.eval(&format!(
+        "document.documentElement.dataset.window='{value}';"
+    ));
 }
 
 /// Vuelve a calcular la sombra a partir de lo que hay pintado ahora mismo.
@@ -189,8 +214,9 @@ mod liquid {
                 let _: () = msg_send![layer, setMasksToBounds: true];
             }
 
-            // Sin tinte. El spec es explícito en que la app no tiene color de acento propio
-            // (sección 3.1), y un `tintColor` aquí se lo daría a toda la superficie.
+            // Sin tinte, aunque la app sí tenga acento (sección 3.1): el acento colorea los
+            // controles, y un `tintColor` aquí se lo daría a la superficie entera. Los popovers
+            // del propio sistema tampoco tiñen su vidrio del acento elegido.
 
             glass.setAutoresizingMask(
                 NSAutoresizingMaskOptions::ViewWidthSizable

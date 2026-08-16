@@ -28,13 +28,51 @@ body {
   -webkit-user-select: none;
 }
 
-/* El último sitio por el que se colaba el azul de sistema, y el único que no aparecía escrito
-   en ninguna hoja: sin una regla propia, macOS pinta la selección de texto con el color de
-   acento del sistema — azul por omisión. Basta seleccionar una palabra en la búsqueda para
-   verlo, así que el criterio 9 no se cumplía.
+/* El `user-select: none` de arriba es lo que evita que arrastrar por una etiqueta la deje
+   seleccionada como si fuera un párrafo — el rastro de página más fácil de ver. Pero se hereda
+   dentro de los campos, y ahí hace lo contrario de lo que hace falta: sin esta excepción no se
+   puede seleccionar con el ratón lo que uno acaba de escribir en la búsqueda, y la regla
+   `::selection` de abajo no llegaba a pintarse nunca porque no había forma de seleccionar nada.
 
-   El `color-mix` la tiñe del acento en contexto: grafito en las vistas mixtas, el color del
-   proyecto dentro de uno. La declaración plana de arriba es la red por si la versión de
+   El cursor va con ello y por lo mismo: la viga solo donde se escribe, y la flecha en todo lo
+   demás, que es de donde sale que un rótulo no se lea como texto editable. */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  /* Lo poco de la app que sí es un control nativo. Los de aquí se pintan solos con el acento
+     del sistema; los hechos a mano lo reciben por `--accent`, que es lo que publica Rust. */
+  accent-color: auto;
+}
+
+/* El rebote elástico de la página entera. Un panel anclado bajo el icono de la barra no tiene
+   dónde rebotar: al llegar al final el vidrio se despega del borde de la ventana y por debajo
+   asoma el escritorio, que es exactamente el fotograma que delata que esto es un navegador.
+
+   Lo que se apaga es el del documento, no el de las listas: dentro de un `NSScrollView` macOS
+   sí rebota, y quitarlo también ahí sería menos nativo y no más. De eso se encarga el
+   `overscroll-behavior: contain` de cada contenedor con desplazamiento, que corta el
+   encadenamiento hacia fuera sin tocar el rebote de dentro. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* Arrastrar un icono y que salga volando su fantasma es de una página web. Ninguno de los
+   dibujos de la app es un objeto que se lleve a ningún sitio. */
+img,
+svg {
+  -webkit-user-drag: none;
+}
+
+/* Sin una regla propia, macOS pinta la selección de texto con el acento del sistema a su manera
+   y a su alfa. Ahora que el acento de la app *es* el del sistema (spec 3.1) el color de partida
+   ya no está mal, pero la mezcla sí importa: la del sistema es opaca y aquí tiene que ser una
+   veladura, o sobre el vidrio tapa el texto que está seleccionando.
+
+   El `color-mix` la tiñe del acento en contexto: el del sistema en las vistas mixtas, el color
+   del proyecto dentro de uno. La declaración plana de arriba es la red por si la versión de
    WebKit de macOS 13 no lo entiende — el navegador descarta la que no sepa leer. */
 ::selection {
   background: rgb(28 28 30 / 18%);
@@ -67,5 +105,23 @@ body {
 @media (prefers-color-scheme: dark) {
   :root[data-glass="popover"] body::after {
     border-color: rgb(255 255 255 / 14%);
+  }
+}
+
+/* ── Transparencia reducida ──────────────────────────────────────────────────────────── */
+
+/* La casilla de Accesibilidad. El vidrio no lo pinta el webview sino `NSVisualEffectView` por
+   debajo, así que desde aquí no se puede apagar: lo que se puede es taparlo, y un fondo opaco
+   de borde a borde es exactamente lo que pide la casilla — sin blur, sin nada del escritorio
+   asomando detrás del texto.
+
+   Va en `#root` y no en `body`, porque el borde de `body::after` tiene que seguir pintándose
+   por encima: es lo único que le da un canto al panel, y sin vidrio que lo despegue del fondo
+   hace más falta que antes, no menos. El radio es el mismo que publica Rust, o el sólido
+   saldría por fuera del arco de la ventana y asomaría en las cuatro esquinas. */
+@media (prefers-reduced-transparency: reduce) {
+  #root {
+    background: var(--panel-solid);
+    border-radius: var(--panel-radius, 12px);
   }
 }

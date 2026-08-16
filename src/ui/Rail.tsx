@@ -7,8 +7,14 @@ import { CalendarDays, CheckCircle, Ellipsis, List, Plus, Sun, type Icon } from 
 import { ProjectMenu } from "./ProjectMenu";
 import { useReorder } from "./useReorder";
 
-/** Un icono por vista del sistema, para cuando el riel está colapsado (spec 3.4). */
-const ICONS: Record<SystemKind, Icon> = {
+/**
+ * Un icono por vista del sistema, para cuando el riel está colapsado (spec 3.4).
+ *
+ * Se exporta porque Ajustes elige la vista de arranque con estos mismos iconos y no con sus
+ * nombres: lo que se está eligiendo es a qué entrada del riel caer al abrir, así que enseñar
+ * otra cosa obligaría a aprender dos vocabularios para una sola lista de cuatro.
+ */
+export const SYSTEM_ICONS: Record<SystemKind, Icon> = {
   hoy: Sun,
   proximas: CalendarDays,
   todas: List,
@@ -72,7 +78,7 @@ export function Rail({
     <nav className="rail" aria-label="Vistas y proyectos">
       <ul className="rail__group">
         {SYSTEM_VIEWS.map(({ kind, label }) => {
-          const Icon = ICONS[kind];
+          const Icon = SYSTEM_ICONS[kind];
           return (
             <RailItem
               key={kind}

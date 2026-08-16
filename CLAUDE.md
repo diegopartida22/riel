@@ -21,6 +21,8 @@ Dentro:
 - Reordenar con drag & drop.
 - Notificaciones nativas para tareas con hora.
 - Arranque al iniciar sesión.
+- Exportar e importar JSON. El export sin vuelta no es un respaldo, es un archivo: lo que
+  hace que los datos sean del usuario es poder devolverlos.
 
 Fuera de la v1, no lo construyas:
 
@@ -70,7 +72,10 @@ Reglas:
   en la capa de datos, no solo en la UI.
 - `has_time = 0` significa que `due_at` representa solo el día; ignora la hora al mostrar.
 - `position` es float para permitir reordenar insertando entre dos valores sin reescribir
-  la lista completa.
+  la lista completa. Insertar siempre en el mismo hueco parte la distancia por dos cada vez, y
+  un `double` se queda sin dígitos entre dos vecinos después de unos cincuenta arrastres al
+  mismo sitio: cuando el hueco baja de `1e-6`, renumera la lista entera en pasos de 1024 y
+  vuelve a insertar. Es la única escritura de la app que toca muchas filas, y pasa casi nunca.
 - Completar una tarea padre completa sus subtareas. Completar todas las subtareas **no**
   completa la padre automáticamente.
 - Borrar un proyecto deja sus tareas sin proyecto, no las borra. Confírmalo con el usuario
@@ -82,13 +87,25 @@ Reglas:
 
 ### 3.1 El principio que gobierna todo
 
-**La app no tiene color de acento propio.** El acento lo presta el proyecto en contexto:
-en la vista de un proyecto, sus casillas, anillos de foco, selección y botón primario usan
-el color de ese proyecto. En Hoy, Próximas, Todas y Completadas — donde conviven varios
-proyectos — el acento cae a `--ink-accent`, un grafito neutro, y el color aparece
-únicamente en el punto de proyecto de cada fila.
+**La app no tiene color de acento propio: usa el del sistema.** El que el usuario eligió en
+Ajustes del Sistema → Apariencia, y no uno inventado por nosotros. En la vista de un proyecto
+sigue mandando el proyecto — sus casillas, anillos de foco, selección y botón primario usan su
+color — y en Hoy, Próximas, Todas y Completadas el acento es el del sistema, con el color de
+proyecto solo en el punto de cada fila.
 
-Consecuencia: **nunca uses el azul de sistema de macOS**. No hay `#007AFF` en esta app.
+El azul de `#007AFF` ya no está prohibido, pero tampoco se escribe: si el acento sale azul es
+porque el usuario lo puso azul. **Ningún hex de acento va escrito en el código.** Lo lee Rust de
+`NSColor.controlAccentColor` y lo publica como `--system-accent-light` / `--system-accent-dark`;
+el CSS elige entre los dos con la media query, igual que los colores de proyecto con su pareja
+claro/oscuro. Resolverlo desde JavaScript al cambiar el modo es lo que hace parpadear el cambio,
+y eso sigue prohibido (criterio 5).
+
+`--ink-accent`, el grafito neutro, deja de ser el acento por defecto pero no desaparece: es el
+respaldo cuando no se puede leer el del sistema, es lo que se usa donde el acento no viene a
+cuento —el punto de versión nueva del `⚙︎` (§11)— y es a donde cae el anillo de foco cuando el
+color de un proyecto no llega a 3:1 (§5). También es a lo que cae el acento entero mientras la
+ventana no es la clave: macOS desatura los controles de acento de una ventana inactiva, y el
+panel refleja ese estado con `data-window` (§4).
 
 ### 3.2 Color
 
@@ -244,6 +261,37 @@ Sentence case en todo. Verbos en infinitivo para acciones ("Agregar tarea", "Eli
 proyecto"). El nombre de una acción no cambia entre el botón y su resultado. Los errores
 dicen qué pasó y qué hacer, sin disculparse.
 
+### 3.9 Ajustes del sistema que se obedecen
+
+Cuatro media queries, y ninguna es opcional. macOS tiene las tres primeras en Accesibilidad, y
+una app que presume de nativa las respeta sin que haya que pedírselo.
+
+- `prefers-reduced-transparency: reduce` → **el vidrio se sustituye por un sólido**. El material
+  lo pinta el sistema por debajo del webview y desde CSS no hay forma de apagarlo, así que lo que
+  se hace es taparlo: un fondo opaco de borde a borde en `#root`, con el mismo radio que publica
+  Rust para que no asome por fuera del arco. Las veladuras de encima siguen valiendo tal cual —
+  un 5% de negro se lee igual sobre un gris fijo que sobre el vidrio.
+- `prefers-reduced-motion: reduce` → sin transiciones (criterio 7).
+- `prefers-color-scheme` → claro y oscuro, sin colores escritos a mano.
+- Ventana inactiva → el acento cae al grafito (§4).
+
+### 3.10 Nada que delate una webview
+
+Un panel de la barra de menú que se comporta como una página se cae de nativo en un solo gesto.
+Lo que se apaga, y por qué:
+
+- **El menú contextual del navegador.** Aparece con el gesto más común de macOS y nombra cosas
+  que aquí no existen. Se apaga en todas partes menos sobre un campo, donde WKWebView da el menú
+  de texto del sistema —cortar, copiar, pegar, ortografía— y ese sí se espera. El menú del `⋯`
+  de una fila es lo que sustituye al de la lista (§3.5).
+- **La selección de texto fuera de los campos.** `user-select: none` en `body`, con la excepción
+  de `input` y `textarea` — sin ella no se puede seleccionar con el ratón lo que uno acaba de
+  escribir en la búsqueda. El cursor va con ello: la viga solo donde se escribe.
+- **El rebote elástico de la página.** Al llegar al final, el vidrio se despega del borde y por
+  debajo asoma el escritorio. Se apaga el del documento, no el de las listas: dentro de un
+  `NSScrollView` macOS sí rebota, y quitarlo también ahí sería menos nativo y no más.
+- **El arrastre de imágenes y el outline azul por defecto.** El anillo de foco es el de §5.
+
 ---
 
 ## 4. Comportamiento de la ventana
@@ -256,10 +304,30 @@ dicen qué pasó y qué hacer, sin disculparse.
   `resizable: false`, `skipTaskbar: true`.
 - Vibrancy con `window-vibrancy`: material `NSVisualEffectMaterial::Popover`, estado
   `FollowsWindowActiveState`, con radio de 12. **No uses `backdrop-filter` de CSS como
-  sustituto** — se nota de inmediato que no es vidrio del sistema.
+  sustituto** — se nota de inmediato que no es vidrio del sistema. Sí lo usan las superficies
+  que viven *dentro* del webview, que no tienen otra: un menú, el popover de Ajustes. No las
+  confundas — `backdrop-filter` no difumina el escritorio, solo lo que queda detrás dentro de
+  la webview. Y **un solo nivel de blur**: lo que flota sobre el vidrio lleva su material, y
+  sus renglones van sólidos o transparentes pero nunca con blur propio.
+- **Ventana inactiva.** `FollowsWindowActiveState` desatura el material heredado por su cuenta,
+  pero no alcanza a lo que pintamos nosotros —el interruptor, el anillo de foco, el cursor, la
+  selección— ni a `NSGlassEffectView`, que no tiene estado de ventana. Rust pone
+  `data-window="inactivo"` en la raíz y el acento cae al grafito neutro (§3.1). Los puntos de
+  proyecto se quedan: son contenido y no controles, y macOS tampoco despinta el contenido de una
+  ventana inactiva. Casi nunca se ve, porque perder el foco oculta el panel — se ve mientras hay
+  un modal o el selector de fecha delante, que es cuando el panel sigue en pantalla sin ser la
+  ventana que manda.
 - `app.set_activation_policy(ActivationPolicy::Accessory)` en `setup`, y `LSUIElement: true`
   en el `Info.plist`, para que no aparezca en el Dock ni en el conmutador de apps.
 - Escape cierra el panel. Si hay búsqueda activa, el primer Escape la limpia y el segundo cierra.
+- Cerrar el panel no es salir de la app, y sin Dock ni ⌘Tab tampoco hay menú de aplicación ni
+  ⌘Q: **«Salir de Riel» va en Ajustes**, o pararla obliga a ir al Monitor de Actividad. Es un
+  comando propio en Rust y no `tauri-plugin-process` — el plugin trae permisos que no hacen
+  falta para un botón. Antes de salir, `cleanup_before_exit`, o el glifo se queda en la barra.
+- Mientras haya un panel del sistema abierto por la app —elegir dónde guardar el export, elegir
+  qué archivo importar— el panel no se oculta aunque pierda el foco. Una ventana del sistema se
+  lo lleva por definición, y sin la excepción el panel se cerraría por debajo justo mientras se
+  contesta lo que él mismo preguntó.
 
 ### Icono de la barra
 
@@ -292,6 +360,17 @@ Esc          limpiar búsqueda, luego cerrar
 Anillo de foco visible siempre: 2px del color de acento en contexto, con 2px de offset.
 Nunca `outline: none` sin reemplazo.
 
+Con una salvedad, porque la 3.2 deja elegir un hex manual que cueste leerse: si el color del
+proyecto no llega a 3:1 contra el fondo del modo, el anillo —y solo el anillo— cae a
+`--ink-accent`. Avisar y no bloquear vale para las casillas y los puntos; no puede valer para
+lo único que dice dónde está el teclado.
+
+`⌘F` busca en el título, en las notas y en el nombre del proyecto, sobre todo lo que hay
+—pendiente y completado, tareas y subtareas— sin importar la vista en la que se esté. Buscar es
+la salida de emergencia de «sé que la escribí y no sé dónde la puse», y una búsqueda que solo
+mira la vista actual no sirve para eso. Lo que no casa por el título vale menos que lo que sí:
+encontrar algo porque la palabra salía en un párrafo es una coincidencia peor.
+
 ---
 
 ## 6. Captura de tareas
@@ -321,6 +400,13 @@ Si se deniega, muestra una nota discreta en Ajustes con un enlace a Preferencias
 Programa las notificaciones al arrancar la app y cada vez que cambie una fecha. No dejes un
 `setTimeout` por tarea corriendo indefinidamente — recalcula sobre una ventana de 24h.
 
+Los avisos los da la app, no el sistema: con Riel cerrada no llega ninguno, y las horas que
+pasaron mientras tanto no se disparan al volver a abrirla — un aluvión de notificaciones de
+ayer al arrancar es peor que no haberlas tenido. Sacarlos del proceso pediría un agente propio
+en `launchd` o `UNUserNotificationCenter` con la app registrada, que es una app de fondo dentro
+de otra: fuera de la v1, y no un descuido. Por eso el arranque al iniciar sesión (§8) es lo que
+hace que las notificaciones funcionen de verdad.
+
 ---
 
 ## 8. Ajustes
@@ -328,12 +414,110 @@ Programa las notificaciones al arrancar la app y cada vez que cambie una fecha. 
 Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 
 - Abrir al iniciar sesión (`tauri-plugin-autostart`).
-- Retención de completadas: 30 días por defecto, con opciones 7 / 30 / 90 / siempre.
-- Exportar a JSON.
-- Versión y un enlace a los datos en Finder.
-- El renglón de la actualización, cuando hay una (§11).
+- Vista al abrir, texto de las tareas, icono de la barra y retención de completadas.
+- Exportar e importar JSON, y un enlace a los datos en Finder.
+- La versión, el renglón de la actualización cuando hay una (§11) y salir de Riel (§4).
 
-Barrido de completadas al arrancar: borra lo que exceda la retención configurada.
+«Pequeño» es una restricción y no un adjetivo: el popover cuelga de un panel de 440 × 580 y no
+tiene dónde desbordarse, así que se sujeta contra los dos bordes y no solo contra el derecho.
+
+Una preferencia es una línea: su nombre a la izquierda y sus opciones a la derecha, alineadas
+todas al mismo borde. Ni un renglón con palomita por opción —las cinco costaban quince líneas y
+tapaban la lista entera— ni el nombre encima de sus opciones, que gasta una línea para diez
+píxeles de texto y deja medio popover en blanco al lado: apretaba a lo alto justo donde sobraba
+a lo ancho.
+
+Cuatro de las cinco son la misma forma, un segmentado; la quinta es booleana y va con
+interruptor. Lo que no vale para ella es la palomita a la izquierda —la gramática de un menú
+metida entre cuatro filas que ya eran tabla— pero un segmentado de «Sí / No» tampoco: pide leer
+dos palabras para saber un estado que un interruptor puede simplemente *tener*, y es el control
+con el que el sistema dice esto. Medidas del sistema y no aproximadas: 38 × 22 con pulgar de 18
+y 150 ms de recorrido. Un interruptor con otras proporciones es de lo primero que delata que un
+control está hecho a mano, y aquí todos lo están.
+
+Mientras `launchd` no conteste va apagado y no acepta clics: no hay posición para «todavía no se
+sabe», y dejarlo pulsable antes de conocer el estado convierte el primer clic en un volado.
+
+Tres niveles de tinta y no dos: el nombre y el valor puesto en `--ink-primary`, las opciones sin
+elegir en `--ink-secondary`. Un rótulo que no se pulsa no puede pesar lo mismo que algo que sí.
+El elegido de un segmentado lleva fondo y nunca un anillo de color, y el interruptor encendido
+lleva el acento **del sistema** y no el del proyecto: el popover se dibuja dentro del panel, así
+que dentro de un proyecto heredaría su color, y ninguna de las cinco preferencias es de un
+proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el proyecto no sobreescribe. La vista al abrir se elige con los iconos del riel, que es donde ya se aprendieron, y el
+icono de la barra con los glifos mismos a 18px, que es el tamaño al que macOS los dibuja: la
+previsualización no es una versión del glifo, es el glifo.
+
+Las opciones de cada preferencia van sobre una pista, como un segmentado del sistema, y el
+elegido se levanta de ella en vez de hundirse. Un fondo suelto al 9% basta para distinguir dos
+palabras, pero en una fila de cinco glifos no se lee como «este»; con la pista, además, los
+cinco dejan de ser botones sueltos flotando sobre el menú. Sigue siendo una veladura sobre el
+vidrio y no un panel opaco (§3.2), y sigue sin haber color de por medio.
+
+Y donde las opciones son dibujos —la vista al abrir, el icono de la barra— debajo va el nombre
+del elegido, alineado con ellas. Un glifo de 15px se distingue de sus vecinos pero no se lee, y
+sin pasar el ratón por cada uno no había forma de saber cuál está puesto. No es una segunda
+línea de opciones ni contradice lo de arriba: es el valor puesto dicho en palabras.
+
+Todo lo del popover cuelga de una sola sangría —la de `.menu__item`, que es su relleno más el
+hueco de la palomita— y eso incluye las notas y los rótulos de grupo. Cada grupo de opciones es
+una parada del tabulador y por dentro se recorre con las flechas, como un control segmentado del
+sistema: con cada opción tabulable, cruzar Ajustes costaba dieciocho tabuladores.
+
+Los grupos se separan con su rótulo —versalitas mono, el mismo tratamiento que los encabezados
+de la lista (§3.3)— y no con hairlines. Una regla dice que hay un corte pero no de qué, y tres
+reglas en un popover de doscientos píxeles lo convierten en una reja; un rótulo separa igual y
+además nombra. El bloque de preferencias es el único sin rótulo, porque es para lo que existe el
+popover. **La versión es el rótulo de su grupo**, no una línea al final: lo que cuelga de ella
+—actualizar, salir— son las dos cosas que se le hacen a la app misma. Colgando sola debajo de
+«Buscar actualizaciones» se leía como el número que ese botón acababa de encontrar, que es justo
+lo contrario de lo que es.
+
+Importar va pegado a exportar, porque son la misma operación en los dos sentidos: un export sin
+forma de volver a entrar no es un respaldo, es un archivo. Del popover sale solo la pregunta de
+cuál —los puntos suspensivos son eso— y el resto ocupa el área de contenido como el editor de
+proyecto, que es donde hay sitio para leer.
+
+Va en tres tiempos que fallan por razones distintas, y solo el último escribe: validar el
+archivo entero, cruzarlo con lo que hay, aplicar. Validar entero por delante es lo que evita
+rechazar en la fila doscientos con las ciento noventa y nueve anteriores ya dentro, y el error
+nombra el campo y no la línea —`tasks[12]: «title» está vacío`— porque un JSON que pasó por otra
+herramienta viene en una sola línea y ahí «línea 1» no localiza nada. El nivel único de
+subtareas (§2) se comprueba aquí también, contra el archivo y contra la base: el disparador lo
+defiende igual, pero puede decir cuál es la tarea que sobra en vez de dejar salir un error de
+SQLite.
+
+El resumen antes de escribir no es una cortesía. Los dos modos hacen cosas incomparables
+—combinar solo agrega, reemplazar borra las dos tablas— y elegir sin saber qué trae el archivo
+es elegir a ciegas. Combinar no pisa lo que ya está por id, y eso es deliberado: un respaldo de
+hace un mes no puede revivir el título viejo de una tarea que se editó ayer. Reemplazar pide un
+segundo sí con la cifra de lo que se lleva por delante, como eliminar un proyecto.
+
+Antes de escribir se guarda una copia en `Backups/`, dentro del directorio de datos, y también
+al combinar: el deshacer de una importación no cabe en la pila de ⌘Z —son miles de filas y dos
+tablas— así que el respaldo *es* el deshacer. Lo importado se corre detrás de lo que ya hay en
+vez de conservar su `position` cruda; dos listas hechas por separado empiezan las dos cerca de
+cero, y sin correrlas lo de fuera se intercala con lo propio en un orden que no es el de
+ninguna de las dos. No hay transacción porque `tauri-plugin-sql` reparte las sentencias sobre un
+pool y un BEGIN y su COMMIT pueden caer en conexiones distintas; lo que cubre un fallo a mitad
+es esa copia.
+
+Una tarea del archivo cuyo proyecto no venga con él entra sin proyecto y el resumen lo dice
+antes de confirmar. Es el mismo resultado que borrar un proyecto (§2), así que rechazar el
+archivo entero por eso sería más severo que la propia app; lo que no vale es enterarse al
+terminar de que cuarenta tareas perdieron el suyo. El `parent_id` colgando sí rechaza: una
+subtarea sin madre no tiene dónde entrar.
+
+Retención de completadas: 30 días por defecto, con opciones 7 / 30 / 90 / siempre. Barrido de
+completadas al arrancar y también al cambiar el plazo — bajar a 7 días y no ver ningún cambio
+deja sin saber si se guardó.
+
+Por eso mismo, **acortar el plazo pregunta antes**, con la cifra de lo que se lleva: el barrido
+no pasa por la pila de ⌘Z, y es la única preferencia del popover que destruye datos. Solo
+pregunta cuando de verdad hay algo que perder — alargarlo, poner «siempre» o acortarlo sin que
+caiga nada se guardan de una. Una confirmación que sale siempre se aprende a pulsar sin leerla,
+y entonces ya no protege de nada. Mientras espera el sí, la opción pulsada se dibuja marcada
+aunque no esté guardada: es lo que se está decidiendo, y dejar la marca en la vieja haría
+parecer que el clic no llegó.
 
 ---
 
@@ -351,8 +535,12 @@ La v1 está lista cuando:
 6. Reordenar por drag & drop persiste tras cerrar y reabrir.
 7. Con `prefers-reduced-motion` activo no hay una sola animación de movimiento.
 8. Navegar toda la app solo con teclado deja siempre un foco visible.
-9. Ninguna superficie de la UI usa el azul de sistema de macOS.
-10. En reposo, con el panel cerrado, el proceso se mantiene por debajo de 60 MB.
+9. Ningún hex de acento está escrito en el código: cambiar el acento en Ajustes del Sistema
+   recolorea el panel abierto, sin reiniciar y sin parpadeo.
+10. Con `prefers-reduced-transparency` activo no queda una sola superficie translúcida.
+11. Nada delata que es una webview: sin menú contextual del navegador, sin rebote elástico de
+    la página, sin selección de texto fuera de los campos, sin arrastre de imágenes.
+12. En reposo, con el panel cerrado, el proceso se mantiene por debajo de 60 MB.
 
 ---
 
@@ -416,5 +604,9 @@ hace falta es `cleanup_before_exit`, o el proceso viejo deja su glifo en la barr
 nuevo.
 
 Las releases las corta `npm run release -- X.Y.Z`. La llave privada vive fuera del repo, en
-`~/.tauri/riel.key`, y es la única copia: perderla deja a todo el que tenga una versión
-anterior sin actualizaciones automáticas para siempre.
+`~/.tauri/riel.key`. Perderla deja a todo el que tenga una versión anterior sin actualizaciones
+automáticas para siempre: no hay forma de rotarla, porque la llave pública va compilada dentro
+de los binarios que ya están instalados, y una release firmada con otra llave la rechazan todos.
+Así que no puede haber una sola copia. Dos, cifradas y fuera de esta máquina —un gestor de
+contraseñas y un disco que no viva enchufado sirven— y el mismo cuidado que una llave SSH: se
+pierde una vez y ya no se recupera.

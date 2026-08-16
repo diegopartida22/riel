@@ -189,6 +189,9 @@ export interface RielState {
   /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
   retention: Retention;
   setRetention: (retention: Retention) => void;
+
+  /** Relee proyectos y tareas desde cero. Lo usa la importación, que cambia las dos tablas. */
+  reloadAll: () => Promise<void>;
 }
 
 /**
@@ -295,6 +298,7 @@ export function useRiel(): RielState {
     const [list, totals] = await Promise.all([listProjects(), pendingCountByProject()]);
     setProjects(list);
     setCounts(totals);
+    return list;
   }, []);
 
   // Proyectos y conteos: una vez, y después cada vez que alguien los mueva.
@@ -881,6 +885,33 @@ export function useRiel(): RielState {
     }
   }, []);
 
+  /**
+   * Relee todo desde cero, para cuando la base cambió por debajo de la vista de una forma que
+   * no se puede reconstruir aplicando un cambio suelto: hoy, la importación.
+   *
+   * Además comprueba que el proyecto que se está mirando siga existiendo. Reemplazando se
+   * borran los dos tablas enteras, y quedarse dentro de la vista de un proyecto que ya no está
+   * deja una lista vacía sin nada en el riel que explique por qué.
+   */
+  const reloadAll = useCallback(async () => {
+    try {
+      const alive = await reloadProjects();
+      setView((current) =>
+        current.kind === "proyecto" && !alive.some((each) => each.id === current.id)
+          ? { kind: "hoy" }
+          : current,
+      );
+      setDetailId(null);
+      // Importar sobre una base vacía la deja de estar: sin esto, el campo de captura seguiría
+      // con el texto del primer arranque delante de una lista llena (spec 3.7).
+      setFirstRun((await countTasks()) === 0);
+      setEpoch((current) => current + 1);
+    } catch (cause) {
+      console.error(cause);
+      setError("No se pudieron releer las tareas. Cierra y vuelve a abrir el panel.");
+    }
+  }, [reloadProjects]);
+
   /** Con qué vista se abre el panel a partir de ahora. Se aplica en la siguiente apertura. */
   const setStartView = useCallback((kind: SystemKind) => {
     localStorage.setItem(START_KEY, kind);
@@ -948,5 +979,6 @@ export function useRiel(): RielState {
     setTrayGlyph: changeTrayGlyph,
     retention,
     setRetention: changeRetention,
+    reloadAll,
   };
 }

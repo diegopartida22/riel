@@ -40,6 +40,13 @@ window-vibrancy = "0.6"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
+  "block2",
+  # El acento del sistema: `NSColor::controlAccentColor`, resuelto a sRGB bajo cada una de las
+  # dos apariencias. Las tres van juntas — el color no se puede leer sin espacio al que
+  # convertirlo ni sin apariencia bajo la que resolverlo.
+  "NSAppearance",
+  "NSColor",
+  "NSColorSpace",
   "NSGraphics",
   "NSPanel",
   "NSResponder",
@@ -48,10 +55,16 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
+  "block2",
   "NSArray",
   "NSBundle",
   "NSError",
+  # El aviso de que cambió el acento. Es *distribuido* y no el centro normal: lo emite el
+  # sistema hacia todas las apps, no la nuestra hacia sí misma.
+  "NSDistributedNotificationCenter",
+  "NSNotification",
   "NSObject",
+  "NSOperation",
   "NSSet",
   "NSString",
   "NSURL",

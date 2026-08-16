@@ -93,9 +93,9 @@ function parseTime(text: string): string | null {
  * La fecha del detalle, ahora editable.
  *
  * Un `<input type="date">` habría costado tres líneas, pero trae el calendario de WebKit
- * entero: su propio azul de selección —lo único que el criterio 9 prohíbe de plano—, su propia
- * tipografía y un desplegable que se dibuja fuera de la ventana, o sea fuera del vidrio. Así
- * que la rejilla es nuestra, con los mismos tokens que el resto del panel.
+ * entero: su propia tipografía, su propia rejilla y un desplegable que se dibuja fuera de la
+ * ventana, o sea fuera del vidrio. Así que la rejilla es nuestra, con los mismos tokens que el
+ * resto del panel.
  *
  * El camino de la captura («mañana 10:00») sigue siendo el rápido; este es el que faltaba para
  * mover una fecha ya puesta sin tener que reescribir la tarea entera.

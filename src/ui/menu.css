@@ -13,7 +13,7 @@
   z-index: 40;
   padding: 4px;
   border: 0.5px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--menu-radius);
   background: var(--menu-bg);
   box-shadow: var(--menu-shadow);
 }
@@ -21,6 +21,12 @@
 .menu {
   position: fixed;
   min-width: 176px;
+
+  /* La sangría única de la que cuelga todo lo del popover (spec 8): el relleno del renglón,
+     más el hueco de la palomita, más su separación. Escrita una vez y no repetida en cada
+     regla, porque el popover mezcla renglones de dos clases —los de menú y los de preferencia—
+     y basta con que una se quede atrás para que se lean dos columnas donde hay una. */
+  --indent: 26px;
 }
 
 .menu:focus-visible {
@@ -32,7 +38,10 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 4px 8px 4px 4px;
+  /* 6 y no 4: a 22px de alto los renglones se tocaban, y un bloque de texto sin aire entre
+     líneas se lee como un párrafo y no como una lista de cosas que se pulsan. Los 6 de la
+     izquierda son la primera mitad de `--indent`. */
+  padding: 6px 10px 6px 6px;
   border: 0;
   border-radius: 4px;
   background: none;
@@ -71,7 +80,7 @@
 
 /* El título de la tarea que se va a eliminar, para que la confirmación diga cuál. */
 .menu__note {
-  margin: 2px 8px 4px 22px;
+  margin: 2px 8px 4px var(--indent);
   font-size: var(--text-meta);
   line-height: 1.35;
   color: var(--ink-secondary);
@@ -83,72 +92,292 @@
    clase de cosa —algo pequeño colgado de un botón— y darle un material propio sería inventar
    una segunda gramática para lo mismo. */
 .settings {
+  /* El mínimo casi nunca manda: ni el nombre ni las opciones de un renglón se encogen, así que
+     el ancho lo fija la preferencia más larga —«Conservar completadas» con sus cuatro plazos— y
+     sale por encima de esto. Las demás no se estiran: lo que crece es el hueco de en medio, que
+     es lo que deja el nombre a la izquierda y todos los controles alineados a la derecha. */
   min-width: 208px;
+  /* 6 y no los 4 del menú de la fila: aquí hay rótulos de grupo y notas además de renglones, y
+     al ras del canto el popover se leía como una caja llena hasta el borde. */
+  padding: 6px;
+  /* Más arco que el menú del que hereda: esto es un popover y no un desplegable. */
+  border-radius: var(--popover-radius);
+  /* La red de seguridad del anclaje: con las notas del actualizador y las de permiso denegado
+     sumadas a la vez, el popover podría pasar del alto del panel, y una ventana sin decoración
+     no tiene dónde desbordarse. En su forma normal no llega ni a la mitad, así que esto no se
+     ve nunca — pero un menú que se recorre es mejor que uno cuyo último renglón no existe. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  /* Y si llega a recorrerse, que no arrastre consigo la lista de detrás. */
+  overscroll-behavior: contain;
 }
 
-/* El encabezado de un grupo de opciones. Mismo papel que el encabezado de día de una lista,
-   así que mismo tratamiento (spec 3.3): mono, versalitas, tinta terciaria. */
-.settings__label {
-  margin: 6px 8px 2px 22px;
+/* El encabezado de un grupo del popover, con el mismo tratamiento que los de la lista
+   (spec 3.3): mono a 10px, versalitas, tinta terciaria. Sustituye a las hairlines que había
+   entre grupos — una regla dice que hay un corte pero no de qué, y tres reglas en un popover
+   de doscientos píxeles lo convertían en una reja. Un rótulo separa igual y además nombra.
+
+   Cuelga de `--indent` como todo lo demás, y no del borde: es el título de renglones que
+   empiezan ahí, no de la caja. */
+.settings__section {
+  margin: 14px 8px 4px var(--indent);
   font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--ink-tertiary);
 }
 
-/* La nota de permiso denegado. Dice qué pasó y qué hacer, sin disculparse (spec 3.8). */
+/* Una preferencia: su nombre a la izquierda, sus opciones a la derecha. Apilados, el nombre
+   gastaba una línea entera para diez píxeles de texto mientras la fila de opciones dejaba
+   medio popover en blanco a su derecha — apretado a lo alto justo donde sobraba a lo ancho. */
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* El hueco mínimo entre el nombre y sus opciones. Es el que decide si se leen como dos cosas
+     o como una sopa; los 12 de antes se los comía el nombre más largo. */
+  gap: 16px;
+  /* La sangría de la izquierda es la de `.menu__item` y no un valor propio: el popover tiene
+     renglones de las dos clases y con sangrías distintas se veían dos columnas donde hay una. */
+  margin: 0 8px 0 var(--indent);
+  /* El alto de la pista más su aire: la pista mide el chip más sus dos rellenos —32— y los 6
+     que sobran son lo que la separa del renglón de arriba y del de abajo. A 30 el segmentado
+     los tocaba, y eso es lo que se percibía como «apretado». */
+  min-height: calc(var(--choice-height) + var(--track-pad) * 2 + 6px);
+}
+
+/* La misma fila, fuera del popover. La sangría de la izquierda es el hueco de la palomita de
+   `.menu__item`, y en la hoja de importación no hay ninguna palomita con la que alinearse. */
+.settings__row--flush {
+  margin: 0;
+}
+
+/* Sentence case y no versalitas mono: en versalitas era el encabezado de un grupo, que es lo
+   que era cuando iba encima. Al lado de sus opciones es la etiqueta de un campo, y ese es el
+   tratamiento de un nombre, no el de un rótulo (spec 3.3). */
+/* En tinta primaria, como los renglones de abajo: es el nombre de la preferencia, o sea el
+   ancla del renglón. En secundaria pesaba exactamente lo mismo que una opción sin elegir, y un
+   rótulo que no se pulsa no puede parecerse a algo que sí. Con esto quedan tres niveles: el
+   nombre y el valor puesto en primaria, el resto de opciones en secundaria. */
+.settings__label {
+  flex: 0 0 auto;
+  font-size: var(--text-subtitle);
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+/* Las notas del popover: el permiso denegado, el estado del actualizador, lo que va a borrar
+   bajar la retención. Dicen qué pasó y qué hacer, sin disculparse (spec 3.8). */
 .settings__note {
-  margin: 2px 8px 4px 22px;
+  margin: 2px 8px 6px var(--indent);
   font-size: var(--text-meta);
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--ink-secondary);
 }
 
-/* Los cinco glifos de la barra, en fila. La sangría es la de las etiquetas del grupo, para
-   que la fila arranque donde arrancan los nombres de las opciones de arriba. */
-.settings__glyphs {
+/* La columna de la derecha de una preferencia: sus opciones y, cuando las opciones son glifos,
+   el nombre del elegido debajo. */
+.settings__group {
+  flex: 0 0 auto;
   display: flex;
-  gap: 2px;
-  margin: 2px 8px 4px 18px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
-.settings__glyph {
+/* Pegadas al borde derecho: las cinco filas tienen nombres de anchos muy distintos, y
+   alinearlas por la izquierda dejaría las opciones en cinco sitios diferentes.
+
+   La pista de debajo es lo que las hace un control y no cinco botones sueltos flotando sobre
+   el menú: sin ella, la única diferencia entre elegido y no elegido era un fondo del 9% que en
+   una fila de glifos no se leía como «este». Es la misma capa con alfa de siempre y no un
+   panel opaco (spec 3.2), y sigue sin haber color de por medio (spec 3.1).
+
+   3px de relleno y no 2: el anillo de foco de un chip sale a 2px de su borde, y con 2 caía
+   justo encima del canto de la pista. */
+.settings__choices {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--track-gap);
+  padding: var(--track-pad);
+  border-radius: var(--track-radius);
+  background: var(--track-bg);
+}
+
+/* El nombre de lo elegido, cuando lo elegido es un dibujo. Los glifos de la barra son cinco
+   siluetas de 18px y las vistas cuatro iconos de 15: se distinguen, pero no se leen, y sin
+   pasar el ratón por cada uno no había forma de saber cuál está puesto. El renglón sigue
+   siendo uno —nombre a la izquierda, opciones a la derecha (spec 8)—; esto no es una segunda
+   línea de opciones, es el valor puesto dicho en palabras.
+
+   `aria-hidden` en el marcado: cada opción ya se llama por su nombre, y quien navega a ciegas
+   oiría el del elegido dos veces seguidas. */
+.settings__caption {
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+}
+
+/* El mínimo es el ancho que da un glifo de la barra con su relleno —18 + 5 + 5— y así los dos
+   renglones de iconos salen con el mismo paso aunque el de la vista dibuje a 15 y el de la
+   barra a 18. Van uno debajo del otro y alineados a la derecha: con anchos distintos, las dos
+   rejillas se cruzarían a ojo. Los de texto crecen. */
+.settings__choice {
+  /* Para el separador de abajo, que se cuelga en el hueco de la izquierda. */
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 26px;
-  padding: 0;
+  min-width: 28px;
+  height: var(--choice-height);
+  padding: 0 5px;
   border: 0;
-  border-radius: 4px;
+  /* Concéntrico con la pista: su radio menos su relleno. */
+  border-radius: var(--choice-radius);
   background: none;
+  font-family: inherit;
+  font-size: var(--text-subtitle);
+  font-weight: 400;
+  color: var(--ink-secondary);
   cursor: default;
 }
 
-.settings__glyph:hover {
+.settings__choice:hover {
   background: var(--layer-hover);
 }
 
-/* El elegido lleva fondo y no un anillo de color: el acento aquí sería el del proyecto que se
-   esté mirando, y el icono de la barra no es de ningún proyecto (spec 3.1). */
-.settings__glyph.is-selected {
-  background: var(--layer-selected);
+/* El separador del segmentado del sistema: una hairline en el hueco entre dos opciones, y solo
+   entre las que no tocan a la elegida. La elegida ya está dibujada —lleva fondo y se levanta de
+   la pista— y una raya pegada a su canto compite con su propio borde en vez de separar nada; lo
+   que macOS deja ver son las divisiones del resto, que sin fondo no tienen otra forma de
+   decir dónde acaba una opción y empieza la siguiente. En una fila de cinco glifos de 18px eso
+   es la diferencia entre cinco cosas y una mancha.
+
+   Va centrada en el hueco de `--track-gap` y sin altura completa: a ras de la pista parecería
+   que la corta en dos. */
+.settings__choice + .settings__choice::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--track-gap) / -2 - 0.5px);
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: var(--hairline);
+}
+
+.settings__choice.is-selected::before,
+.settings__choice.is-selected + .settings__choice::before {
+  display: none;
+}
+
+/* Al pasar por encima, la opción también se dibuja sola: sus dos divisiones sobran igual. */
+.settings__choice:hover::before,
+.settings__choice:hover + .settings__choice::before {
+  display: none;
+}
+
+/* El elegido lleva fondo y tinta primaria, no un anillo de color: el acento aquí sería el del
+   proyecto que se esté mirando, y ninguna de estas cinco preferencias es de un proyecto
+   (spec 3.1). El icono hereda la tinta por `currentcolor`, así que se apaga y se enciende con
+   el texto sin una regla aparte.
+
+   Se levanta de su pista en vez de hundirse en ella, que es como macOS dibuja un segmentado:
+   sobre un fondo que ya es una veladura oscura, otra veladura oscura encima no destaca nada. */
+.settings__choice.is-selected {
+  background: var(--track-on);
+  box-shadow: var(--track-lift);
+  color: var(--ink-primary);
+}
+
+/* ── Interruptor ─────────────────────────────────────────────────────────────────────── */
+
+/* El del arranque automático, que es el único booleano del popover. Las medidas son las del
+   sistema —38×22 con pulgar de 18— y no una aproximación: un interruptor con otras
+   proporciones es de lo primero que delata un control hecho a mano, y aquí todos lo están.
+
+   El encendido va con `--accent-app` y no con `--accent`: el popover se dibuja dentro de
+   `.panel`, así que dentro de un proyecto `--accent` es el color de ese proyecto — y el
+   arranque automático no es de ningún proyecto (spec 8). */
+.switch {
+  --switch-width: 38px;
+  --switch-height: 22px;
+  --switch-thumb: 18px;
+  /* El aire entre el pulgar y la pista, arriba, abajo y a los dos lados. De él sale también el
+     recorrido, que es el ancho menos el pulgar menos sus dos márgenes. */
+  --switch-inset: calc((var(--switch-height) - var(--switch-thumb)) / 2);
+
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  padding: 0;
+  border: 0;
+  /* Píldora, y escrito así para que siga al alto si alguna vez cambia. Va después de la regla
+     de foco de `primitives.css`, que impone un radio de 3px a todo lo que se enfoca: sin esto
+     el interruptor se volvería un rectángulo al llegarle el teclado. */
+  border-radius: calc(var(--switch-height) / 2);
+  background: var(--track-bg);
+  cursor: default;
+  transition: background 150ms ease-out;
+}
+
+.switch[aria-checked="true"] {
+  background: var(--accent-app);
+}
+
+/* El anillo de foco sigue el radio del elemento, y la regla de foco de `primitives.css` impone
+   `border-radius: 3px` a todo lo que se enfoca. Con `[data-teclado]` esa regla suma cuatro
+   clases de especificidad y gana, así que sin esto llegarle el teclado convertiría la píldora
+   en un rectángulo — y justo en el único momento en que el anillo se dibuja. Mismo peso y
+   declarado después, que es lo que hace falta para devolvérselo. */
+:root[data-teclado] .switch:focus,
+:root[data-teclado] .switch:focus-visible {
+  border-radius: calc(var(--switch-height) / 2);
+}
+
+/* Blanco en los dos modos, como el del sistema: el pulgar de macOS no se invierte en oscuro.
+   La sombra es lo que lo despega de la pista — sin ella, apagado sobre una pista clara se
+   pierde — y el filo de 0.5px hace lo mismo sobre el acento encendido, donde una sombra
+   difusa sola no marca el borde. */
+.switch__thumb {
+  position: absolute;
+  top: var(--switch-inset);
+  left: var(--switch-inset);
+  width: var(--switch-thumb);
+  height: var(--switch-thumb);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 24%),
+    0 0 0 0.5px rgb(0 0 0 / 6%);
+  transition: transform 150ms ease-out;
+}
+
+.switch[aria-checked="true"] .switch__thumb {
+  transform: translateX(
+    calc(var(--switch-width) - var(--switch-thumb) - var(--switch-inset) * 2)
+  );
+}
+
+/* El pulgar salta en vez de recorrer, y la pista cambia de color sin desvanecerse. El estado
+   se sigue viendo entero; lo que se va es el movimiento (criterio 7). */
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .switch__thumb {
+    transition: none;
+  }
 }
 
 /* 18px, que es exactamente el alto al que macOS dibuja el icono en la barra: la
    previsualización no es una versión del glifo, es el glifo. */
-.settings__glyph-tinta {
+.settings__glifo {
   width: 18px;
   height: 18px;
-  background: var(--ink-secondary);
+  background: currentcolor;
   mask-size: 18px 18px;
   -webkit-mask-size: 18px 18px;
-}
-
-.settings__glyph.is-selected .settings__glyph-tinta {
-  background: var(--ink-primary);
 }
 
 /* Mientras se escribe el export, el renglón no acepta un segundo clic. */
@@ -169,13 +398,8 @@
   letter-spacing: 0.02em;
 }
 
-/* La versión no es un renglón que se pueda tocar: va en mono, con la sangría de las etiquetas
-   del menú, y sin el relleno horizontal que sugeriría que se puede pulsar. */
-.settings__version {
-  margin: 2px 8px 2px 4px;
-  font-family: var(--font-data);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: var(--ink-tertiary);
-}
+/* La versión ya no es un renglón suelto al final: es el encabezado de su grupo
+   (`.settings__section`). Colgando sola debajo de «Buscar actualizaciones» se leía como el
+   subtítulo de ese botón —el número que el botón acababa de encontrar— cuando es lo contrario:
+   lo que hay puesto, y el botón es lo que cuelga de ello. De paso desaparece una línea huérfana
+   y el grupo pasa a tener nombre, que es lo que le faltaba. */

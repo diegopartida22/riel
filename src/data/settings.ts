@@ -13,11 +13,16 @@ import { execute, select } from "./db";
  */
 export type Retention = 7 | 30 | 90 | null;
 
-export const RETENTIONS: { value: Retention; label: string }[] = [
-  { value: 7, label: "7 días" },
-  { value: 30, label: "30 días" },
-  { value: 90, label: "90 días" },
-  { value: null, label: "Siempre" },
+/**
+ * `short` es lo que se dibuja en la fila de opciones de Ajustes, donde las cuatro tienen que
+ * caber una junto a otra; `label` es lo que se lee —el tooltip y el nombre para quien navega
+ * a ciegas— y ahí «7 d» no vale.
+ */
+export const RETENTIONS: { value: Retention; label: string; short: string }[] = [
+  { value: 7, label: "7 días", short: "7 d" },
+  { value: 30, label: "30 días", short: "30 d" },
+  { value: 90, label: "90 días", short: "90 d" },
+  { value: null, label: "Siempre", short: "Siempre" },
 ];
 
 export const DEFAULT_RETENTION: Retention = 30;
