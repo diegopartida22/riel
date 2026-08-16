@@ -28,10 +28,13 @@ Dentro:
 - La carpeta de un proyecto y el botón que la abre en el editor (§13).
 - El esquema `riel://`, para escribir una tarea desde otra app sin abrir el panel (§14).
 - La agenda del día: los eventos del Calendario de hoy, encima de la lista de Hoy (§15).
+- El vínculo con los Recordatorios de Apple, para las listas que se elijan (§16).
 
 Fuera de la v1, no lo construyas:
 
-- Sincronización, cuentas, nube.
+- Sincronización, cuentas, nube. El vínculo de §16 no es una excepción: no hay servidor, no hay
+  cuenta y no sale nada de esta Mac — habla con otra app del sistema por su base local, igual
+  que §15 habla con el Calendario.
 - Subtareas anidadas más allá de un nivel.
 - Atajo global de teclado.
 - Adjuntos, etiquetas, colaboración.
@@ -835,3 +838,158 @@ Reglas:
 - **Ninguna tarea se crea desde un evento y ningún evento desde una tarea.** Serían dos originales
   de lo mismo, y entonces habría que decidir qué pasa al editar uno de los dos, al borrar el otro
   y al desactivar el permiso — que es una sincronización, no una lectura, y no es esto.
+
+---
+
+## 16. Los Recordatorios de Apple
+
+Añadido después de la v1. Es la tercera cosa que cruza el borde de la app y la única de las tres
+que además **escribe** fuera, así que hay que ser preciso sobre qué escribe: una casilla.
+
+Existe porque en un iPhone no hay Riel. Lo que se dicta al reloj, lo que se pide desde el coche y
+lo que llega compartido de otra persona cae en Recordatorios, y sin vínculo la elección es tener
+la lista partida en dos o copiar a mano de una app a otra. Traerlo es lo que permite que Riel sea
+donde se mira el día sin dejar de recoger lo que se apuntó lejos de la Mac.
+
+### 16.1 Hasta dónde llega
+
+Ida y vuelta, pero solo sobre lo vinculado:
+
+- Los recordatorios **sin completar** de las listas elegidas entran en Riel como tareas.
+- Completar la tarea en Riel marca el recordatorio; completar el recordatorio en el iPhone marca
+  la tarea. El deshacer de los 3 segundos (§3.6) también lo desmarca allá.
+- **Riel no crea recordatorios.** Lo que se escribe aquí se queda aquí.
+
+Esa asimetría es la decisión, no una etapa a medio hacer. Un vínculo que escribiera en los dos
+sentidos convertiría cualquier error de esta app en la lista de otra app estropeada, y de las dos
+la que lleva años ahí y tiene el respaldo de iCloud detrás no es esta. Escribir una casilla es
+reversible con un clic; crear, editar y borrar no lo es.
+
+Por eso **lo único que Riel escribe fuera de su base es `isCompleted`**. Ni el título, ni las
+notas, ni la fecha, ni la lista, ni la prioridad, ni el orden. No hay ningún camino en la app que
+lo haga.
+
+### 16.2 Quién manda cuando los dos lados cambiaron
+
+La regla cabe en una línea, y todo lo demás sale de ella:
+
+> **Si el recordatorio cambió fuera desde la última vez que Riel lo miró, manda el recordatorio.
+> Si no cambió, manda Riel.**
+
+El árbitro es `lastModifiedDate`, que EventKit ya lleva por su cuenta, guardado en el vínculo
+junto al identificador. No hace falta nada más y no puede haber menos: sin él, «lo completaron en
+el iPhone» y «Riel lo completó y el empuje se quedó a medias» son exactamente el mismo par de
+estados —uno hecho de un lado y no del otro— y piden resultados opuestos.
+
+Lo que se gana con eso, y que es la razón de elegir un sello y no un contador de versiones:
+
+- Es independiente del orden. Da igual cuál de los dos lados se mire primero.
+- Se cura solo. Si el vínculo no llegó a sellarse tras traer un cambio, la pasada siguiente lo
+  vuelve a traer: escribir lo mismo encima de lo mismo no rompe nada.
+- Un empuje que falló —Recordatorios cerrado a la fuerza, iCloud caído— se distingue de un cambio
+  ajeno y se reintenta solo, sin pila de pendientes ni cola que mantener.
+
+Que mandar signifique **pisar** lo editado aquí es la parte incómoda y también la correcta: si se
+cambia el título de una tarea vinculada y en paralelo cambia el recordatorio, gana el
+recordatorio. Vincular una tarea a algo que vive en otra app es exactamente aceptar eso, y la
+alternativa —fusionar campo por campo— pide inventar reglas que nadie puede predecir de memoria.
+
+### 16.3 Lo que nunca pasa
+
+- **Nada se borra por lo que le falte al otro lado.** Un recordatorio que desaparece no se lleva
+  su tarea: si lo que falló fue iCloud y no un borrado, la pasada siguiente lo encuentra donde
+  estaba, y mientras tanto la tarea sigue ahí. Y una tarea eliminada en Riel no borra su
+  recordatorio — borrar fuera lo que se borró aquí es lo que la §16.1 promete no hacer.
+- **Una tarea eliminada no vuelve.** Su vínculo se queda como lápida —el identificador con la
+  tarea en nulo— para que la pasada siguiente lo reconozca y no lo trate como recién llegado.
+  Sin lápida, borrar una tarea vinculada la haría reaparecer treinta segundos después, que es de
+  las peores cosas que puede hacer una lista.
+- **Los recordatorios que se repiten se quedan fuera.** Recordatorios ya los hace volver por su
+  cuenta, y encima de una tarea recurrente de Riel (§12) serían dos calendarios discutiendo: al
+  completarla, EventKit adelanta el recordatorio a la vuelta siguiente y Riel además dejaría otra
+  detrás. La hoja de listas dice cuántos hay y por qué, cuando hay alguno.
+- **Desvincular una lista no toca las tareas que ya trajo**, pero sí deja de escribirlas en los
+  dos sentidos: «solo lo vinculado» es literal. El vínculo se queda de todas formas, y no es
+  contradicción — es lo que hace que volver a vincular la lista reconozca la tarea que ya existe
+  en vez de crear una segunda igual.
+
+### 16.4 El proyecto es de Riel
+
+Una tarea que llega de Recordatorios **entra sin proyecto**, igual que una que llega por un
+`riel://` (§14): lo que no dice el origen no lo pone la vista que se estuviera mirando. Una lista
+de Recordatorios no es un proyecto de Riel, y adivinar la equivalencia por el nombre acierta una
+vez y falla las demás.
+
+Y el proyecto que se le dé aquí **se queda puesto para siempre**, aunque el recordatorio cambie
+fuera y mande él (§16.2). El proyecto no está entre los campos que se copian, así que no hay nada
+que pisar. Es lo que permite que el vínculo sea útil: se recoge lo apuntado en el iPhone, se
+archiva aquí, y editarlo en el iPhone no lo devuelve al montón.
+
+### 16.5 La tabla del vínculo
+
+```sql
+CREATE TABLE reminder_links (
+  reminder_id TEXT PRIMARY KEY,
+  task_id     TEXT,
+  changed     REAL NOT NULL DEFAULT 0
+);
+```
+
+Tabla aparte y no dos columnas en `tasks`, porque un vínculo tiene que poder sobrevivir a su
+tarea (la lápida de §16.3) y una columna no sobrevive a su fila.
+
+Y **`task_id` a propósito sin clave foránea**, que es lo que más se va a querer «arreglar» al
+leerlo. Con `ON DELETE SET NULL` la lápida saldría gratis, pero una importación en modo
+reemplazar (§8) vacía `tasks` y vuelve a insertar las mismas filas con los mismos identificadores:
+la foránea convertiría de golpe todos los vínculos en lápidas, y el archivo que se acaba de
+restaurar quedaría con sus tareas sin poder volver a hablar con sus recordatorios. Sin foránea,
+las tareas vuelven a existir con su mismo id y el vínculo las encuentra donde estaban.
+
+### 16.6 Permiso, listas y cadencia
+
+- **Viene apagado, y encenderlo es lo que pregunta**, igual que la agenda (§15) y los avisos (§7).
+  El interruptor está en Ajustes. Mientras el sistema no diga cómo está el permiso, no se pulsa.
+- **`NSRemindersFullAccessUsageDescription` y `NSRemindersUsageDescription` en el `Info.plist`,
+  las dos**, por lo mismo que las dos del Calendario: la clave cambió en macOS 14 y la app se
+  instala desde la 13, y sin ellas pedir el permiso levanta una excepción y se lleva el proceso.
+  El texto no puede decir «solo se lee», porque completar escribe: dice qué escribe y qué no.
+- **Denegado se dice una vez y no se insiste**: una nota en Ajustes con el enlace a Privacidad →
+  Recordatorios. El interruptor se queda encendido, que es lo que se pidió.
+- **Qué listas se vinculan se elige en el área de contenido, no dentro del popover**, por lo mismo
+  que la importación (§8): del `⚙︎` sale solo la pregunta de cuáles. Cada lista es una fila con
+  interruptor —la misma gramática de Ajustes— y **con su conteo de pendientes al lado del
+  nombre**, porque «Trabajo» a secas no dice si vincularla trae cinco tareas o doscientas, que es
+  justo lo que se está decidiendo. Cada interruptor guarda al pulsarse; el botón es «Listo» y no
+  «Guardar», y al cerrarse pide una pasada sin esperar.
+- **Se sincroniza al arrancar y al abrir el panel, no con un temporizador**, por lo mismo que los
+  avisos (§7), el actualizador (§11) y la agenda (§15): con el panel cerrado macOS estrangula la
+  webview. Con un mínimo de 30 segundos entre pasadas automáticas, que es corto de sobra para que
+  lo completado en el iPhone se vea al abrir, y largo de sobra para que abrir y cerrar el panel no
+  lo repita. Pedirlo a mano se lo salta.
+- **Un fallo no se enseña**, como el del actualizador: la app funciona igual sin el vínculo y la
+  próxima apertura lo vuelve a intentar.
+
+### 16.7 Qué se le pregunta a EventKit
+
+Dos preguntas por pasada y ninguna barre nada:
+
+1. Los **sin completar** de las listas elegidas. Los completados de una cuenta con años encima son
+   miles de filas y de ellas solo importan las que Riel ya tiene vinculadas.
+2. Los **ya vinculados, por identificador**. Es lo que cubre la vuelta: uno completado en el
+   iPhone deja de salir entre los pendientes, y sin preguntar por él directamente sería
+   indistinguible de uno borrado. Es una búsqueda por clave, así que preguntar por unos cuantos
+   cientos no cuesta nada.
+
+La segunda tiene un respaldo y conviene saber por qué está: Apple documenta la búsqueda por
+identificador como perezosa para los recordatorios —puede contestar nada mientras nadie los haya
+traído antes—, y en el sistema donde eso pasara la vuelta dejaría de funcionar en silencio, que es
+la peor forma de fallar. Cuando no aparece **ninguno** de los pedidos se barre la lista entera,
+completados incluidos, y se cruza con lo que se preguntaba. Ninguno de muchos es la firma de una
+API que no contesta; que falte uno es simplemente que lo borraron, y eso no dispara nada.
+
+La capa de Rust es tonta a propósito, como la de la agenda: sabe el permiso, sabe traer y sabe
+marcar uno. Qué entra, quién gana y qué no se toca nunca lo decide TypeScript, que es donde está
+la base.
+
+Ojo con el nombre al leer el código: `notify::Reminder` es un aviso programado del sistema (§7) y
+no tiene nada que ver con esto. Son dos cosas que en castellano se llaman igual.

@@ -19,6 +19,7 @@ import {
   moveProject,
   moveTask,
   pendingCountByProject,
+  pushDone,
   renameProject,
   restoreProject,
   restoreTasks,
@@ -608,6 +609,7 @@ export function useRiel(): RielState {
         .then(async (ids) => {
           if (!ids.length) return;
           for (const id of ids) await completeTask(id);
+          void pushDone(ids, true);
           setEpoch((current) => current + 1);
           await refreshCounts();
         })
@@ -699,6 +701,11 @@ export function useRiel(): RielState {
           const { ids, at, spawned } = await completeTask(task.id);
           if (!ids.length) return;
 
+          // Hacia fuera y sin esperar: si la tarea está vinculada a un recordatorio (spec 16),
+          // la casilla se marca también allá. No se espera porque el gesto ya está guardado
+          // aquí y EventKit puede tardar; si el empuje no llega, la próxima pasada lo repite.
+          void pushDone(ids, true);
+
           stamp(ids, at);
           setUndoing((current) => new Set(current).add(task.id));
           pending.current.set(task.id, {
@@ -736,6 +743,9 @@ export function useRiel(): RielState {
           if (entry?.spawned) await undoSpawn(entry.spawned, entry.source);
           const ids = entry?.ids ?? [task.id];
           await uncompleteTasks(ids);
+          // El deshacer de los tres segundos tiene que llegar también al recordatorio: sin
+          // esto, arrepentirse en Riel dejaría el recordatorio marcado en el iPhone.
+          void pushDone(ids, false);
           stamp(ids, null);
           unmarkLeaving(task.id);
           unmarkUndoing(task.id);

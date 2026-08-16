@@ -6,6 +6,7 @@ import type { Project } from "./data";
 import { tint } from "./design/palette";
 import { useAgenda } from "./state/agenda";
 import { useDevMode } from "./state/editors";
+import { useReminders } from "./state/reminders";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
 import { acceptsNew } from "./state/views";
@@ -15,6 +16,7 @@ import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
 import { ImportSheet } from "./ui/ImportSheet";
 import { ProjectEditor } from "./ui/ProjectEditor";
 import { Rail } from "./ui/Rail";
+import { RemindersSheet } from "./ui/RemindersSheet";
 import { SettingsPopover } from "./ui/SettingsPopover";
 import { TopBar } from "./ui/TopBar";
 import { SearchResults } from "./views/SearchResults";
@@ -35,11 +37,13 @@ export default function App() {
   const updates = useUpdates();
   const dev = useDevMode();
   const agenda = useAgenda(riel.today);
+  const reminders = useReminders(riel.reloadAll);
   const composer = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const [settings, setSettings] = useState<DOMRect | null>(null);
   const [importing, setImporting] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [wantsCapture, setWantsCapture] = useState(false);
 
   useFocoDeTeclado();
@@ -71,6 +75,7 @@ export default function App() {
       setSettings(null);
       setEditing(null);
       setImporting(false);
+      setPicking(false);
       select({ kind: startView });
     });
     return () => {
@@ -105,6 +110,8 @@ export default function App() {
           riel.setQuery("");
         } else if (importing) {
           setImporting(false);
+        } else if (picking) {
+          setPicking(false);
         } else if (editing) {
           setEditing(null);
         } else if (riel.detail) {
@@ -153,7 +160,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, importing, riel]);
+  }, [editing, importing, picking, riel]);
 
   // Dentro de un proyecto, el acento de todo el panel es el suyo (spec 3.1). Fuera, se queda
   // el grafito neutro y el color solo aparece en el punto de cada fila.
@@ -207,6 +214,17 @@ export default function App() {
           agenda={agenda.enabled}
           onAgenda={agenda.setEnabled}
           calendar={agenda.permission}
+          reminders={reminders.enabled}
+          onReminders={reminders.setEnabled}
+          remindersPermission={reminders.permission}
+          reminderLists={reminders.lists.length}
+          onPickLists={() => {
+            // Igual que la importación: la hoja se lo lleva el área de contenido entera, así
+            // que lo que hubiera puesto ahí se cierra antes.
+            setEditing(null);
+            riel.closeDetail();
+            setPicking(true);
+          }}
           updates={updates}
           onImport={() => {
             // La hoja se lo lleva todo el área de contenido, así que lo que hubiera puesto ahí
@@ -240,6 +258,17 @@ export default function App() {
             <ImportSheet
               onImported={() => void riel.reloadAll()}
               onClose={() => setImporting(false)}
+            />
+          ) : picking ? (
+            <RemindersSheet
+              lists={reminders.lists}
+              onLists={reminders.setLists}
+              onClose={() => {
+                setPicking(false);
+                // Al salir, sin esperar al mínimo entre pasadas: quien acaba de vincular una
+                // lista viene a ver sus tareas, no a esperar medio minuto.
+                reminders.sync();
+              }}
             />
           ) : editing ? (
             <ProjectEditor
@@ -338,9 +367,9 @@ export default function App() {
           </button>
         </div>
 
-        {/* El pie no captura mientras se edita un proyecto, se importa un archivo o se lee el
-            detalle de una tarea: en ninguno de los tres hay una lista delante a la que agregar. */}
-        {!editing && !importing && !riel.detail && acceptsNew(riel.view) && (
+        {/* El pie no captura mientras hay una hoja delante —editar un proyecto, importar, elegir
+            listas— ni leyendo el detalle de una tarea: en ninguno hay lista a la que agregar. */}
+        {!editing && !importing && !picking && !riel.detail && acceptsNew(riel.view) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}

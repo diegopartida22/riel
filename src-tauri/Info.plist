@@ -17,6 +17,13 @@
 	<string>Riel enseña los eventos de hoy encima de tus tareas. Solo los lee: no crea, edita ni borra nada, y no sale nada de esta Mac.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Riel enseña los eventos de hoy encima de tus tareas. Solo los lee: no crea, edita ni borra nada, y no sale nada de esta Mac.</string>
+	<!-- Lo mismo para Recordatorios (§16), y por el mismo par de claves. Aquí el texto no puede
+	     decir que solo se lee, porque no es verdad: completar en Riel marca el recordatorio.
+	     Lo que sí dice es lo único que se escribe. -->
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Riel trae como tareas los recordatorios de las listas que elijas. Lo único que escribe de vuelta es marcarlos hechos: no crea, edita ni borra recordatorios, y no sale nada de esta Mac.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Riel trae como tareas los recordatorios de las listas que elijas. Lo único que escribe de vuelta es marcarlos hechos: no crea, edita ni borra recordatorios, y no sale nada de esta Mac.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -93,6 +93,12 @@ export function tasksInProject(projectId: string): Promise<Task[]> {
   return query("completed_at IS NULL AND parent_id IS NULL AND project_id = $1", [projectId]);
 }
 
+/** Varias por id, en una sola consulta. Lo usa la sincronización con Recordatorios (spec 16). */
+export async function tasksByIds(ids: string[]): Promise<Task[]> {
+  if (!ids.length) return [];
+  return query(`id IN (${placeholders(ids.length)})`, ids);
+}
+
 export async function subtasksOf(parentIds: string[]): Promise<Task[]> {
   if (!parentIds.length) return [];
   return query(`parent_id IN (${placeholders(parentIds.length)})`, parentIds);

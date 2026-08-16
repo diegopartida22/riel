@@ -20,6 +20,7 @@ import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
 import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
 import { SYSTEM_ICONS } from "./Rail";
+import { Switch } from "./Switch";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
@@ -40,6 +41,14 @@ export interface SettingsPopoverProps {
   agenda: boolean;
   onAgenda: (value: boolean) => void;
   calendar: Permission | null;
+  /** El vínculo con Recordatorios y su permiso (spec 16). */
+  reminders: boolean;
+  onReminders: (value: boolean) => void;
+  remindersPermission: Permission | null;
+  /** Cuántas listas están vinculadas, para no mandar a elegir a quien ya eligió. */
+  reminderLists: number;
+  /** Abre la hoja de listas, que vive en el área de contenido como la de importación. */
+  onPickLists: () => void;
   updates: Updates;
   /** Abre la hoja de importación, que vive en el área de contenido y no aquí dentro. */
   onImport: () => void;
@@ -53,6 +62,9 @@ const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notif
 
 /** El de Privacidad → Calendarios, para lo mismo con la agenda (spec 15). */
 const CALENDAR_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars";
+
+/** Y el de Privacidad → Recordatorios (spec 16). */
+const REMINDERS_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders";
 
 /**
  * Lo que contesta Rust sobre el arranque al iniciar sesión.
@@ -181,51 +193,6 @@ function Choices<T>({
 }
 
 /**
- * El interruptor de las dos preferencias booleanas: el arranque automático y la agenda.
- *
- * Para las dos, un segmentado de «Sí / No» era pedirle al
- * lector que tradujera dos palabras a un estado que el control ya puede *tener*. Un interruptor
- * lo dice sin leer nada: la posición del pulgar es el valor. Las medidas son las de macOS —38×22
- * con pulgar de 18, y 150ms de recorrido— porque un interruptor con otras proporciones es de lo
- * primero que delata que un control está hecho a mano.
- *
- * Mientras `launchd` no conteste, el del arranque va apagado y sin aceptar clics: no hay
- * posición para «todavía no se sabe», y dejarlo pulsable antes de conocer el estado convertiría
- * el primer clic en un volado. El de la agenda sabe su valor desde el primer pintado —vive en
- * `localStorage`— pero tampoco se pulsa hasta que el sistema diga cómo está el permiso, que es
- * lo que decide qué pasa al encenderlo. Los dos contestan en milisegundos.
- */
-function Switch({
-  label,
-  value,
-  disabled = false,
-  onPick,
-}: {
-  label: string;
-  value: boolean | null;
-  /** Aparte de `value === null`: el estado se conoce, pero esta copia no puede cambiarlo. */
-  disabled?: boolean;
-  onPick: (value: boolean) => void;
-}) {
-  return (
-    <div className="settings__row">
-      <span className="settings__label">{label}</span>
-      <button
-        type="button"
-        className="switch"
-        role="switch"
-        aria-label={label}
-        aria-checked={value ?? false}
-        disabled={disabled || value === null}
-        onClick={() => onPick(!value)}
-      >
-        <span className="switch__thumb" />
-      </button>
-    </div>
-  );
-}
-
-/**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
  */
 export function SettingsPopover({
@@ -244,6 +211,11 @@ export function SettingsPopover({
   agenda,
   onAgenda,
   calendar,
+  reminders,
+  onReminders,
+  remindersPermission,
+  reminderLists,
+  onPickLists,
   updates,
   onImport,
   onClose,
@@ -284,7 +256,20 @@ export function SettingsPopover({
       top: Math.max(EDGE, Math.min(anchor.bottom + 6, window.innerHeight - own.height - EDGE)),
       left: Math.min(Math.max(EDGE, anchor.right - own.width), window.innerWidth - own.width - EDGE),
     });
-  }, [anchor, version, autostart, notify, updates.state, pruning, editors, agenda, calendar]);
+  }, [
+    anchor,
+    version,
+    autostart,
+    notify,
+    updates.state,
+    pruning,
+    editors,
+    agenda,
+    calendar,
+    reminders,
+    remindersPermission,
+    reminderLists,
+  ]);
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -393,7 +378,7 @@ export function SettingsPopover({
           preferencias es el único sin rótulo porque es para lo que existe el popover; ponerle
           «PREFERENCIAS» encima sería rotular la caja entera desde dentro.
 
-          Los dos booleanos van primero y juntos, con interruptor y no con un segmentado de
+          Los tres booleanos van primero y juntos, con interruptor y no con un segmentado de
           «Sí / No»: es el control con el que el sistema dice esto, y un estado que el control
           puede *tener* no hace falta además escribirlo. Juntos, además, dejan las de lista
           cerrada en un bloque seguido; intercalado, un interruptor entre dos segmentados parte
@@ -438,6 +423,46 @@ export function SettingsPopover({
             Riel no tiene acceso al Calendario, así que la agenda de hoy sale vacía.
           </p>
           <button type="button" className="menu__item" onClick={() => void openUrl(CALENDAR_PANE)}>
+            Abrir Ajustes del Sistema
+          </button>
+        </>
+      )}
+
+      {/* El vínculo con Recordatorios (spec 16). Apagado de fábrica, y por lo mismo que la
+          agenda: encenderlo es lo que levanta la pregunta del sistema. El nombre dice con qué se
+          vincula y no lo que hace — «Sincronizar» prometería los dos sentidos enteros, y de
+          vuelta solo sale la casilla. Eso lo explica la hoja, que es donde se elige. */}
+      <Switch
+        label="Recordatorios de Apple"
+        value={reminders}
+        disabled={remindersPermission === null || remindersPermission === "unavailable"}
+        onPick={onReminders}
+      />
+
+      {/* Elegir listas es lo que hace que el vínculo haga algo: encendido y sin ninguna, no
+          entra nada. Por eso el renglón sale en cuanto se enciende y no solo cuando se pide, y
+          por eso dice cuántas hay puestas — encendido sin listas se lee como roto. */}
+      {reminders && remindersPermission === "granted" && (
+        <button
+          type="button"
+          className="menu__item"
+          onClick={() => {
+            onPickLists();
+            onClose();
+          }}
+        >
+          {reminderLists === 0
+            ? "Elegir listas…"
+            : `${reminderLists} ${reminderLists === 1 ? "lista vinculada" : "listas vinculadas"}…`}
+        </button>
+      )}
+
+      {reminders && remindersPermission === "denied" && (
+        <>
+          <p className="settings__note">
+            Riel no tiene acceso a Recordatorios, así que no puede traer nada ni marcar nada.
+          </p>
+          <button type="button" className="menu__item" onClick={() => void openUrl(REMINDERS_PANE)}>
             Abrir Ajustes del Sistema
           </button>
         </>

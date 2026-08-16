@@ -8,6 +8,7 @@ export * from "./repeat";
 export * from "./projects";
 export * from "./tasks";
 export * from "./settings";
+export * from "./reminders";
 export * from "./backup";
 export * from "./import";
 export { localDay, localIso, dayOf, nextDay } from "./time";

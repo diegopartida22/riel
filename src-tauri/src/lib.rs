@@ -7,6 +7,7 @@ mod editor;
 mod glass;
 mod notify;
 mod panel;
+mod reminders;
 mod tray;
 
 use tauri::Manager;
@@ -182,6 +183,48 @@ fn agenda(from: f64, to: f64) -> Vec<agenda::Event> {
     agenda::events(from, to)
 }
 
+/// El estado del permiso de Recordatorios, con el mismo vocabulario que los otros dos.
+#[tauri::command]
+fn reminders_permission() -> String {
+    reminders::permission()
+}
+
+/// La pregunta del sistema, al encender el vínculo en Ajustes. Por lo mismo que la agenda: se
+/// pide donde se ve para qué es, y no en el primer arranque.
+#[tauri::command]
+fn request_reminders_permission() -> bool {
+    reminders::request()
+}
+
+/// Las listas de Recordatorios, para elegir cuáles se vinculan.
+#[tauri::command]
+fn reminder_lists() -> Vec<reminders::List> {
+    reminders::lists()
+}
+
+/// Los recordatorios sin completar de esas listas. Sin listas no devuelve nada: vincular
+/// «ninguna» no puede querer decir «todas».
+#[tauri::command]
+fn fetch_reminders(lists: Vec<String>) -> Vec<reminders::Reminder> {
+    reminders::fetch(&lists)
+}
+
+/// Recordatorios concretos, por identificador. Es como se sabe qué fue de los ya vinculados,
+/// que por estar completados no salen entre los pendientes. `lists` no filtra nada: es por dónde
+/// buscar si la búsqueda por identificador no contesta.
+#[tauri::command]
+fn reminders_by_id(ids: Vec<String>, lists: Vec<String>) -> Vec<reminders::Reminder> {
+    reminders::by_id(&ids, &lists)
+}
+
+/// Lo único que Riel escribe fuera de su base: la casilla de un recordatorio vinculado.
+/// Devuelve su nueva fecha de modificación, que es lo que evita que la pasada siguiente lea
+/// esta escritura como un cambio venido de fuera.
+#[tauri::command]
+fn set_reminder_done(id: String, done: bool) -> Result<f64, String> {
+    reminders::set_done(&id, done)
+}
+
 /// Cierra la app desde Ajustes.
 ///
 /// Sin Dock y sin ⌘Tab (spec 4), una app de la barra no tiene ⌘Q ni menú de aplicación, así
@@ -241,6 +284,12 @@ pub fn run() {
             calendar_permission,
             request_calendar_permission,
             agenda,
+            reminders_permission,
+            request_reminders_permission,
+            reminder_lists,
+            fetch_reminders,
+            reminders_by_id,
+            set_reminder_done,
             quit,
             restart
         ])

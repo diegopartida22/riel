@@ -94,8 +94,9 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
   "UNNotificationTrigger",
   "UNUserNotificationCenter",
 ] }
-# La agenda del día (spec 15). Es la misma API de la que lee Calendario.app, y se usa solo para
-# leer: nada de crear, editar ni borrar eventos.
+# La agenda del día (spec 15) y el vínculo con Recordatorios (spec 16). Es la misma API de la
+# que leen Calendario.app y Recordatorios.app. De los eventos solo se lee; de los recordatorios
+# se lee y se escribe una sola cosa, la casilla de completado.
 objc2-event-kit = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
@@ -105,6 +106,7 @@ objc2-event-kit = { version = "0.3", default-features = false, features = [
   "EKEventStore",
   "EKObject",
   "EKParticipant",
+  "EKReminder",
   "EKTypes",
 ] }
 block2 = "0.6"

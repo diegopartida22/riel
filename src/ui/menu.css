@@ -183,6 +183,38 @@
   white-space: nowrap;
 }
 
+/* Las filas de la hoja de Recordatorios (spec 16): la misma gramática de Ajustes —nombre a la
+   izquierda, estado a la derecha— pero fuera del popover, donde no hay renglones de menú con los
+   que alinearse. Y con el nombre encogible: el interruptor no puede acabar fuera del panel
+   porque alguien llamara a una lista «Cosas de casa para el fin de semana». */
+.editor__lists .settings__row {
+  margin: 0;
+}
+
+.editor__lists .settings__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+}
+
+.editor__lists .settings__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* El conteo junto al nombre de una lista de Recordatorios (spec 16). Es un dato y no un rótulo,
+   así que va en mono y tabular como todos los números de la app (§3.3): las cifras de las filas
+   quedan en columna y la hoja no baila al cambiar de dos a tres dígitos. */
+.settings__hint {
+  margin-left: 6px;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+}
+
 /* Las notas del popover: el permiso denegado, el estado del actualizador, lo que va a borrar
    bajar la retención. Dicen qué pasó y qué hacer, sin disculparse (spec 3.8). */
 .settings__note {
