@@ -122,6 +122,38 @@ if (!identity)
       "  Sin firma, macOS no entrega las notificaciones de las tareas con hora.",
   );
 
+// Notarizar es lo que le quita a un tercero el «Apple no puede comprobar si contiene software
+// malicioso», y solo se puede con un certificado «Developer ID Application»: los de «Apple
+// Development» firman igual de bien pero Apple no los notariza, porque son para probar en las
+// máquinas del equipo y no para repartir. Se mira aquí, con el resto: `tauri build` son minutos
+// y una credencial que falta no se descubriría hasta el final.
+const notarizable = /^Developer ID Application:/.test(identity);
+const conPassword = ["APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
+const conLlave = ["APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH"];
+const puedeNotarizar = [conPassword, conLlave].some((set) => set.every((v) => process.env[v]));
+
+// Con Developer ID y sin credenciales sale lo peor de las dos: el certificado bueno, ninguna
+// grapa, y Gatekeeper bloqueando igual. Eso no se avisa, se para.
+if (notarizable && !puedeNotarizar)
+  die(
+    "Estás firmando con Developer ID pero faltan las credenciales para notarizar.\n" +
+      '  export APPLE_ID="tu@correo"\n' +
+      '  export APPLE_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # contraseña específica de app\n' +
+      '  export APPLE_TEAM_ID="2YDZQVNG3D"\n' +
+      "  O las tres de la llave de App Store Connect: APPLE_API_KEY, APPLE_API_ISSUER,\n" +
+      "  APPLE_API_KEY_PATH.",
+  );
+
+// Al revés no se para: firmar con un certificado de desarrollo es lo que había antes de que
+// esto existiera, y sigue sirviendo para actualizar copias ya instaladas. Pero se dice, porque
+// el aviso que suelta `tauri build` pasa entre cientos de líneas y nadie lo ve.
+if (!notarizable)
+  console.warn(
+    `\n⚠︎  «${identity}» no es un «Developer ID Application»: el paquete NO se va a notarizar.\n` +
+      "    Las copias ya instaladas se actualizan bien; a quien baje el DMG le saltará\n" +
+      "    Gatekeeper. Notarizar pide el Apple Developer Program.\n",
+  );
+
 if (!existsSync(KEY))
   die(
     `No está la llave privada del actualizador en ${KEY}.\n` +
@@ -177,6 +209,22 @@ try {
   run("codesign", ["--verify", "--strict", app], { stdio: ["ignore", "ignore", "pipe"] });
 } catch {
   die(`${app} salió sin firmar. Revisa APPLE_SIGNING_IDENTITY.`);
+}
+
+// Y la grapa sobre el `.app`, por lo mismo: que las credenciales estuvieran puestas no
+// demuestra que Apple haya contestado que sí. Una notarización rechazada deja una línea en la
+// salida de `tauri build` y sigue empaquetando tan tranquila.
+if (notarizable) {
+  try {
+    run("xcrun", ["stapler", "validate", app], { stdio: ["ignore", "ignore", "pipe"] });
+    console.log("· Notarizado, y con la grapa puesta.");
+  } catch {
+    die(
+      `${app} salió sin la grapa de notarización.\n` +
+        "  Apple rechazó el paquete o no llegó a contestar. El detalle se pide con:\n" +
+        "  xcrun notarytool history --apple-id \"$APPLE_ID\" --team-id \"$APPLE_TEAM_ID\" --password \"$APPLE_PASSWORD\"",
+    );
+  }
 }
 
 // ── latest.json ─────────────────────────────────────────────────────────────────────────
