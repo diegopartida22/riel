@@ -6,6 +6,7 @@ import type { Project } from "./data";
 import { tint } from "./design/palette";
 import { useAgenda } from "./state/agenda";
 import { useDevMode } from "./state/editors";
+import { usePreferencias } from "./state/preferencias";
 import { useReminders } from "./state/reminders";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
@@ -34,6 +35,7 @@ const NUMBERED = ["hoy", "proximas", "todas", "completadas"] as const;
  */
 export default function App() {
   const riel = useRiel();
+  const prefs = usePreferencias();
   const updates = useUpdates();
   const dev = useDevMode();
   const agenda = useAgenda(riel.today);
@@ -62,7 +64,8 @@ export default function App() {
    * lo dejaste — que en una ventana normal sería lo correcto, pero esta se abre y se cierra
    * decenas de veces al día y la última vez casi nunca es la que importa ahora.
    */
-  const { select, startView } = riel;
+  const { select } = riel;
+  const { startView } = prefs;
   useEffect(() => {
     // Se depende de `select` y de la vista, no de `riel` entero: ese es un objeto nuevo en cada
     // render, y con él aquí el oyente se daría de baja y de alta constantemente. `listen`
@@ -93,6 +96,24 @@ export default function App() {
   }, [wantsCapture, editing, riel.detail, riel.view]);
 
   /**
+   * Lo que el oyente de teclas necesita leer, siempre en su versión de este render.
+   *
+   * Va en una `ref` por lo mismo que el oyente del panel depende de `select` y no de `riel`
+   * entero: `riel` es un objeto nuevo en cada render, así que con él en las dependencias este
+   * oyente se daba de baja y de alta con cada tecla escrita en la búsqueda y con cada fila que
+   * entra o sale de la lista. Y aquí no vale destructurar como allí, porque este usa media
+   * docena de miembros: la lista de dependencias sería media App.
+   *
+   * Se escribe en un efecto sin dependencias —después de cada render— y no durante el render.
+   * Un `keydown` se atiende siempre después de que los efectos se hayan vaciado, así que lo que
+   * lee el oyente es lo del render que se acaba de pintar.
+   */
+  const teclado = useRef({ riel, editing, importing, picking });
+  useEffect(() => {
+    teclado.current = { riel, editing, importing, picking };
+  });
+
+  /**
    * Los atajos que no dependen de dónde esté el foco (spec 5). El resto —flechas, Espacio,
    * ⏎— van con la fila enfocada y llegan con la pasada de teclado.
    *
@@ -104,6 +125,8 @@ export default function App() {
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      const { riel, editing, importing, picking } = teclado.current;
+
       if (event.key === "Escape") {
         event.preventDefault();
         if (riel.query) {
@@ -160,7 +183,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, importing, picking, riel]);
+  }, []);
 
   // Dentro de un proyecto, el acento de todo el panel es el suyo (spec 3.1). Fuera, se queda
   // el grafito neutro y el color solo aparece en el punto de cada fila.
@@ -170,14 +193,14 @@ export default function App() {
     <div
       className={[
         "panel",
-        riel.railExpanded && "is-rail-expanded",
+        prefs.railExpanded && "is-rail-expanded",
         project && !editing && "is-project tinted",
       ]
         .filter(Boolean)
         .join(" ")}
       /* Un atributo en la raíz y no una prop hasta cada fila: lo mira solo el CSS, y de aquí
          cuelgan por igual la lista, los resultados de búsqueda y las subtareas del detalle. */
-      data-texto={riel.rowText}
+      data-texto={prefs.rowText}
       style={project && !editing ? tint(project.color) : undefined}
     >
       <TopBar
@@ -202,12 +225,12 @@ export default function App() {
           anchor={settings}
           retention={riel.retention}
           onRetention={riel.setRetention}
-          startView={riel.startView}
-          onStartView={riel.setStartView}
-          rowText={riel.rowText}
-          onRowText={riel.setRowText}
-          trayGlyph={riel.trayGlyph}
-          onTrayGlyph={riel.setTrayGlyph}
+          startView={prefs.startView}
+          onStartView={prefs.setStartView}
+          rowText={prefs.rowText}
+          onRowText={prefs.setRowText}
+          trayGlyph={prefs.trayGlyph}
+          onTrayGlyph={prefs.setTrayGlyph}
           editors={dev.editors}
           editor={dev.editor}
           onEditor={dev.setEditor}
@@ -243,7 +266,7 @@ export default function App() {
           view={riel.view}
           projects={riel.projects}
           counts={riel.counts}
-          expanded={riel.railExpanded}
+          expanded={prefs.railExpanded}
           onSelect={(next) => {
             setEditing(null);
             riel.select(next);
@@ -270,6 +293,7 @@ export default function App() {
                 reminders.sync();
               }}
             />
+
           ) : editing ? (
             <ProjectEditor
               key={editing.project?.id ?? "nuevo"}
@@ -354,12 +378,12 @@ export default function App() {
           <button
             type="button"
             className="foot__toggle"
-            title={riel.railExpanded ? "Contraer el riel" : "Expandir el riel"}
-            aria-label={riel.railExpanded ? "Contraer el riel" : "Expandir el riel"}
-            aria-expanded={riel.railExpanded}
-            onClick={riel.toggleRail}
+            title={prefs.railExpanded ? "Contraer el riel" : "Expandir el riel"}
+            aria-label={prefs.railExpanded ? "Contraer el riel" : "Expandir el riel"}
+            aria-expanded={prefs.railExpanded}
+            onClick={prefs.toggleRail}
           >
-            {riel.railExpanded ? (
+            {prefs.railExpanded ? (
               <PanelLeftClose size={15} aria-hidden />
             ) : (
               <PanelLeftOpen size={15} aria-hidden />

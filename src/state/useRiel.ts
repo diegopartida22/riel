@@ -45,26 +45,19 @@ import { LINK_EVENT, parseLink, takeLinks, type Link } from "./links";
 import {
   DONE_EVENT,
   ensurePermission,
+  schedule as scheduleNotifications,
   start as startNotifications,
   takeCompleted,
 } from "./notifications";
-import { storeRowText, storedRowText, type RowText } from "./rowText";
+import { startView } from "./preferencias";
 import { rank } from "./search";
 import {
-  applyTrayGlyph,
-  storeTrayGlyph,
-  storedTrayGlyph,
-  type TrayGlyph,
-} from "./trayGlyph";
-import {
-  SYSTEM_VIEWS,
   belongs,
   draftFor,
   exiles,
   loadView,
   sameView,
   viewKey,
-  type SystemKind,
   type View,
 } from "./views";
 
@@ -77,23 +70,6 @@ const keepOpen = (value: boolean) => invoke<void>("set_keep_open", { value });
 /** Los tres segundos de gracia y los 200ms de colapso de la sección 3.6. */
 const UNDO_MS = 3000;
 const COLLAPSE_MS = 200;
-
-/** El estado de expansión del riel persiste (spec 3.4). No es un dato: no va a SQLite. */
-const RAIL_KEY = "riel:rail-expandido";
-
-/** Con qué vista se abre el panel. Tampoco es un dato: es una preferencia de esta máquina. */
-const START_KEY = "riel:vista-al-abrir";
-
-/**
- * La vista con la que arranca el panel, o Hoy si no hay nada elegido.
- *
- * Solo las cuatro del sistema. Un proyecto fijado tendría que decidir qué hacer cuando ese
- * proyecto se borra, y la respuesta —caer a otra vista— sería un ajuste que cambia solo.
- */
-function startView(): SystemKind {
-  const saved = localStorage.getItem(START_KEY);
-  return SYSTEM_VIEWS.some((each) => each.kind === saved) ? (saved as SystemKind) : "hoy";
-}
 
 /** Lo que se espera tras la última tecla antes de consultar. Una pulsación lee la base entera. */
 const TYPING_MS = 120;
@@ -191,21 +167,6 @@ export interface RielState {
   /** Mueve un proyecto en el riel, entre los dos que se le indiquen. */
   reorderProject: (id: string, between: Between) => Promise<void>;
 
-  /** La vista con la que se abre el panel, y con la que vuelve a abrirse cada vez. */
-  startView: SystemKind;
-  setStartView: (kind: SystemKind) => void;
-
-  railExpanded: boolean;
-  toggleRail: () => void;
-
-  /** Si el título de la fila se corta a una línea o se enseña entero. */
-  rowText: RowText;
-  setRowText: (value: RowText) => void;
-
-  /** Qué silueta dibuja el icono de la barra de menú (spec 4). */
-  trayGlyph: TrayGlyph;
-  setTrayGlyph: (value: TrayGlyph) => void;
-
   /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
   retention: Retention;
   setRetention: (retention: Retention) => void;
@@ -260,8 +221,9 @@ function sortBetween<T extends { id: string }>(list: T[], id: string, after: str
  */
 export function useRiel(): RielState {
   const [today, setToday] = useState(localDay);
+  // La preferencia se lee una vez, para el primer estado. Con cuál abrir es de `usePreferencias`;
+  // cuál se está viendo ahora es de aquí.
   const [view, setView] = useState<View>(() => ({ kind: startView() }));
-  const [start, setStart] = useState<SystemKind>(startView);
   const [projects, setProjects] = useState<Project[]>([]);
   const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
   const [tasks, setTasks] = useState<TaskTree[]>([]);
@@ -276,11 +238,6 @@ export function useRiel(): RielState {
   const [retention, setRetention] = useState<Retention>(DEFAULT_RETENTION);
   /** Se incrementa para forzar una relectura cuando la base cambió por debajo de la vista. */
   const [epoch, setEpoch] = useState(0);
-  const [railExpanded, setRailExpanded] = useState(
-    () => localStorage.getItem(RAIL_KEY) === "1",
-  );
-  const [rowText, setRowText] = useState<RowText>(storedRowText);
-  const [trayGlyph, setTrayGlyph] = useState<TrayGlyph>(storedTrayGlyph);
 
   /**
    * Por cada tarea completada, los temporizadores que la sacarán de la lista y la lista exacta
@@ -415,11 +372,18 @@ export function useRiel(): RielState {
     [projects],
   );
 
-  // El plan de notificaciones se rehace al arrancar y cada vez que cambia algo que pueda
-  // mover una hora (spec 7). Depender de `tasks` es más ancho de lo necesario —cambia también
-  // al navegar— pero `schedule` relee la base y es idempotente: de más solo cuesta una
-  // consulta, y de menos costaría un aviso que no llega.
-  useEffect(() => startNotifications(projectsById), [projectsById, tasks]);
+  // El repaso de los diez minutos (spec 7) dura lo que dura el panel y se arranca una vez. Antes
+  // colgaba del efecto de abajo, así que cada cambio de vista lo desmontaba y lo volvía a montar
+  // — y con él se iba el plan entero, para volver a registrarse igual un instante después.
+  useEffect(() => startNotifications(), []);
+
+  // El plan se revisa al arrancar y cada vez que cambia algo que pueda mover una hora (spec 7).
+  // Depender de `tasks` sigue siendo más ancho de lo necesario —cambia también al navegar y al
+  // buscar— y por eso `schedule` compara antes de mandar nada: la pasada de más se queda en una
+  // consulta con índice, y la de menos costaría un aviso que no llega.
+  useEffect(() => {
+    void scheduleNotifications(projectsById);
+  }, [projectsById, tasks]);
 
   // El peso del glifo de la barra (spec 4). Se recalcula contra la base entera y no contra la
   // vista: en Casa puede no haber nada vencido y seguir habiéndolo en Infra.
@@ -447,11 +411,6 @@ export function useRiel(): RielState {
       clearInterval(timer);
     };
   }, [tasks]);
-
-  // Y la silueta. Aquí y no dentro del que la cambia porque este también cubre el arranque:
-  // Rust monta el icono con el de omisión —la preferencia vive en el webview, que todavía no
-  // existe cuando se monta la barra— y esta es la primera pasada que lo pone en su sitio.
-  useEffect(() => applyTrayGlyph(trayGlyph), [trayGlyph]);
 
   // Escribir espera un respiro; borrar no. Limpiar la búsqueda tiene que devolver la vista de
   // golpe — es lo que hace el primer Escape (spec 4), y ahí una demora se siente como un tirón.
@@ -1122,29 +1081,6 @@ export function useRiel(): RielState {
     }
   }, [reloadProjects]);
 
-  /** Con qué vista se abre el panel a partir de ahora. Se aplica en la siguiente apertura. */
-  const setStartView = useCallback((kind: SystemKind) => {
-    localStorage.setItem(START_KEY, kind);
-    setStart(kind);
-  }, []);
-
-  const toggleRail = useCallback(() => {
-    setRailExpanded((current) => {
-      localStorage.setItem(RAIL_KEY, current ? "0" : "1");
-      return !current;
-    });
-  }, []);
-
-  const changeRowText = useCallback((value: RowText) => {
-    storeRowText(value);
-    setRowText(value);
-  }, []);
-
-  const changeTrayGlyph = useCallback((value: TrayGlyph) => {
-    storeTrayGlyph(value);
-    setTrayGlyph(value);
-  }, []);
-
   return {
     view,
     select,
@@ -1179,14 +1115,6 @@ export function useRiel(): RielState {
     saveProject,
     removeProject,
     reorderProject,
-    startView: start,
-    setStartView,
-    railExpanded,
-    toggleRail,
-    rowText,
-    setRowText: changeRowText,
-    trayGlyph,
-    setTrayGlyph: changeTrayGlyph,
     retention,
     setRetention: changeRetention,
     reloadAll,
