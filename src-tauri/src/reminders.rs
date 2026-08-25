@@ -18,14 +18,15 @@ use std::time::Duration;
 use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::runtime::Bool;
-use objc2::{sel, AnyThread};
+use objc2::sel;
 use objc2_event_kit::{
     EKAuthorizationStatus, EKCalendar, EKEntityType, EKEventStore, EKReminder,
 };
 use objc2_foundation::{
-    NSArray, NSBundle, NSDateComponentUndefined, NSError, NSInteger, NSObjectProtocol, NSPredicate,
-    NSString,
+    NSArray, NSDateComponentUndefined, NSError, NSInteger, NSObjectProtocol, NSPredicate, NSString,
 };
+
+use crate::eventkit;
 
 /// Lo mismo que en los avisos y la agenda: los callbacks llegan por otra cola y un comando de
 /// Tauri que espere para siempre cuelga el hilo que lo atiende.
@@ -79,20 +80,10 @@ pub struct Reminder {
     repeats: bool,
 }
 
-/// Sin paquete no hay EventKit que valga: el permiso se concede a un identificador, y en
-/// `tauri dev` el binario corre suelto. Es la misma puerta que la de los avisos y la agenda.
-fn bundled() -> bool {
-    NSBundle::mainBundle().bundleIdentifier().is_some()
-}
-
-fn store() -> Option<Retained<EKEventStore>> {
-    bundled().then(|| unsafe { EKEventStore::init(EKEventStore::alloc()) })
-}
-
 /// El estado del permiso, con el mismo vocabulario que los avisos y la agenda (spec 7):
 /// `granted`, `denied`, `default` o `unavailable`.
 pub fn permission() -> String {
-    if !bundled() {
+    if !eventkit::bundled() {
         return "unavailable".into();
     }
 
@@ -111,10 +102,6 @@ pub fn permission() -> String {
 /// y la app se instala desde la 13, donde el selector no existe — llamarlo ahí no devuelve un
 /// error, levanta una excepción de Objective‑C y se lleva el proceso.
 pub fn request() -> bool {
-    let Some(store) = store() else {
-        return false;
-    };
-
     let (tx, rx) = mpsc::channel();
     let handler = RcBlock::new(move |granted: Bool, error: *mut NSError| {
         if let Some(error) = unsafe { error.as_ref() } {
@@ -123,14 +110,22 @@ pub fn request() -> bool {
         let _ = tx.send(granted.as_bool());
     });
 
-    let block = RcBlock::as_ptr(&handler);
-    if store.respondsToSelector(sel!(requestFullAccessToRemindersWithCompletion:)) {
-        unsafe { store.requestFullAccessToRemindersWithCompletion(block) };
-    } else {
-        #[allow(deprecated)]
-        unsafe {
-            store.requestAccessToEntityType_completion(EKEntityType::Reminder, block)
-        };
+    // La espera queda fuera del almacén por lo mismo que en la agenda: quien contesta el
+    // diálogo es una persona, y el candado no puede estar echado ese rato.
+    let asked = eventkit::with(|store| {
+        let block = RcBlock::as_ptr(&handler);
+        if store.respondsToSelector(sel!(requestFullAccessToRemindersWithCompletion:)) {
+            unsafe { store.requestFullAccessToRemindersWithCompletion(block) };
+        } else {
+            #[allow(deprecated)]
+            unsafe {
+                store.requestAccessToEntityType_completion(EKEntityType::Reminder, block)
+            };
+        }
+    });
+
+    if asked.is_none() {
+        return false;
     }
 
     rx.recv_timeout(TIMEOUT).unwrap_or(false)
@@ -145,18 +140,18 @@ pub fn lists() -> Vec<List> {
     if permission() != "granted" {
         return Vec::new();
     }
-    let Some(store) = store() else {
-        return Vec::new();
-    };
 
-    let mut out: Vec<List> = unsafe { store.calendarsForEntityType(EKEntityType::Reminder) }
-        .iter()
-        .map(|calendar| List {
-            id: unsafe { calendar.calendarIdentifier() }.to_string(),
-            title: unsafe { calendar.title() }.to_string(),
-        })
-        .collect();
+    let found = eventkit::with(|store| {
+        unsafe { store.calendarsForEntityType(EKEntityType::Reminder) }
+            .iter()
+            .map(|calendar| List {
+                id: unsafe { calendar.calendarIdentifier() }.to_string(),
+                title: unsafe { calendar.title() }.to_string(),
+            })
+            .collect::<Vec<List>>()
+    });
 
+    let mut out = found.unwrap_or_default();
     out.sort_by(|a, b| a.title.cmp(&b.title));
     out
 }
@@ -170,23 +165,23 @@ pub fn fetch(lists: &[String]) -> Vec<Reminder> {
     if lists.is_empty() || permission() != "granted" {
         return Vec::new();
     }
-    let Some(store) = store() else {
-        return Vec::new();
-    };
 
-    let Some(calendars) = calendars_of(&store, lists) else {
-        return Vec::new();
-    };
+    eventkit::with(|store| {
+        let Some(calendars) = calendars_of(store, lists) else {
+            return Vec::new();
+        };
 
-    let predicate = unsafe {
-        store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars(
-            None,
-            None,
-            Some(&calendars),
-        )
-    };
+        let predicate = unsafe {
+            store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars(
+                None,
+                None,
+                Some(&calendars),
+            )
+        };
 
-    matching(&store, &predicate)
+        matching(store, &predicate)
+    })
+    .unwrap_or_default()
 }
 
 /// Recordatorios concretos, por identificador. Los que ya no estén no salen en la respuesta.
@@ -206,30 +201,30 @@ pub fn by_id(ids: &[String], lists: &[String]) -> Vec<Reminder> {
     if ids.is_empty() || permission() != "granted" {
         return Vec::new();
     }
-    let Some(store) = store() else {
-        return Vec::new();
-    };
 
-    let found: Vec<Reminder> = ids
-        .iter()
-        .filter_map(|id| find(&store, id))
-        .filter_map(|reminder| describe(&reminder))
-        .collect();
+    eventkit::with(|store| {
+        let found: Vec<Reminder> = ids
+            .iter()
+            .filter_map(|id| find(store, id))
+            .filter_map(|reminder| describe(&reminder))
+            .collect();
 
-    if !found.is_empty() || lists.is_empty() {
-        return found;
-    }
+        if !found.is_empty() || lists.is_empty() {
+            return found;
+        }
 
-    let Some(calendars) = calendars_of(&store, lists) else {
-        return found;
-    };
-    let predicate = unsafe { store.predicateForRemindersInCalendars(Some(&calendars)) };
-    let wanted: Vec<&str> = ids.iter().map(String::as_str).collect();
+        let Some(calendars) = calendars_of(store, lists) else {
+            return found;
+        };
+        let predicate = unsafe { store.predicateForRemindersInCalendars(Some(&calendars)) };
+        let wanted: Vec<&str> = ids.iter().map(String::as_str).collect();
 
-    matching(&store, &predicate)
-        .into_iter()
-        .filter(|reminder| wanted.contains(&reminder.id.as_str()))
-        .collect()
+        matching(store, &predicate)
+            .into_iter()
+            .filter(|reminder| wanted.contains(&reminder.id.as_str()))
+            .collect()
+    })
+    .unwrap_or_default()
 }
 
 /// Los calendarios de esas listas, o nada si no queda ninguno.
@@ -272,29 +267,32 @@ fn matching(store: &EKEventStore, predicate: &NSPredicate) -> Vec<Reminder> {
 /// pasada siguiente como un cambio venido de fuera, y el vínculo se pasaría la vida
 /// reconciliando su propia escritura.
 ///
-/// El recordatorio se vuelve a buscar aquí en vez de recibirlo ya cargado porque EventKit
-/// levanta una excepción al guardar un objeto que salió de otra instancia del almacén, y cada
-/// llamada abre la suya.
+/// El recordatorio se vuelve a buscar aquí en vez de recibirlo ya cargado porque lo que cruza
+/// desde el webview es un identificador y no un objeto, y porque cada pasada empieza tirando la
+/// caché del almacén (`eventkit`): uno traído en la pasada anterior ya no estaría conectado a
+/// nada, y guardarlo levantaría una excepción. Buscar por identificador es una consulta por
+/// clave y no cuesta.
 pub fn set_done(id: &str, done: bool) -> Result<f64, String> {
     if permission() != "granted" {
         return Err("Riel no tiene acceso a Recordatorios.".into());
     }
-    let Some(store) = store() else {
-        return Err("Recordatorios no está disponible en esta copia.".into());
-    };
-    let Some(reminder) = find(&store, id) else {
-        return Err("Ese recordatorio ya no está en Recordatorios.".into());
-    };
 
-    // Sin cambio no se guarda: `saveReminder` sobre algo que ya estaba así mueve la fecha de
-    // modificación por nada, y esa fecha es justo el árbitro de la próxima pasada.
-    if unsafe { reminder.isCompleted() } != done {
-        unsafe { reminder.setCompleted(done) };
-        unsafe { store.saveReminder_commit_error(&reminder, true) }
-            .map_err(|error| error.localizedDescription().to_string())?;
-    }
+    eventkit::with(|store| {
+        let Some(reminder) = find(store, id) else {
+            return Err("Ese recordatorio ya no está en Recordatorios.".into());
+        };
 
-    Ok(stamp(&reminder))
+        // Sin cambio no se guarda: `saveReminder` sobre algo que ya estaba así mueve la fecha de
+        // modificación por nada, y esa fecha es justo el árbitro de la próxima pasada.
+        if unsafe { reminder.isCompleted() } != done {
+            unsafe { reminder.setCompleted(done) };
+            unsafe { store.saveReminder_commit_error(&reminder, true) }
+                .map_err(|error| error.localizedDescription().to_string())?;
+        }
+
+        Ok(stamp(&reminder))
+    })
+    .unwrap_or_else(|| Err("Recordatorios no está disponible en esta copia.".into()))
 }
 
 fn find(store: &EKEventStore, id: &str) -> Option<Retained<EKReminder>> {

@@ -8,14 +8,15 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use block2::RcBlock;
-use objc2::rc::Retained;
 use objc2::runtime::Bool;
-use objc2::{sel, AnyThread};
+use objc2::sel;
 use objc2_event_kit::{
     EKAuthorizationStatus, EKCalendarType, EKEntityType, EKEvent, EKEventStatus, EKEventStore,
     EKParticipantStatus,
 };
-use objc2_foundation::{NSBundle, NSDate, NSError, NSObjectProtocol};
+use objc2_foundation::{NSDate, NSError, NSObjectProtocol};
+
+use crate::eventkit;
 
 /// Lo mismo que en los avisos: los callbacks llegan por otra cola y un comando de Tauri que
 /// espere para siempre cuelga el hilo que lo atiende.
@@ -36,20 +37,10 @@ pub struct Event {
     all_day: bool,
 }
 
-/// Sin paquete no hay EventKit que valga: el permiso se concede a un identificador, y en
-/// `tauri dev` el binario corre suelto. Es la misma puerta que la de los avisos.
-fn bundled() -> bool {
-    NSBundle::mainBundle().bundleIdentifier().is_some()
-}
-
-fn store() -> Option<Retained<EKEventStore>> {
-    bundled().then(|| unsafe { EKEventStore::init(EKEventStore::alloc()) })
-}
-
 /// El estado del permiso, con el mismo vocabulario que el de los avisos (spec 7): `granted`,
 /// `denied`, `default` o `unavailable`.
 pub fn permission() -> String {
-    if !bundled() {
+    if !eventkit::bundled() {
         return "unavailable".into();
     }
 
@@ -70,10 +61,6 @@ pub fn permission() -> String {
 /// 14 y en la 13 no existe el selector — llamarlo ahí no devuelve un error, levanta una
 /// excepción de Objective‑C y se lleva el proceso. Así que se pregunta antes si lo entiende.
 pub fn request() -> bool {
-    let Some(store) = store() else {
-        return false;
-    };
-
     let (tx, rx) = mpsc::channel();
     let handler = RcBlock::new(move |granted: Bool, error: *mut NSError| {
         if let Some(error) = unsafe { error.as_ref() } {
@@ -82,14 +69,23 @@ pub fn request() -> bool {
         let _ = tx.send(granted.as_bool());
     });
 
-    let block = RcBlock::as_ptr(&handler);
-    if store.respondsToSelector(sel!(requestFullAccessToEventsWithCompletion:)) {
-        unsafe { store.requestFullAccessToEventsWithCompletion(block) };
-    } else {
-        #[allow(deprecated)]
-        unsafe {
-            store.requestAccessToEntityType_completion(EKEntityType::Event, block)
-        };
+    // La espera queda fuera del almacén a propósito: el diálogo del sistema lo contesta una
+    // persona, y quedarse con el candado echado mientras tanto dejaría la agenda parada hasta
+    // que alguien mirara la pantalla. Pedirlo es lo que necesita el almacén; esperar, no.
+    let asked = eventkit::with(|store| {
+        let block = RcBlock::as_ptr(&handler);
+        if store.respondsToSelector(sel!(requestFullAccessToEventsWithCompletion:)) {
+            unsafe { store.requestFullAccessToEventsWithCompletion(block) };
+        } else {
+            #[allow(deprecated)]
+            unsafe {
+                store.requestAccessToEntityType_completion(EKEntityType::Event, block)
+            };
+        }
+    });
+
+    if asked.is_none() {
+        return false;
     }
 
     rx.recv_timeout(TIMEOUT).unwrap_or(false)
@@ -105,16 +101,30 @@ pub fn events(from: f64, to: f64) -> Vec<Event> {
     if permission() != "granted" {
         return Vec::new();
     }
-    let Some(store) = store() else {
+
+    let Some(mut out) = eventkit::with(|store| collect(store, from, to)) else {
         return Vec::new();
     };
 
+    // Por hora, y los de día entero primero: es el orden en que se lee un día.
+    out.sort_by(|a, b| {
+        b.all_day
+            .cmp(&a.all_day)
+            .then(a.start.total_cmp(&b.start))
+            .then(a.title.cmp(&b.title))
+    });
+    out
+}
+
+/// La parte que necesita el almacén delante. Lo que sale de aquí ya son datos y no objetos de
+/// EventKit, que es lo que permite ordenar fuera y soltar el candado antes.
+fn collect(store: &EKEventStore, from: f64, to: f64) -> Vec<Event> {
     let start = NSDate::dateWithTimeIntervalSince1970(from);
     let end = NSDate::dateWithTimeIntervalSince1970(to);
     let predicate =
         unsafe { store.predicateForEventsWithStartDate_endDate_calendars(&start, &end, None) };
 
-    let mut out: Vec<Event> = unsafe { store.eventsMatchingPredicate(&predicate) }
+    unsafe { store.eventsMatchingPredicate(&predicate) }
         .iter()
         .filter(|event| keep(event))
         .filter_map(|event| {
@@ -145,16 +155,7 @@ pub fn events(from: f64, to: f64) -> Vec<Event> {
                 all_day: unsafe { event.isAllDay() } || start < from,
             })
         })
-        .collect();
-
-    // Por hora, y los de día entero primero: es el orden en que se lee un día.
-    out.sort_by(|a, b| {
-        b.all_day
-            .cmp(&a.all_day)
-            .then(a.start.total_cmp(&b.start))
-            .then(a.title.cmp(&b.title))
-    });
-    out
+        .collect()
 }
 
 /// Si el evento pinta algo en la agenda de hoy.

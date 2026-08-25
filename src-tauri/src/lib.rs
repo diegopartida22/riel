@@ -4,6 +4,7 @@ mod autostart;
 mod db;
 mod deeplink;
 mod editor;
+mod eventkit;
 mod glass;
 mod notify;
 mod panel;
