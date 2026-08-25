@@ -29,6 +29,7 @@ Dentro:
 - El esquema `riel://`, para escribir una tarea desde otra app sin abrir el panel (§14).
 - La agenda del día: los eventos del Calendario de hoy, encima de la lista de Hoy (§15).
 - El vínculo con los Recordatorios de Apple, para las listas que se elijan (§16).
+- Las sesiones de Claude Code que quedan abiertas, y lo que ocupan (§17).
 
 Fuera de la v1, no lo construyas:
 
@@ -1001,3 +1002,191 @@ la base.
 
 Ojo con el nombre al leer el código: `notify::Reminder` es un aviso programado del sistema (§7) y
 no tiene nada que ver con esto. Son dos cosas que en castellano se llaman igual.
+
+---
+
+## 17. Las sesiones de Claude
+
+Añadido después de la v1, y es lo que más se sale del tema de la app: no es una tarea, no tiene
+fecha y no se completa. Está aquí por lo mismo que la agenda (§15) — porque lo que se decide
+mirando el panel no es solo qué hay que hacer, sino con qué se cuenta para hacerlo, y una sesión
+de Claude Code olvidada es medio giga de memoria que nadie está usando y que nada anuncia.
+
+El caso es literal y se midió antes de escribir esto: tres sesiones abiertas a la vez, 1.5 GB
+entre las tres, y de esas tres solo una con alguien delante. Una llevaba casi cuatro horas quieta
+y otra se había abierto sin llegar a escribir un mensaje. Ninguna de las dos se ve en ningún
+sitio: no tienen ventana propia —viven dentro de un panel de VS Code, o de una pestaña de terminal
+que se perdió de vista hace rato— y el Monitor de Actividad las enseña como varios `node`
+idénticos, sin nada que diga cuál es cuál.
+
+Lo que contesta este apartado es una sola pregunta, y de ahí sale todo lo demás: **qué tengo
+abierto y qué de eso no está haciendo nada.** No es un monitor de procesos y no va a crecer hacia
+uno.
+
+### 17.1 Qué se lee, y qué no se mira
+
+Tres sitios, todos de esta máquina y ninguno en la red:
+
+- `~/.claude/sessions/<pid>.json`, que es lo que Claude Code deja escrito mientras corre: el pid,
+  el identificador de la sesión, la carpeta, cuándo arrancó, la versión y desde dónde se lanzó. El
+  archivo se borra al salir limpiamente, así que su existencia es la primera pista de que hay algo
+  vivo — pero solo la primera (§17.2).
+- El proceso, por `proc_pidinfo`: si sigue ahí, cuándo arrancó de verdad, cómo se llama y cuánta
+  memoria residente ocupa.
+- La transcripción, `~/.claude/projects/<carpeta>/<sesión>.jsonl`: **la fecha del archivo** —que es
+  cuándo se escribió la última línea, y por tanto cuánto lleva quieta— y de dentro, únicamente los
+  campos `usage` y `model` de cada mensaje.
+
+Y una línea que va aparte porque es la que más importa: **no se lee lo que dicen los mensajes.** Ni
+se muestra, ni se guarda, ni cruza al webview. Una transcripción tiene todo lo que se ha escrito y
+todo lo que Claude leyó del disco al escribirlo, y una app de tareas no tiene nada que hacer ahí.
+Lo que llega a TypeScript son números y sellos de tiempo; el nombre de la sesión es el `name` que
+Claude Code ya puso, y la carpeta es la carpeta.
+
+Tampoco se escribe nada dentro de `~/.claude`. Lo único que este apartado hace además de leer es
+mandarle una señal a un proceso (§17.3).
+
+### 17.2 Qué es una sesión viva
+
+Un `.json` en `sessions/` no basta, y confiar en él es lo que convertiría este apartado en algo
+peligroso. Un archivo se queda huérfano cuando el proceso se fue de golpe, y macOS recicla los
+pid: el 43560 de esta mañana puede ser cualquier otra cosa esta tarde, incluida una que importe.
+
+Una sesión está viva cuando se cumplen las tres:
+
+1. Hay un `sessions/<pid>.json`.
+2. El pid contesta a `proc_pidinfo`.
+3. **La hora de arranque real del proceso es la que dice el archivo.**
+
+La tercera se compara con una ventana y no con un margen simétrico, porque los dos sellos no
+miden lo mismo: el proceso arranca primero y escribe su `.json` después, y `proc_pidinfo` da el
+arranque truncado al segundo. Medido sobre sesiones reales, el archivo va entre medio segundo y
+un segundo por detrás. Así que vale desde un segundo antes —el truncamiento— hasta un minuto
+después, que da aire de sobra para un arranque lento sin dejar sitio a nada más: para colarse
+por esa ventana, un pid reciclado tendría que haber arrancado en el mismo minuto que la sesión
+que suplanta.
+
+Sin la tercera, un pid reciclado se enseñaría como una sesión de Claude y —esto es lo grave— se
+podría cerrar como una. La tercera no es una comprobación de más: es lo que hace aceptable el botón
+de §17.3.
+
+Lo que no cumple las tres no sale en la lista, y su archivo huérfano no se toca. Limpiar
+`sessions/` sería escribir en `~/.claude`, y no se escribe.
+
+Y una cosa que no se puede saber, dicha aquí para no fingir lo contrario en la pantalla: **quieta
+no es lo mismo que ociosa.** Una sesión que lleva ocho minutos sin escribir una línea puede estar
+esperando a que termine una compilación. La fecha del archivo es la mejor señal que hay y no es
+una certeza, así que la app enseña el número y no saca la conclusión: dice «hace 3 h 55 min», nunca
+«inactiva».
+
+### 17.3 Cerrar una sesión
+
+Es lo único que la app hace hacia fuera aquí, y va con todo el cuidado que eso pide.
+
+- **Es `SIGTERM` y no `SIGKILL`.** El proceso tiene que poder cerrar su transcripción antes de
+  irse; matarlo a la brava puede dejar el `.jsonl` a medias, y esa transcripción es lo único que
+  queda de la conversación.
+- **Lo que cruza desde el webview es el identificador de la sesión, no el pid.** Rust vuelve a leer
+  `sessions/`, encuentra la entrada, comprueba las tres condiciones de §17.2 y solo entonces manda
+  la señal. Es el mismo trato que la lista cerrada de editores de §13: si el webview no puede
+  nombrar un pid, no hay forma de que nombre uno equivocado.
+- **Siempre pregunta**, y la pregunta dice tres cosas: cuál es —su nombre y su carpeta—, cuánto
+  lleva sin escribir, y que **la transcripción se queda en el disco y `claude --resume` la
+  recupera**. Esa última es la que cambia la decisión: sin ella, cerrar parece perder la
+  conversación, y no lo es.
+- **Y dice desde dónde se lanzó**, cuando lo sabe. Una sesión de `claude-vscode` es hija de VS
+  Code, y cerrarla deja el panel del editor enseñando una sesión muerta hasta que se abra otra. No
+  es un fallo de la app, pero enterarse después es peor que leerlo antes.
+- **No se cierra nada en lote.** Un botón de «cerrar las inactivas» operaría sobre la conclusión
+  que §17.2 dice que no se puede sacar. Se cierran de una en una, que además son tres o cuatro.
+- Cerrar no entra en la pila de ⌘Z. No hay nada que deshacer: el proceso se fue, y lo que lo trae
+  de vuelta es `--resume` en la terminal, no esta app.
+
+### 17.4 Lo que se enseña de cada sesión
+
+Una fila por sesión, ordenadas por tiempo quieto de mayor a menor: lo que se está preguntando es
+qué se puede cerrar, y lo que se puede cerrar va arriba. La que se está usando ahora acaba la
+última, que es donde estorba menos.
+
+**No es una fila de tarea y no lo finge**, exactamente por lo que dice §15 de los eventos: sin
+casilla, sin manija de arrastre, sin punto de proyecto. Una sesión no se completa ni se reordena.
+
+```
+ 3 sesiones · 1.5 GB de memoria
+
+ 12:28   reno-04                        hace 4 h 23 min
+         ~/Desktop/Trabajo/RENO · opus-5
+         337 MB      68k ctx
+         47.8M tok   $127.77 estimado
+
+ 18:49   riel-14                                  ahora
+         ~/Documents/Projects/riel · opus-5
+         655 MB      207k ctx
+         50.1M tok   $122.37 estimado
+```
+
+- La hora de arranque a la izquierda y en mono, que es la columna donde la agenda pone la suya y la
+  fila de tarea su casilla.
+- El nombre con el peso del título de una fila, y la carpeta debajo en `--ink-secondary`,
+  abreviada con el `~` del usuario igual que la del proyecto en §13. A su lado, el modelo.
+- **Los cuatro números van en rejilla de dos columnas, no en un renglón con separadores**, y eso
+  es una medida y no un gusto: con el riel expandido al cuerpo de la fila le quedan 218 px, que
+  son treinta caracteres de la fuente de datos, y las cuatro cifras con sus rótulos pasan de
+  cuarenta. En un renglón, lo último se perdía por la derecha — y lo último era el costo. En
+  rejilla caben, y de paso caen en el mismo sitio en todas las filas: comparar dos sesiones es
+  leer una columna en vez de dos renglones distintos, que es justo para lo que existe la fuente
+  de datos (§3.3). Arriba lo que la sesión ocupa ahora —memoria y contexto—, abajo lo que lleva
+  gastado. La unidad de los tokens va cortada a tres letras, `tok` como `ctx`: escrita entera se
+  comía el ancho que necesita el rótulo del costo, y ese no puede faltar.
+- El encabezado dice **«1.5 GB de memoria»** y no «1.5 GB» a secas. Debajo, el bloque del disco
+  (§17.5) enseña otro número en gigas que no es ese, y dos cifras iguales sin rótulo en la misma
+  pantalla se leen como la misma cifra repetida.
+- **La que se está usando sube a `--ink-primary`; las quietas van un peso por debajo**, la misma
+  gramática que la agenda usa para el evento que está pasando. Y ni una en `--danger`: una sesión
+  olvidada no es un error, es una decisión que todavía no se ha tomado.
+- El acento del apartado es `--accent-app` y no el de ningún proyecto (§3.1). No es un proyecto y
+  no está dentro de uno.
+- «Cerrar» aparece al hover, en el hueco de la derecha, como el `⋯` de una fila de tarea (§3.5).
+- ↑↓ recorre las sesiones. Espacio y ⏎ no hacen nada aquí: no hay nada que completar ni que editar.
+
+El contexto es el `usage` del último mensaje del asistente —lo que ocupa la conversación ahora
+mismo— y no la suma de todo; los tokens gastados sí son la suma, y por eso van en la fila de
+abajo de la rejilla, pegados al costo que salen de multiplicar. No hay una pantalla de detalle:
+una sesión son cuatro números, y abrir algo para leerlos sería esconderlos.
+
+**El costo es una estimación y se dice así, en la propia etiqueta.** Sale de multiplicar tokens por
+el precio de lista de la API, y quien paga una suscripción no paga eso: el número sirve para
+comparar una sesión con otra —para ver que la de la mañana costó diez veces lo que la de ahora— y
+no para cuadrar nada. Enseñarlo sin el rótulo sería inventarle una factura al usuario.
+
+Vacío: «No hay ninguna sesión abierta.» Sin dibujo y sin frase de ánimo, como todos los de §3.7.
+
+### 17.5 El disco
+
+Un bloque al final del apartado, y no una fila por carpeta: `~/.claude` entero, con las dos piezas
+que explican el tamaño —las transcripciones y el historial de archivos— y el resto junto.
+
+**No se borra nada.** Ni un botón de limpiar, ni uno de vaciar lo viejo. Es la misma razón por la
+que §16.1 solo escribe una casilla: lo que hay ahí dentro es de otra app y tiene años encima, y una
+app de tareas que se equivoque borrando transcripciones es una app de tareas que borró el trabajo
+de alguien. Lo que sí hay es el enlace a la carpeta en el Finder, la misma salida que §8 le da a
+los datos de Riel: enseñar el número y abrir la puerta es todo lo que hace falta para decidir.
+
+Y el número tarda, porque recorrer `~/.claude` son varios miles de archivos. Se calcula aparte, con
+el apartado ya en pantalla, y mientras tanto el bloque dice que está contando en vez de saltar de
+vacío a un número.
+
+### 17.6 Dónde vive y cuándo se lee
+
+- **Una quinta entrada en el riel**, abajo del todo —debajo de los proyectos y de su `⊕`— y bajo su
+  propia hairline, separada de ellos igual que ellos están separados de las cuatro vistas del
+  sistema (§3.4). No es una vista de tareas y no es un proyecto: las dos hairlines dicen justo eso.
+  `⌘5`, detrás de `⌘1..4`.
+- **Se lee cuando el apartado está a la vista, y no al abrir el panel.** Contar `~/.claude` cuesta
+  más que el presupuesto entero del criterio 1, y no hay ninguna razón para pagarlo al abrir Hoy.
+  Es lo contrario de la agenda (§15), que tiene que estar puesta en el instante en que se dibuja
+  Hoy porque es ahí donde vive.
+- **Ni temporizador ni vigilancia del sistema de archivos**, por lo mismo que §7, §11, §15 y §16.
+  Se lee al entrar, y hay un botón para volver a leer. Lo que sí avanza solo es el «hace 3 h 55
+  min», que se dibuja del reloj sobre un sello ya leído y no vuelve a tocar el disco.
+- La búsqueda no entra aquí. `⌘F` busca tareas (§5), y una sesión no lo es.

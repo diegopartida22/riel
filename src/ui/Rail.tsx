@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { Between, Project } from "../data";
 import { tint } from "../design/palette";
 import { SYSTEM_VIEWS, sameView, type SystemKind, type View } from "../state/views";
-import { CalendarDays, CheckCircle, Ellipsis, List, Plus, Sun, type Icon } from "./icons";
+import { CalendarDays, CheckCircle, Ellipsis, List, Plus, Sun, Terminal, type Icon } from "./icons";
 import { ProjectMenu } from "./ProjectMenu";
 import { useReorder } from "./useReorder";
 
@@ -26,7 +26,10 @@ export interface RailProps {
   projects: Project[];
   counts: Map<string | null, number>;
   expanded: boolean;
+  /** Si lo que se está viendo es el apartado de las sesiones de Claude (spec 17). */
+  sessions: boolean;
   onSelect: (view: View) => void;
+  onSessions: () => void;
   onNewProject: () => void;
   onEditProject: (project: Project) => void;
   onReorder: (id: string, between: Between) => void;
@@ -56,7 +59,9 @@ export function Rail({
   projects,
   counts,
   expanded,
+  sessions,
   onSelect,
+  onSessions,
   onNewProject,
   onEditProject,
   onReorder,
@@ -84,7 +89,7 @@ export function Rail({
               key={kind}
               label={label}
               tooltip={expanded ? undefined : label}
-              selected={sameView(view, { kind })}
+              selected={!sessions && sameView(view, { kind })}
               onSelect={() => onSelect({ kind })}
             >
               <Icon size={15} aria-hidden />
@@ -101,7 +106,7 @@ export function Rail({
             key={project.id}
             label={project.name}
             tooltip={expanded ? undefined : tooltipFor(project.name, counts.get(project.id) ?? 0)}
-            selected={sameView(view, { kind: "proyecto", id: project.id })}
+            selected={!sessions && sameView(view, { kind: "proyecto", id: project.id })}
             tinted={project.color}
             onSelect={() => onSelect({ kind: "proyecto", id: project.id })}
             onEdit={() => onEditProject(project)}
@@ -149,6 +154,23 @@ export function Rail({
           <Plus size={15} aria-hidden />
         </span>
         <span className="rail__label">Nuevo proyecto</span>
+      </button>
+
+      {/* La quinta entrada, abajo del todo y bajo su propia hairline (spec 17.6). Las dos reglas
+          del riel dicen exactamente lo que es: ni una vista de tareas, ni un proyecto. */}
+      <div className="rail__rule" role="presentation" />
+
+      <button
+        type="button"
+        className={`rail__item${sessions ? " is-selected" : ""}`}
+        title={expanded ? undefined : "Claude"}
+        aria-current={sessions ? "page" : undefined}
+        onClick={onSessions}
+      >
+        <span className="rail__mark">
+          <Terminal size={15} aria-hidden />
+        </span>
+        <span className="rail__label">Claude</span>
       </button>
     </nav>
   );

@@ -14,6 +14,7 @@
 import Calendar03Icon from "@hugeicons/core-free-icons/Calendar03Icon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
 import CodeIcon from "@hugeicons/core-free-icons/CodeIcon";
+import CommandLineIcon from "@hugeicons/core-free-icons/CommandLineIcon";
 import CheckmarkCircle02Icon from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import ArrowLeft01Icon from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import ArrowRight01Icon from "@hugeicons/core-free-icons/ArrowRight01Icon";
@@ -81,6 +82,14 @@ export const GripVertical = glyph(DragDropVerticalIcon);
 /* La marca de una tarea que vuelve. La flecha en círculo y no el bucle de dos rayas del
    reproductor: a 11px en una fila, dos rayas paralelas se funden en una mancha. */
 export const Repeat = glyph(Refresh01Icon);
+/* El mismo glifo con otro nombre, y a propósito: una flecha en círculo dice «otra vez» igual
+   para una tarea que vuelve que para un botón que relee. Dos nombres porque los dos sitios se
+   leen distinto en el código; un solo glifo porque el juego de iconos es una sola decisión. */
+export const Refresh = glyph(Refresh01Icon);
+
+/** El apartado de las sesiones de Claude (spec 17). Claude Code es una herramienta de terminal,
+    y el prompt lo dice sin fingir una marca ni prometer un cerebro. */
+export const Terminal = glyph(CommandLineIcon);
 
 /** El modo desarrollo (spec 13): la carpeta que se vincula y el editor con el que se abre. */
 export const Folder = glyph(Folder01Icon);

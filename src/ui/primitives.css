@@ -675,3 +675,245 @@
     display: none;
   }
 }
+
+/* ── Las sesiones de Claude ──────────────────────────────────────────────────────────── */
+
+/* La misma advertencia que la agenda: se parecen a una fila de tarea y no lo son. Sin casilla,
+   sin punto de proyecto y sin manija — una sesión no se completa ni se reordena (spec 17.4).
+   Lo que una fila gasta a la izquierda en su casilla, esta lo gasta en la hora de arranque. */
+.claude {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.claude__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--row-radius);
+}
+
+.claude__row:hover {
+  background: var(--layer-hover);
+}
+
+/* El anillo de la sección 5. Este apartado no es un proyecto y no está dentro de uno, así que
+   su acento es el de la app y no el del proyecto que estuviera seleccionado (spec 3.1). */
+.claude__row:focus-visible {
+  outline: 2px solid var(--accent-app);
+  outline-offset: -1px;
+}
+
+/* Igual que `.agenda__time`: `5ch` es exactamente `09:15` en la fuente de datos, y es un mínimo
+   y no un ancho fijo porque el tracking del rol empuja un pelo por fuera. */
+.claude__time {
+  flex: 0 0 auto;
+  min-width: 5ch;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+}
+
+.claude__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.claude__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Un peso por debajo del título de una tarea, por lo mismo que el título de un evento: esto es
+   contexto y la tarea es el trabajo. La que se está usando sube a `--ink-primary` más abajo. */
+.claude__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-secondary);
+}
+
+/* El hueco compartido por el «hace» y el botón, como el de la fecha y el `⋯` de una fila de
+   tarea (spec 3.5). Mide lo que el más ancho de los dos —`9ch` cubre «hace 3 h 55 min» sin
+   apretarlo— así que al cruzarse no se mueve nada a su izquierda. */
+.claude__when {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 15ch;
+  text-align: right;
+}
+
+.claude__idle {
+  display: inline-block;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+  transition: opacity 120ms ease-out;
+}
+
+/* En reposo la fila es solo texto. El botón entra en el sitio del «hace», que se desvanece. */
+.claude__close {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  opacity: 0;
+  cursor: default;
+  transition: opacity 120ms ease-out;
+}
+
+.claude__row:hover .claude__idle,
+.claude__row:focus-within .claude__idle {
+  opacity: 0;
+}
+
+.claude__row:hover .claude__close,
+.claude__close:focus-visible {
+  opacity: 1;
+}
+
+.claude__close:hover {
+  color: var(--danger);
+}
+
+.claude__close:focus-visible {
+  outline: 2px solid var(--accent-app);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Dónde vive la sesión, y con qué modelo. En la fuente de interfaz: una ruta no es un dato
+   tabulado, y en mono pesaría más que el nombre que tiene encima. */
+.claude__where {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+/* Y al pie los números, en dos columnas fijas. Medido en el panel: con el riel expandido al
+   cuerpo de la fila le quedan 218 px, que son treinta caracteres de la fuente de datos, y las
+   cuatro cifras con sus rótulos pasan de cuarenta — puestas en un solo renglón, el costo se
+   perdía por la derecha. La primera columna se fija en `10ch`, que es lo que mide la cifra más
+   ancha del bloque —y por eso la unidad va cortada a tres letras, `tok` como `ctx`: escrita
+   entera se comía el ancho que necesita el rótulo del costo, que es el que no puede faltar—,
+   así que las cuatro caen en el mismo sitio en todas las filas: comparar dos
+   sesiones es leer una columna y no dos renglones distintos, que es justo para lo que existe la
+   fuente de datos (spec 3.3). Sigue sin haber pantalla de detalle: son cuatro números y abrir
+   algo para leerlos sería esconderlos. */
+.claude__grid {
+  display: grid;
+  grid-template-columns: 10ch minmax(0, 1fr);
+  column-gap: 10px;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: var(--ink-tertiary);
+}
+
+.claude__grid > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La que se está usando sube al primer plano, y es la única del bloque que lo hace — la misma
+   gramática con la que la agenda marca el evento que está pasando. Ninguna va en `--danger`:
+   una sesión olvidada no es un error, es una decisión que todavía no se ha tomado. */
+.claude__slot.is-now .claude__name,
+.claude__slot.is-now .claude__idle,
+.claude__slot.is-now .claude__time {
+  color: var(--ink-primary);
+}
+
+.claude__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 8px 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.claude__confirm code {
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  color: var(--ink-primary);
+}
+
+/* ── El disco ────────────────────────────────────────────────────────────────────────── */
+
+.claude-disk {
+  margin: 0;
+  padding: 0;
+}
+
+/* La misma forma que una preferencia de Ajustes: el nombre a la izquierda y el número a la
+   derecha, todos alineados contra el mismo borde. */
+.claude-disk__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+}
+
+.claude-disk__row dt {
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+}
+
+.claude-disk__row dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
+}
+
+.claude-note {
+  margin: 6px 8px 0;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-tertiary);
+}
+
+/* Criterio 7: el cruce del «hace» con el botón es una opacidad, no un movimiento, y aun así se
+   apaga — lo que se pide es que nada cambie solo bajo el puntero. */
+@media (prefers-reduced-motion: reduce) {
+  .claude__idle,
+  .claude__close {
+    transition: none;
+  }
+}

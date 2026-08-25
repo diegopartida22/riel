@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project } from "./data";
 import { tint } from "./design/palette";
 import { useAgenda } from "./state/agenda";
+import { useClaude } from "./state/claude";
 import { useDevMode } from "./state/editors";
 import { usePreferencias } from "./state/preferencias";
 import { useReminders } from "./state/reminders";
@@ -20,6 +21,7 @@ import { Rail } from "./ui/Rail";
 import { RemindersSheet } from "./ui/RemindersSheet";
 import { SettingsPopover } from "./ui/SettingsPopover";
 import { TopBar } from "./ui/TopBar";
+import { ClaudeSessions } from "./views/ClaudeSessions";
 import { SearchResults } from "./views/SearchResults";
 import { TaskDetail } from "./views/TaskDetail";
 import { TaskList } from "./views/TaskList";
@@ -46,6 +48,11 @@ export default function App() {
   const [settings, setSettings] = useState<DOMRect | null>(null);
   const [importing, setImporting] = useState(false);
   const [picking, setPicking] = useState(false);
+  /** Si lo que ocupa el área de contenido es el apartado de Claude (spec 17). */
+  const [sessions, setSessions] = useState(false);
+  // Solo lee mientras el apartado está a la vista: contar `~/.claude` cuesta más que el
+  // presupuesto entero del criterio 1, y al abrir Hoy no hay ahí nada que mirar (spec 17.6).
+  const claude = useClaude(sessions);
   const [wantsCapture, setWantsCapture] = useState(false);
 
   useFocoDeTeclado();
@@ -79,6 +86,7 @@ export default function App() {
       setEditing(null);
       setImporting(false);
       setPicking(false);
+      setSessions(false);
       select({ kind: startView });
     });
     return () => {
@@ -165,6 +173,7 @@ export default function App() {
       if (event.key === "n") {
         event.preventDefault();
         setEditing(null);
+        setSessions(false);
         riel.closeDetail();
         // En Completadas no hay campo de captura, y una tecla que no hace nada es peor que una
         // que te mueve: ⌘N lleva a la vista donde siempre se puede agregar.
@@ -173,10 +182,22 @@ export default function App() {
         return;
       }
 
+      // ⌘5, detrás de ⌘1..4 (spec 17.6). Va antes de la tabla porque no es una vista de tareas
+      // y no tiene sitio en ella.
+      if (event.key === "5") {
+        event.preventDefault();
+        setEditing(null);
+        riel.closeDetail();
+        riel.setQuery("");
+        setSessions(true);
+        return;
+      }
+
       const numbered = NUMBERED[Number(event.key) - 1];
       if (numbered) {
         event.preventDefault();
         setEditing(null);
+        setSessions(false);
         riel.select({ kind: numbered });
       }
     };
@@ -194,14 +215,16 @@ export default function App() {
       className={[
         "panel",
         prefs.railExpanded && "is-rail-expanded",
-        project && !editing && "is-project tinted",
+        // El apartado de Claude no es un proyecto y no está dentro de uno: su acento es el de
+        // la app (spec 17.4), así que el tinte del proyecto seleccionado no lo alcanza.
+        project && !editing && !sessions && "is-project tinted",
       ]
         .filter(Boolean)
         .join(" ")}
       /* Un atributo en la raíz y no una prop hasta cada fila: lo mira solo el CSS, y de aquí
          cuelgan por igual la lista, los resultados de búsqueda y las subtareas del detalle. */
       data-texto={prefs.rowText}
-      style={project && !editing ? tint(project.color) : undefined}
+      style={project && !editing && !sessions ? tint(project.color) : undefined}
     >
       <TopBar
         ref={field}
@@ -213,6 +236,7 @@ export default function App() {
           // se ve la lista, y dejarlo detrás de un editor abierto sería teclear a ciegas.
           if (value) {
             setEditing(null);
+            setSessions(false);
             riel.closeDetail();
           }
           riel.setQuery(value);
@@ -245,6 +269,7 @@ export default function App() {
             // Igual que la importación: la hoja se lo lleva el área de contenido entera, así
             // que lo que hubiera puesto ahí se cierra antes.
             setEditing(null);
+            setSessions(false);
             riel.closeDetail();
             setPicking(true);
           }}
@@ -254,6 +279,7 @@ export default function App() {
             // se cierra: importar puede borrar la tarea que se estaba leyendo o el proyecto que
             // se estaba editando, y volver a ellos después sería volver a un fantasma.
             setEditing(null);
+            setSessions(false);
             riel.closeDetail();
             setImporting(true);
           }}
@@ -267,9 +293,19 @@ export default function App() {
           projects={riel.projects}
           counts={riel.counts}
           expanded={prefs.railExpanded}
+          sessions={sessions}
           onSelect={(next) => {
             setEditing(null);
+            setSessions(false);
             riel.select(next);
+          }}
+          onSessions={() => {
+            setEditing(null);
+            riel.closeDetail();
+            // La búsqueda es de tareas y aquí no hay ninguna (spec 17.6). Dejarla puesta haría
+            // que volver al riel devolviera a unos resultados que nadie pidió otra vez.
+            riel.setQuery("");
+            setSessions(true);
           }}
           onNewProject={() => setEditing({ project: null })}
           onEditProject={(target) => setEditing({ project: target })}
@@ -293,7 +329,8 @@ export default function App() {
                 reminders.sync();
               }}
             />
-
+          ) : sessions ? (
+            <ClaudeSessions claude={claude} />
           ) : editing ? (
             <ProjectEditor
               key={editing.project?.id ?? "nuevo"}
@@ -393,7 +430,7 @@ export default function App() {
 
         {/* El pie no captura mientras hay una hoja delante —editar un proyecto, importar, elegir
             listas— ni leyendo el detalle de una tarea: en ninguno hay lista a la que agregar. */}
-        {!editing && !importing && !picking && !riel.detail && acceptsNew(riel.view) && (
+        {!editing && !importing && !picking && !sessions && !riel.detail && acceptsNew(riel.view) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}

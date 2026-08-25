@@ -1,6 +1,7 @@
 mod accent;
 mod agenda;
 mod autostart;
+mod claude;
 mod db;
 mod deeplink;
 mod editor;
@@ -226,6 +227,31 @@ fn set_reminder_done(id: String, done: bool) -> Result<f64, String> {
     reminders::set_done(&id, done)
 }
 
+/// Las sesiones de Claude Code que están abiertas ahora mismo (spec 17).
+///
+/// Se pide cuando el apartado está a la vista y no al abrir el panel: leer las transcripciones
+/// cuesta más que el presupuesto entero del criterio 1, y no hay ninguna razón para pagarlo al
+/// abrir Hoy.
+#[tauri::command]
+fn claude_sessions() -> Vec<claude::Session> {
+    claude::live()
+}
+
+/// Lo que ocupa `~/.claude`. Va en un comando aparte del de las sesiones porque tarda mucho más
+/// —son varios miles de archivos— y así la lista se dibuja sin esperarlo (spec 17.5).
+#[tauri::command]
+fn claude_disk() -> Option<claude::Disk> {
+    claude::disk()
+}
+
+/// Cierra una sesión. Lo que llega es su identificador y nunca un pid: Rust vuelve a mirar quién
+/// es antes de mandar la señal (spec 17.3). El error que devuelve se enseña tal cual, así que ya
+/// viene dicho en castellano.
+#[tauri::command]
+fn close_claude_session(id: String) -> Result<(), String> {
+    claude::close(&id)
+}
+
 /// Cierra la app desde Ajustes.
 ///
 /// Sin Dock y sin ⌘Tab (spec 4), una app de la barra no tiene ⌘Q ni menú de aplicación, así
@@ -291,6 +317,9 @@ pub fn run() {
             fetch_reminders,
             reminders_by_id,
             set_reminder_done,
+            claude_sessions,
+            claude_disk,
+            close_claude_session,
             quit,
             restart
         ])

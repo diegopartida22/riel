@@ -38,6 +38,12 @@ url = "2"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 window-vibrancy = "0.6"
+# Las sesiones de Claude Code (spec 17). Es la misma versión que ya arrastra Tauri, así que
+# nombrarla aquí no añade nada al árbol. Se usa para tres cosas y ninguna más: saber si un pid
+# sigue vivo, leer su hora de arranque real —que es lo que impide confundir un pid reciclado con
+# una sesión— y mandarle un SIGTERM. Nada de `tauri-plugin-shell`: ejecutar programas desde
+# JavaScript es justo lo que esta app no tiene por qué poder hacer.
+libc = "0.2"
 # Las mismas versiones que ya arrastra Tauri, así que no crecen el árbol. Se usan solo
 # para instanciar `NSGlassEffectView`, que ninguna caja de Rust expone todavía.
 objc2 = "0.6"
