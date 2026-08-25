@@ -263,6 +263,10 @@ fn tray_monitor<R: Runtime>(
 
 pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
     position(window);
+    // Entre colocar y mostrar: el vidrio nuevo necesita saber sobre qué pantalla va a dibujar,
+    // y no puede haber un fotograma de ventana transparente antes de que esté puesto. De la
+    // segunda apertura en adelante no hace nada.
+    crate::glass::ensure(window);
     let _ = window.show();
     let _ = window.set_focus();
 

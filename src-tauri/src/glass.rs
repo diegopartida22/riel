@@ -49,14 +49,33 @@ impl Material {
     }
 }
 
+/// Decide qué material va a pintar el panel, y deja puesto el que se puede poner ya.
+///
+/// Los dos caminos no se instalan en el mismo momento, y la asimetría es a propósito:
+///
+/// - El heredado sí se pone aquí. `NSVisualEffectView` lleva desde 10.10 poniéndose en el
+///   `setup` de cualquier app y no le importa que la ventana todavía no se haya visto.
+/// - El nuevo espera a `ensure`, que corre justo antes de la primera apertura. Una
+///   `NSGlassEffectView` es una superficie que *muestrea lo que tiene detrás*, y en `setup` no
+///   tiene nada detrás: la ventana no se ha mostrado, no se ha colocado bajo el icono y por
+///   tanto ni siquiera se le ha asignado la pantalla en la que va a vivir. Que instalarlo así
+///   deja el vidrio a medias no es una sospecha: `refresh_shadow` existe justo para arreglar la
+///   sombra que macOS cachea de esa ventana todavía vacía, y esto es el mismo problema un piso
+///   más abajo.
+///
+///   Lo que no está medido —y por eso se dice como lo que es— es que ese sea el panel negro que
+///   sale al arrancar la máquina y se cura saliendo y volviendo a abrir. Encaja: al iniciar
+///   sesión `launchd` levanta el agente con la sesión gráfica todavía asentándose, el vidrio se
+///   instala una sola vez y se queda como quedó para lo que dure el proceso. No se pudo
+///   reproducir a mano, así que es la explicación mejor sostenida y no un diagnóstico.
+///
+/// Lo que sí se resuelve aquí en los dos casos es *cuál* de los dos es, porque de eso dependen
+/// el radio y el `data-glass` que `on_page_load` le pasa al CSS, y eso pasa antes de que el
+/// panel se abra por primera vez. Preguntar si la clase existe no dibuja nada.
 pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
     #[cfg(target_os = "macos")]
     {
-        let ns_view = window.ns_view()?;
-
-        // SAFETY: `ns_view()` devuelve la `NSView` viva de la ventana, y `apply_glass` se
-        // llama desde `setup`, que corre en el hilo principal.
-        if unsafe { liquid::apply(ns_view, Material::Liquid.corner_radius()) } {
+        if liquid::disponible() {
             return Ok(Material::Liquid);
         }
 
@@ -92,6 +111,38 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
         let _ = window;
         Ok(Material::Popover)
     }
+}
+
+/// Mete el vidrio nuevo por debajo del webview, la primera vez que el panel va a aparecer.
+///
+/// Va justo antes de `show()` y no después, para que no haya un fotograma con la ventana
+/// transparente y el escritorio asomando por dentro del panel. Y va después de `position()`,
+/// que es lo que le da a la ventana la pantalla sobre la que se va a dibujar — que es
+/// exactamente lo que le faltaba en `setup`.
+///
+/// Idempotente: de la segunda apertura en adelante no hace nada. El material heredado no pasa
+/// por aquí; ese ya quedó puesto en `apply`.
+pub fn ensure<R: Runtime>(window: &WebviewWindow<R>) {
+    #[cfg(target_os = "macos")]
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static PUESTO: AtomicBool = AtomicBool::new(false);
+
+        if !liquid::disponible() || PUESTO.swap(true, Ordering::Relaxed) {
+            return;
+        }
+
+        let Ok(ns_view) = window.ns_view() else {
+            return;
+        };
+
+        // SAFETY: `ns_view()` devuelve la `NSView` viva de la ventana, y esto se llama desde
+        // `show()`, en el hilo principal.
+        unsafe { liquid::apply(ns_view, Material::Liquid.corner_radius()) };
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
 }
 
 /// Le pasa al CSS qué material ganó y con qué radio, para que no haya dos números que
@@ -175,19 +226,27 @@ mod liquid {
     /// superficie que tiene que sostener texto de 11px.
     const STYLE_REGULAR: isize = 0;
 
-    /// Mete una `NSGlassEffectView` por debajo del webview. Devuelve `false` si la clase no
-    /// existe, que es exactamente el caso de macOS 25 y anteriores.
+    /// Si este macOS trae el vidrio nuevo. Falso en macOS 25 y anteriores.
+    pub fn disponible() -> bool {
+        clase().is_some()
+    }
+
+    fn clase() -> Option<&'static AnyClass> {
+        AnyClass::get(c"NSGlassEffectView")
+    }
+
+    /// Mete una `NSGlassEffectView` por debajo del webview.
     ///
     /// # Safety
     ///
     /// `ns_view` tiene que ser la `NSView` viva de la ventana, y esto tiene que correr en el
     /// hilo principal.
-    pub unsafe fn apply(ns_view: *mut c_void, radius: f64) -> bool {
-        let Some(class) = AnyClass::get(c"NSGlassEffectView") else {
-            return false;
+    pub unsafe fn apply(ns_view: *mut c_void, radius: f64) {
+        let Some(class) = clase() else {
+            return;
         };
         let Some(ns_view) = NonNull::new(ns_view) else {
-            return false;
+            return;
         };
 
         unsafe {
@@ -224,7 +283,5 @@ mod liquid {
             );
             host.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, None);
         }
-
-        true
     }
 }
