@@ -269,10 +269,95 @@ fn quit(app: tauri::AppHandle) {
 /// `exit` y su permiso. La diferencia con `quit` es `cleanup_before_exit`, que aquí sí hace
 /// falta —desmonta el icono de la barra— para que el proceso viejo no deje un glifo huérfano
 /// junto al del proceso nuevo.
+///
+/// Y lo que no hace es `AppHandle::restart()`, que era lo que había aquí. Lo que hace Tauri en
+/// macOS es un `spawn` del ejecutable de dentro del paquete y un `exit(0)` detrás — y el
+/// paquete que arranca acaba de ser reemplazado, medio segundo antes, por el propio
+/// actualizador. Medido en el registro del sistema al actualizar a la 0.4.0, con 50 ms entre
+/// las dos líneas:
+///
+/// ```text
+/// kernel (AppleSystemPolicy) ASP: Security policy would not allow process: 56821,
+///                                 /Applications/Riel.app/Contents/MacOS/riel
+/// lsd    (appinstallation)   com.riel.app: Building bundle record for app
+/// ```
+///
+/// El proceso nuevo salió antes de que Launch Services terminara de registrar el paquete
+/// recién puesto: la evaluación de Gatekeeper todavía no tenía veredicto para ese binario y el
+/// núcleo denegó el `exec`. Sin dejar rastro para el usuario, que es lo peor de todo — la app
+/// se cerraba para actualizar y ya no volvía.
+///
+/// Así que el relevo lo pide Launch Services y no nosotros: `open -a` es el mismo camino por el
+/// que se abre la app desde el Finder, y es él quien espera a que el paquete esté evaluado y
+/// registrado antes de arrancarlo. Y lo pide desde fuera, viendo morir antes a este proceso:
+/// con la copia vieja todavía viva, Launch Services no abriría una segunda sino que traería al
+/// frente la que ya está, y la que ya está es la que se está yendo.
 #[tauri::command]
 fn restart(app: tauri::AppHandle) {
-    app.cleanup_before_exit();
-    app.restart();
+    #[cfg(target_os = "macos")]
+    {
+        relanzar();
+        app.cleanup_before_exit();
+        app.exit(0);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        app.cleanup_before_exit();
+        app.restart();
+    }
+}
+
+/// Le pide a Launch Services que vuelva a abrir el paquete, en cuanto este proceso ya no esté.
+///
+/// Los dos datos que necesita van como argumentos y no interpolados en el guion, para que una
+/// ruta con una comilla dentro no acabe siendo parte del guion.
+///
+/// `process_group(0)` es lo que le permite sobrevivir a la app, y no es un detalle: cuando el
+/// arranque al iniciar sesión (§8) está puesto, quien lanzó a Riel fue `launchd`, y al morir el
+/// trabajo `launchd` mata lo que quede con el mismo grupo de procesos —para eso existe la clave
+/// `AbandonProcessGroup`, que el plugin no escribe—. Heredando el grupo, el relevo moriría con
+/// quien lo pidió justo en el caso normal. Con grupo propio, el `sh` se queda huérfano y lo
+/// adopta `launchd` como a cualquier otro.
+///
+/// La espera tiene tope, veinte segundos. Si algo dejara este proceso colgado, lo que hace
+/// `open` entonces es traer al frente la copia que sigue viva; un `sh` dando vueltas para
+/// siempre no lo arregla nadie.
+#[cfg(target_os = "macos")]
+fn relanzar() {
+    use std::os::unix::process::CommandExt;
+
+    let Some(bundle) = paquete() else {
+        return;
+    };
+
+    let guion = "n=0; \
+                 while kill -0 \"$1\" 2>/dev/null && [ \"$n\" -lt 100 ]; do \
+                     /bin/sleep 0.2; n=$((n+1)); \
+                 done; \
+                 exec /usr/bin/open -a \"$2\"";
+
+    let _ = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(guion)
+        .arg("riel")
+        .arg(std::process::id().to_string())
+        .arg(&bundle)
+        .process_group(0)
+        .spawn();
+}
+
+/// El `.app` desde el que corre esta copia, o nada si corre suelta — que es el caso de
+/// `tauri dev`, donde no hay actualizador y aquí no se llega.
+#[cfg(target_os = "macos")]
+fn paquete() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    // …/Riel.app/Contents/MacOS/riel → …/Riel.app
+    let bundle = exe.parent()?.parent()?.parent()?;
+    if bundle.extension()?.to_str()? != "app" {
+        return None;
+    }
+    Some(bundle.to_path_buf())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

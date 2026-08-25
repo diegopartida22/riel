@@ -611,6 +611,18 @@ mismo que `quit` (§4): el plugin traería permisos que no hacen falta para un b
 hace falta es `cleanup_before_exit`, o el proceso viejo deja su glifo en la barra junto al del
 nuevo.
 
+Y **el relevo lo pide Launch Services**, no lo hace la app. Lo natural —`AppHandle::restart()`, que
+es lo que había— arranca el ejecutable de dentro del paquete a mano y se muere detrás, y el paquete
+que arranca lo acaba de reemplazar el actualizador medio segundo antes. Medido al actualizar a la
+0.4.0, con 50 ms entre las dos líneas: el núcleo denegó el `exec` por política de seguridad
+mientras `lsd` todavía estaba construyendo el registro del paquete nuevo. O sea que la app se
+cerraba para actualizar y no volvía, sin decir nada. `open -a` es el mismo camino por el que se
+abre desde el Finder, y es Launch Services quien espera a que el paquete esté registrado y
+evaluado. Lo pide un `sh` suelto que primero ve morir a este proceso —con la copia vieja viva,
+Launch Services traería al frente esa en vez de abrir una nueva— y en grupo de procesos propio, o
+`launchd` se lo llevaría por delante al terminar el trabajo cuando el arranque al iniciar sesión
+(§8) está puesto.
+
 Las releases las corta `npm run release -- X.Y.Z`. La llave privada vive fuera del repo, en
 `~/.tauri/riel.key`. Perderla deja a todo el que tenga una versión anterior sin actualizaciones
 automáticas para siempre: no hay forma de rotarla, porque la llave pública va compilada dentro
