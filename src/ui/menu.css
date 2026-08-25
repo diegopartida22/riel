@@ -449,3 +449,24 @@
    subtítulo de ese botón —el número que el botón acababa de encontrar— cuando es lo contrario:
    lo que hay puesto, y el botón es lo que cuelga de ello. De paso desaparece una línea huérfana
    y el grupo pasa a tener nombre, que es lo que le faltaba. */
+
+/* Un renglón del popover que no decide nada ahí sino que lleva a otro sitio: hoy solo el de
+   elegir las listas de Recordatorios (spec 16.6), que cierra el popover y abre la hoja en el
+   área de contenido.
+
+   El `›` va donde el resto del bloque pone su interruptor o su segmentado. Sin él era el único
+   renglón de los seis sin nada en la columna de la derecha, y una cadena suelta a la izquierda
+   entre cinco preferencias con su control alineado se leía como un renglón de menú colado
+   entre ellas — no como lo que cuelga del interruptor de arriba.
+
+   La sangría de la izquierda no se toca: es la única del popover y de ella cuelga todo, notas
+   y rótulos incluidos (spec 8). Lo que dice de quién es este renglón es la compañía, no un
+   escalón propio. */
+.menu__item--lleva {
+  justify-content: space-between;
+}
+
+.menu__lleva {
+  flex: 0 0 auto;
+  color: var(--ink-tertiary);
+}

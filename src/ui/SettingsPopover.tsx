@@ -19,6 +19,7 @@ import { ROW_TEXTS, type RowText } from "../state/rowText";
 import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
 import type { Updates } from "../state/updates";
 import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
+import { ChevronRight } from "./icons";
 import { SYSTEM_ICONS } from "./Rail";
 import { Switch } from "./Switch";
 
@@ -56,6 +57,15 @@ export interface SettingsPopoverProps {
 }
 
 const EDGE = 8;
+
+/**
+ * Lo que espera la cuenta de completadas tras la última tecla, antes de consultar.
+ *
+ * Los mismos 120 ms que el campo de búsqueda, y por lo mismo: cada pulsación es un `COUNT`
+ * contra la base, y recorrer los cuatro plazos con las flechas los lanzaba todos para quedarse
+ * con el último.
+ */
+const COUNT_MS = 120;
 
 /** El panel de Notificaciones de Ajustes del Sistema, para la nota de permiso denegado. */
 const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notifications";
@@ -229,11 +239,40 @@ export function SettingsPopover({
   /** `null` mientras se consulta: sin saberlo, la nota de permiso denegado no se dibuja. */
   const [notify, setNotify] = useState<Permission | null>(null);
   const [busy, setBusy] = useState(false);
-  /** El plazo pulsado que está esperando un sí, con lo que se llevaría por delante. */
-  const [pruning, setPruning] = useState<{ retention: Retention; count: number } | null>(null);
+  /**
+   * El plazo pulsado que todavía no se ha guardado, y lo que se llevaría por delante.
+   *
+   * `count` en nulo es «todavía no se sabe»: el plazo se acaba de pulsar y la cuenta aún no ha
+   * salido. Se dibuja marcado desde ese primer instante aunque no haya nada que confirmar —es
+   * lo que se está decidiendo, y dejar la marca en el plazo viejo mientras tanto haría parecer
+   * que el clic no llegó (spec 8).
+   */
+  const [pruning, setPruning] = useState<{ retention: Retention; count: number | null } | null>(
+    null,
+  );
   /** El último plazo pulsado. Recorrer la fila con las flechas dispara una cuenta por tecla, y
       sin esto la más lenta podría revivir la confirmación de un plazo ya abandonado. */
   const wanted = useRef<Retention>(retention);
+  /** El temporizador de la cuenta, para poder cancelarla si sigue llegando otra tecla. */
+  const counting = useRef<number | null>(null);
+
+  /**
+   * El plazo que ya tiene cuenta, que es el único que pregunta. Mientras `count` sea nulo el
+   * plazo está marcado pero todavía no hay confirmación que dibujar.
+   */
+  const asking =
+    pruning && pruning.count !== null
+      ? { retention: pruning.retention, count: pruning.count }
+      : null;
+
+  // Un temporizador no puede sobrevivir al popover: cerrarlo mientras la cuenta espera dejaría
+  // un disparo tardío tocando un estado que ya no existe.
+  useEffect(
+    () => () => {
+      if (counting.current !== null) clearTimeout(counting.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     getVersion().then(setVersion, (cause) => console.error(cause));
@@ -262,6 +301,8 @@ export function SettingsPopover({
     autostart,
     notify,
     updates.state,
+    // `pruning` y no `asking`: el segundo es un objeto nuevo en cada render, y con él aquí el
+    // popover se remediría a sí mismo sin parar mientras la confirmación esté delante.
     pruning,
     editors,
     agenda,
@@ -318,26 +359,45 @@ export function SettingsPopover({
    * que se está decidiendo, y dejar la marca en la vieja haría parecer que el clic no llegó.
    */
   const pickRetention = (next: Retention) => {
-    setPruning(null);
     wanted.current = next;
+    if (counting.current !== null) clearTimeout(counting.current);
+
     if (next === null || (retention !== null && next >= retention)) {
+      setPruning(null);
       onRetention(next);
       return;
     }
 
-    void countSweepable(next).then(
-      (count) => {
-        if (wanted.current !== next) return;
-        if (count === 0) onRetention(next);
-        else setPruning({ retention: next, count });
-      },
-      (cause) => {
-        // Sin poder contar no hay nada que enseñar, así que se guarda igual. Si además falla
-        // la escritura, lo dice `changeRetention`: no hacen falta dos avisos para un fallo.
-        console.error(cause);
-        if (wanted.current === next) onRetention(next);
-      },
-    );
+    // La marca se mueve ya; la cuenta espera un respiro. Recorrer los cuatro plazos con las
+    // flechas son cuatro pulsaciones en menos de medio segundo, y sin esto cada una lanzaba su
+    // `COUNT` contra la base para que la siguiente lo descartara. Es el mismo respiro que el
+    // campo de búsqueda, y por lo mismo: quien recorre con flechas no está preguntando cuántas.
+    //
+    // Cerrar el popover dentro del respiro solo se traga una confirmación que aún no había
+    // salido. Nada se escribe hasta que se contesta, así que no hay nada que perder.
+    setPruning({ retention: next, count: null });
+    counting.current = window.setTimeout(() => {
+      counting.current = null;
+      void countSweepable(next).then(
+        (count) => {
+          if (wanted.current !== next) return;
+          if (count === 0) {
+            setPruning(null);
+            onRetention(next);
+          } else {
+            setPruning({ retention: next, count });
+          }
+        },
+        (cause) => {
+          // Sin poder contar no hay nada que enseñar, así que se guarda igual. Si además falla
+          // la escritura, lo dice `changeRetention`: no hacen falta dos avisos para un fallo.
+          console.error(cause);
+          if (wanted.current !== next) return;
+          setPruning(null);
+          onRetention(next);
+        },
+      );
+    }, COUNT_MS);
   };
 
   /**
@@ -445,15 +505,23 @@ export function SettingsPopover({
       {reminders && remindersPermission === "granted" && (
         <button
           type="button"
-          className="menu__item"
+          className="menu__item menu__item--lleva"
           onClick={() => {
             onPickLists();
             onClose();
           }}
         >
-          {reminderLists === 0
-            ? "Elegir listas…"
-            : `${reminderLists} ${reminderLists === 1 ? "lista vinculada" : "listas vinculadas"}…`}
+          <span>
+            {reminderLists === 0
+              ? "Elegir listas…"
+              : `${reminderLists} ${reminderLists === 1 ? "lista vinculada" : "listas vinculadas"}…`}
+          </span>
+          {/* Lo que lo devuelve a la tabla de preferencias. Es el único renglón del bloque sin
+              nada en la columna de la derecha —los otros cinco llevan ahí su interruptor o su
+              segmentado— y sin eso se leía como un renglón de menú suelto entre ellas y no como
+              lo que cuelga del interruptor de arriba. El `›` es además lo que dice que no decide
+              nada aquí: lleva a la hoja, que es donde se elige (spec 16.6). */}
+          <ChevronRight size={12} className="menu__lleva" aria-hidden />
         </button>
       )}
 
@@ -548,22 +616,22 @@ export function SettingsPopover({
           el sí en rojo y la salida. Sin `autoFocus`, al revés que allí — allí la confirmación
           nace de un clic en «Eliminar», y aquí de recorrer una fila de opciones, donde robar
           el foco dejaría a quien navega con flechas fuera del grupo a media vuelta. */}
-      {pruning && (
+      {asking && (
         <>
           <p className="settings__note">
-            Conservar {RETENTIONS.find((option) => option.value === pruning.retention)?.label} borra
-            ahora {pruning.count} {pruning.count === 1 ? "tarea completada" : "tareas completadas"},
+            Conservar {RETENTIONS.find((option) => option.value === asking.retention)?.label} borra
+            ahora {asking.count} {asking.count === 1 ? "tarea completada" : "tareas completadas"},
             y eso no se deshace.
           </p>
           <button
             type="button"
             className="menu__item menu__item--danger"
             onClick={() => {
-              onRetention(pruning.retention);
+              onRetention(asking.retention);
               setPruning(null);
             }}
           >
-            Sí, borrar {pruning.count === 1 ? "1 tarea" : `${pruning.count} tareas`}
+            Sí, borrar {asking.count === 1 ? "1 tarea" : `${asking.count} tareas`}
           </button>
           <button
             type="button"
