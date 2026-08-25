@@ -113,6 +113,41 @@
   transition: opacity 140ms ease-out 40ms;
 }
 
+/* ── El conteo de pendientes ─────────────────────────────────────────────────────────── */
+
+/* Cuántas quedan en cada proyecto, en el riel expandido. Colapsado, un disco es lo único que hay
+   y el conteo vive en el tooltip; expandido sobran cuarenta píxeles a la derecha del nombre y el
+   dato que más se quiere de un proyecto antes de entrar en él es justo ese.
+
+   Comparte hueco con el `⋯` y se desvanece cuando entra, igual que la fecha de una fila de tarea
+   (spec 3.5): el sitio ya estaba reservado, así que al pasar el puntero no se mueve nada. En
+   tinta terciaria y en la fuente de datos — es un contador, no un nombre, y a la derecha de siete
+   proyectos tiene que leerse como una columna. */
+.rail__count {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-group);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+.rail__slot:hover .rail__count,
+.rail__slot:focus-within .rail__count {
+  opacity: 0;
+}
+
+/* Colapsado no hay hueco a la derecha: el nombre y el conteo se irían encima del disco. */
+.panel:not(.is-rail-expanded) .rail__count {
+  display: none;
+}
+
 /* ── El `⋯` del proyecto ─────────────────────────────────────────────────────────────── */
 
 .rail__slot {
@@ -266,6 +301,7 @@
   .rail,
   .foot__rail,
   .rail__item,
+  .rail__count,
   .rail__label,
   .panel:not(.is-rail-expanded) .rail__label,
   .rail__group--projects.is-sorting .rail__slot {

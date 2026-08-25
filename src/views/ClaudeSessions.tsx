@@ -6,6 +6,7 @@ import { shortPath } from "../state/editors";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
 import { Folder, Refresh } from "../ui/icons";
+import { Meter } from "../ui/Meter";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
@@ -79,7 +80,7 @@ const OWNERS: Record<string, string> = {
  * a la izquierda en su casilla, esta lo gasta en la hora de arranque.
  */
 export function ClaudeSessions({ claude }: { claude: Claude }) {
-  const { sessions, disk, loading, error, now, reload, close } = claude;
+  const { sessions, disk, loading, counting, error, now, reload, close } = claude;
   const [confirming, setConfirming] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -105,6 +106,30 @@ export function ClaudeSessions({ claude }: { claude: Claude }) {
   };
 
   const total = sessions.reduce((sum, each) => sum + each.memory, 0);
+
+  /**
+   * La vara de las dos barras de cada fila: la sesión más grande del momento en cada cosa.
+   *
+   * Es una escala relativa y no una fracción de un tope, y eso es a propósito. El contexto no
+   * tiene denominador que se pueda saber: la transcripción guarda el `usage` y el modelo, y de
+   * ahí no sale cuál es la ventana —`claude-opus-5` es el mismo nombre con 200k que con 1M— así
+   * que dibujar `68k / 200k` sería inventarse la mitad del dato. Y la memoria residente contra
+   * la RAM de la máquina da fracciones de un dos por ciento, que a lo ancho de una fila no es
+   * una barra sino una raya.
+   *
+   * Contra la mayor sí se contesta lo que este apartado pregunta: cuál de las que hay abiertas
+   * es la que pesa. Por eso las barras solo salen con dos sesiones o más — con una, la vara es
+   * ella misma, las dos barras salen llenas y «lleno» se lee como un tope alcanzado que aquí no
+   * existe. Y por eso el número de al lado siempre es el absoluto: la barra compara, la cifra
+   * dice cuánto.
+   */
+  const scale =
+    sessions.length > 1
+      ? {
+          memory: Math.max(...sessions.map((each) => each.memory)),
+          context: Math.max(...sessions.map((each) => each.context)),
+        }
+      : null;
 
   return (
     <div className="view" ref={box} onKeyDown={onKeyDown}>
@@ -140,6 +165,7 @@ export function ClaudeSessions({ claude }: { claude: Claude }) {
               key={session.id}
               session={session}
               now={now}
+              scale={scale}
               confirming={confirming === session.id}
               onAsk={() => setConfirming(session.id)}
               onCancel={() => setConfirming(null)}
@@ -152,43 +178,31 @@ export function ClaudeSessions({ claude }: { claude: Claude }) {
         </ul>
       )}
 
-      {disk && (
+      {(disk || counting) && (
         <>
           <GroupHeader
             action={
-              <button
-                type="button"
-                className="group-header__tool"
-                title="Ver en el Finder"
-                aria-label="Ver en el Finder"
-                onClick={() => void revealItemInDir(disk.path).catch((cause) => console.error(cause))}
-              >
-                <Folder size={12} aria-hidden />
-              </button>
+              disk && (
+                <button
+                  type="button"
+                  className="group-header__tool"
+                  title="Ver en el Finder"
+                  aria-label="Ver en el Finder"
+                  onClick={() =>
+                    void revealItemInDir(disk.path).catch((cause) => console.error(cause))
+                  }
+                >
+                  <Folder size={12} aria-hidden />
+                </button>
+              )
             }
           >
             Disco
           </GroupHeader>
 
-          <dl className="claude-disk">
-            <div className="claude-disk__row">
-              <dt>Transcripciones</dt>
-              <dd>{bytes(disk.transcripts)}</dd>
-            </div>
-            <div className="claude-disk__row">
-              <dt>Historial de archivos</dt>
-              <dd>{bytes(disk.history)}</dd>
-            </div>
-            <div className="claude-disk__row">
-              <dt>Resto</dt>
-              <dd>{bytes(disk.rest)}</dd>
-            </div>
-          </dl>
-
-          {/* Se enseña el número y se abre la puerta; borrar es cosa de otra app (spec 17.5). */}
-          <p className="claude-note">
-            Riel no borra nada de aquí. Lo que sobre se quita desde el Finder.
-          </p>
+          {/* Recorrer `~/.claude` son varios miles de archivos, así que el bloque dice que está
+              contando en vez de saltar de vacío a un número (spec 17.5). */}
+          {disk ? <DiskBlock disk={disk} /> : <p className="claude-note">Contando…</p>}
         </>
       )}
     </div>
@@ -198,18 +212,21 @@ export function ClaudeSessions({ claude }: { claude: Claude }) {
 interface RowProps {
   session: Session;
   now: number;
+  /** La sesión más grande del momento, o nulo si solo hay una y no hay con qué comparar. */
+  scale: { memory: number; context: number } | null;
   confirming: boolean;
   onAsk: () => void;
   onCancel: () => void;
   onClose: () => void;
 }
 
-function Row({ session, now, confirming, onAsk, onCancel, onClose }: RowProps) {
+function Row({ session, now, scale, confirming, onAsk, onCancel, onClose }: RowProps) {
   const active = isActive(session, now);
   const cost = estimate(session);
   const spent = session.input + session.output + session.cacheWrite + session.cacheRead;
   const owner = session.entrypoint ? OWNERS[session.entrypoint] : undefined;
   const quiet = session.touched === null ? null : since(now - session.touched);
+  const model = session.model ? modelName(session.model) : null;
 
   return (
     <li className={`claude__slot${active ? " is-now" : ""}`}>
@@ -217,11 +234,11 @@ function Row({ session, now, confirming, onAsk, onCancel, onClose }: RowProps) {
         <span className="claude__time">{hour(session.started)}</span>
 
         <div className="claude__body">
-          {/* Tres renglones y no uno. En 440px menos el riel quedan menos de cuatro centímetros
-              de fila, y con el nombre, las tres cifras y el «hace» en el mismo renglón el nombre
-              se quedaba sin ancho y se partía letra a letra. Arriba va lo que contesta la
-              pregunta del apartado —cuál es y cuánto lleva quieta—; debajo, dónde vive; y al pie
-              los números, que son de mirar y no de escanear. */}
+          {/* Renglones y no un solo bloque. En 440px menos el riel quedan menos de cuatro
+              centímetros de fila, y con el nombre, las cifras y el «hace» en el mismo renglón el
+              nombre se quedaba sin ancho y se partía letra a letra. Arriba va lo que contesta la
+              pregunta del apartado —cuál es y cuánto lleva quieta—; debajo, dónde vive; después
+              lo que ocupa ahora, con su barra; y al pie lo que lleva gastado. */}
           <div className="claude__line">
             <span className="claude__name">{session.name}</span>
 
@@ -238,27 +255,66 @@ function Row({ session, now, confirming, onAsk, onCancel, onClose }: RowProps) {
             </span>
           </div>
 
+          {/* La ruta y el modelo, y el presupuesto de la ruta descontando lo que ocupa el
+              modelo: con 34 caracteres fijos para la carpeta, una ruta larga empujaba al modelo
+              fuera del renglón y lo dejaba en `o…`, que no nombra nada. La carpeta se come por
+              delante y sigue diciendo dónde está aunque le falten dos tramos; el modelo cortado
+              no dice nada en absoluto. */}
           <p className="claude__where">
-            {[shortPath(session.cwd, 34), session.model ? modelName(session.model) : null]
-              .filter(Boolean)
-              .join(" · ")}
+            {[shortPath(session.cwd, session.model ? 26 : 34), model].filter(Boolean).join(" · ")}
           </p>
 
-          {/* Los cuatro números, en dos columnas fijas y no en un renglón con separadores.
-              Medido en el panel: con el riel expandido al cuerpo de la fila le quedan 218 px,
-              que son treinta caracteres de la fuente de datos, y las cuatro cifras con sus
-              rótulos pasan de cuarenta. Puestas en rejilla caben, y además se alinean entre
-              sesiones —que es para lo que existe `tabular-nums` (spec 3.3)—: la columna deja
-              comparar dos sesiones de un vistazo en vez de leer dos renglones distintos.
-              Arriba lo que ocupa ahora, abajo lo que lleva gastado. */}
-          <div className="claude__grid">
-            <span>{bytes(session.memory)}</span>
-            <span>{tokens(session.context)} ctx</span>
-            {spent > 0 && <span>{tokens(spent)} tok</span>}
-            {/* El costo nunca sale sin el rótulo: es una estimación a precio de lista, y quien
-                paga una suscripción no paga esto (spec 17.4). */}
-            {spent > 0 && <span>{cost === null ? "sin precio" : `${money(cost)} estimado`}</span>}
-          </div>
+          {/* Lo que la sesión ocupa ahora mismo, que es lo que decide si se cierra. Con barra,
+              cada cifra se lleva su renglón: la barra va delante porque es lo que se lee de un
+              vistazo y la cifra a la derecha, para que caiga en el mismo sitio en todas las
+              filas — que es justo para lo que existe la fuente de datos (spec 3.3).
+
+              Sin barra —una sola sesión, nada con qué comparar— las dos se juntan en un
+              renglón contra sus dos bordes, como el de abajo. Sueltas y alineadas a la derecha
+              se quedaban colgando de media fila vacía: sin la barra delante, el renglón no
+              tenía quién ocupara su izquierda. */}
+          {scale ? (
+            <>
+              <Gauge value={bytes(session.memory)} fill={session.memory / scale.memory} />
+              <Gauge
+                value={tokens(session.context)}
+                unit="ctx"
+                fill={session.context / scale.context}
+              />
+            </>
+          ) : (
+            <div className="claude__totals">
+              <span className="claude__value">{bytes(session.memory)}</span>
+              <span className="claude__value">
+                {tokens(session.context)}
+                <span className="claude__unit"> ctx</span>
+              </span>
+            </div>
+          )}
+
+          {/* Y al pie lo gastado, que no es de ahora y no lleva barra: el contexto y la memoria
+              se comparan entre sesiones vivas, el gasto es un acumulado que solo crece. Los dos
+              contra sus bordes, así que el costo no se pierde por la derecha. */}
+          {spent > 0 && (
+            <div className="claude__totals">
+              <span className="claude__value">
+                {tokens(spent)}
+                <span className="claude__unit"> tok</span>
+              </span>
+              {/* El costo nunca sale sin el rótulo: es una estimación a precio de lista, y quien
+                  paga una suscripción no paga esto (spec 17.4). */}
+              <span className="claude__value">
+                {cost === null ? (
+                  <span className="claude__unit">sin precio</span>
+                ) : (
+                  <>
+                    {money(cost)}
+                    <span className="claude__unit"> estimado</span>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -285,5 +341,72 @@ function Row({ session, now, confirming, onAsk, onCancel, onClose }: RowProps) {
         </div>
       )}
     </li>
+  );
+}
+
+/** Un renglón de la fila: la barra a la izquierda y su cifra contra el borde derecho. */
+function Gauge({ value, unit, fill }: { value: string; unit?: string; fill: number }) {
+  return (
+    <div className="claude__gauge">
+      <Meter fill={fill} />
+      <span className="claude__value">
+        {value}
+        {unit && <span className="claude__unit"> {unit}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * El disco (spec 17.5): `~/.claude` entero, con las dos piezas que explican el tamaño y el resto
+ * junto. Una sola barra apilada y debajo su leyenda, porque lo que se está preguntando aquí es
+ * de qué es el giga y medio — y eso es una proporción, no tres números sueltos.
+ *
+ * Un solo color, el de la app, en tres densidades, y la leyenda nombra cada parte con su cifra:
+ * el color no llega a decir nada por su cuenta y no tiene por qué. El hueco de 1px entre partes
+ * es lo que las separa cuando la densidad no alcanza — la de «Resto» son quince megas de mil
+ * setecientos, y a esa escala su trozo es una raya.
+ *
+ * No hay botón de borrar y no lo va a haber: lo que hay ahí dentro es de otra app y tiene años
+ * encima. Se enseña el número y se abre la puerta.
+ */
+function DiskBlock({ disk }: { disk: { transcripts: number; history: number; rest: number } }) {
+  const parts = [
+    { key: "transcripts", label: "Transcripciones", value: disk.transcripts },
+    { key: "history", label: "Historial de archivos", value: disk.history },
+    { key: "rest", label: "Resto", value: disk.rest },
+  ];
+  const total = parts.reduce((sum, each) => sum + each.value, 0);
+
+  return (
+    <>
+      <div className="claude__gauge claude__gauge--disk">
+        <div className="stack" aria-hidden>
+          {parts.map((part, index) => (
+            <span
+              key={part.key}
+              className={`stack__part stack__part--${index + 1}`}
+              style={{ flexGrow: part.value }}
+            />
+          ))}
+        </div>
+        <span className="claude__value">{bytes(total)}</span>
+      </div>
+
+      <dl className="claude-disk">
+        {parts.map((part, index) => (
+          <div className="claude-disk__row" key={part.key}>
+            <dt>
+              <span className={`stack__swatch stack__part--${index + 1}`} aria-hidden />
+              {part.label}
+            </dt>
+            <dd>{bytes(part.value)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Se enseña el número y se abre la puerta; borrar es cosa de otra app (spec 17.5). */}
+      <p className="claude-note">Riel no borra nada de aquí. Lo que sobre se quita desde el Finder.</p>
+    </>
   );
 }

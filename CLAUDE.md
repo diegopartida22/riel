@@ -213,6 +213,14 @@ pesen lo mismo.
 Al hacer hover sobre un disco colapsado, aparece un tooltip nativo con el nombre y el
 conteo de pendientes.
 
+Expandido, ese conteo deja de vivir solo en el tooltip y sale a la derecha del nombre, en la
+fuente de datos y en `--ink-tertiary`. Es el dato que se quiere de un proyecto justo antes de
+entrar en él, y colapsado no cabía en ningún sitio; expandido sobran cuarenta píxeles ahí. Un
+proyecto sin pendientes no enseña un cero: lo que se lee de una columna de números es cuál pesa,
+y un cero repetido siete veces es ruido con forma de dato. Comparte el hueco del `⋯` y se
+desvanece cuando entra, exactamente como la fecha de una fila de tarea (§3.5), así que al pasar
+el puntero no se mueve nada.
+
 ### 3.5 La fila de tarea
 
 ```
@@ -227,6 +235,9 @@ conteo de pendientes.
   que evita que la lista se vuelva un semáforo.
 - Fecha: en mono. Vencida → `--danger`. Hoy → `--ink-primary`. Futura → `--ink-secondary`.
   Formato corto en español: `mié 12`, `14:30` si es hoy con hora, `12 ago` si es de otro mes.
+  **Completada → `--ink-tertiary`, aunque la fecha haya pasado.** El rojo dice «esto hay que
+  hacerlo ya», y sobre algo que ya se hizo es una alarma que no lleva a ninguna parte: en
+  Completadas dejaba la vista entera en rojo, que es donde menos falta hace.
 - Punto de proyecto: 6px, solo en vistas mixtas. Dentro de un proyecto es redundante, ocúltalo.
 - Subtareas: indentadas 22px, título a 12px, sin punto de proyecto ni fecha propia.
 - Hover: fondo `--layer-hover`, radio 6px, y aparecen dos affordances a la derecha —
@@ -299,6 +310,32 @@ Lo que se apaga, y por qué:
   debajo asoma el escritorio. Se apaga el del documento, no el de las listas: dentro de un
   `NSScrollView` macOS sí rebota, y quitarlo también ahí sería menos nativo y no más.
 - **El arrastre de imágenes y el outline azul por defecto.** El anillo de foco es el de §5.
+
+### 3.11 Un dato con forma
+
+Una lista de tareas no tiene nada que graficar —una tarea está hecha o no lo está— pero el
+apartado de las sesiones (§17) sí: son cuatro cifras por fila que solo sirven comparadas, y una
+columna de números en mono se compara leyéndolos de uno en uno. Ahí, y solo ahí, una magnitud se
+dibuja además de escribirse.
+
+La regla, entera, para que esto no crezca hacia un panel de gráficas:
+
+- **Un solo primitivo, la barra.** Pista con alfa —la misma `--hairline` de todo lo demás— y lo
+  lleno encima. Nada de anillos, agujas, áreas ni ejes: son formas que piden leer una escala, y
+  aquí no hay ninguna escala que enseñar.
+- **Un solo color, y es el acento.** `--accent-app`, el que un proyecto no sobreescribe (§3.1),
+  porque nada de lo que se mide es de un proyecto. Sin gradientes y sin sombras. Cuando una barra
+  tiene partes, se separan por densidad del mismo acento y no por otro color: inventar una paleta
+  de categorías sería escribir hexes de acento, que es justo lo que el criterio 9 prohíbe.
+- **La barra nunca es el dato.** Siempre lleva su cifra al lado, en la fuente de datos y contra el
+  mismo borde en todas las filas. La barra compara de un vistazo; la cifra dice cuánto. Por eso va
+  `aria-hidden`: anunciar las dos es leer el dato dos veces.
+- **Y no se llena con una animación.** El valor solo cambia al releer, así que la transición no
+  acompañaría al gesto de nadie — sería movimiento porque sí, que es lo que el criterio 7 apaga
+  aunque no se lo pidan.
+- **Ninguna barra se dibuja contra un tope inventado.** Si no hay un denominador que se pueda
+  saber, la vara es el mayor de los que hay en pantalla y la comparación es entre ellos; si ni
+  siquiera hay dos, no hay barra (§17.4).
 
 ---
 
@@ -1124,46 +1161,62 @@ qué se puede cerrar, y lo que se puede cerrar va arriba. La que se está usando
 casilla, sin manija de arrastre, sin punto de proyecto. Una sesión no se completa ni se reordena.
 
 ```
- 3 sesiones · 1.5 GB de memoria
+ 3 sesiones · 1.5 GB de memoria                  ↻
 
  12:28   reno-04                        hace 4 h 23 min
          ~/Desktop/Trabajo/RENO · opus-5
-         337 MB      68k ctx
-         47.8M tok   $127.77 estimado
+         ▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒   337 MB
+         ▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒   68k ctx
+         47.8M tok                     $127.77 estimado
 
  18:49   riel-14                                  ahora
          ~/Documents/Projects/riel · opus-5
-         655 MB      207k ctx
-         50.1M tok   $122.37 estimado
+         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   655 MB
+         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   207k ctx
+         50.1M tok                     $122.37 estimado
 ```
 
 - La hora de arranque a la izquierda y en mono, que es la columna donde la agenda pone la suya y la
   fila de tarea su casilla.
 - El nombre con el peso del título de una fila, y la carpeta debajo en `--ink-secondary`,
   abreviada con el `~` del usuario igual que la del proyecto en §13. A su lado, el modelo.
-- **Los cuatro números van en rejilla de dos columnas, no en un renglón con separadores**, y eso
-  es una medida y no un gusto: con el riel expandido al cuerpo de la fila le quedan 218 px, que
-  son treinta caracteres de la fuente de datos, y las cuatro cifras con sus rótulos pasan de
-  cuarenta. En un renglón, lo último se perdía por la derecha — y lo último era el costo. En
-  rejilla caben, y de paso caen en el mismo sitio en todas las filas: comparar dos sesiones es
-  leer una columna en vez de dos renglones distintos, que es justo para lo que existe la fuente
-  de datos (§3.3). Arriba lo que la sesión ocupa ahora —memoria y contexto—, abajo lo que lleva
-  gastado. La unidad de los tokens va cortada a tres letras, `tok` como `ctx`: escrita entera se
-  comía el ancho que necesita el rótulo del costo, y ese no puede faltar.
+- **Los cuatro números van en dos renglones y no en uno**, y eso es una medida y no un gusto: con
+  el riel expandido al cuerpo de la fila le quedan 218 px, que son treinta caracteres de la fuente
+  de datos, y las cuatro cifras con sus rótulos pasan de cuarenta. En un renglón, lo último se
+  perdía por la derecha — y lo último era el costo. Arriba lo que la sesión ocupa ahora —memoria y
+  contexto—, abajo lo que lleva gastado. La unidad de los tokens va cortada a tres letras, `tok`
+  como `ctx`: escrita entera se comía el ancho que necesita el rótulo del costo, y ese no puede
+  faltar. Las cifras caen contra el mismo borde en todas las filas, que es justo para lo que
+  existe la fuente de datos (§3.3): comparar dos sesiones es leer una columna.
+- **Lo que ocupa ahora lleva además su barra** (§3.11), una por renglón, a la izquierda de su
+  cifra. Es lo que contesta de un vistazo la pregunta del apartado —cuál de las abiertas pesa—
+  sin leer cuatro números en mono de una en una.
+- **Y la vara de esas barras es la mayor de las sesiones abiertas, no un tope.** El contexto no
+  tiene denominador que se pueda saber: la transcripción guarda el `usage` y el modelo, y de ahí
+  no sale cuál es la ventana —`claude-opus-5` es el mismo nombre con 200k que con 1M— así que
+  dibujar `68k / 200k` sería inventarse la mitad del dato. Y la memoria residente contra la RAM
+  de la máquina da fracciones de un dos por ciento, que a lo ancho de una fila no es una barra
+  sino una raya. Contra la mayor sí se contesta lo que se pregunta aquí. Por eso mismo **con una
+  sola sesión no hay barras**: la vara sería ella misma, las dos saldrían llenas, y «lleno» se
+  lee como un tope alcanzado que aquí no existe — la fila cae entonces a los dos renglones de
+  cifras sueltas. Y por eso la cifra de al lado siempre es la absoluta.
 - El encabezado dice **«1.5 GB de memoria»** y no «1.5 GB» a secas. Debajo, el bloque del disco
   (§17.5) enseña otro número en gigas que no es ese, y dos cifras iguales sin rótulo en la misma
   pantalla se leen como la misma cifra repetida.
-- **La que se está usando sube a `--ink-primary`; las quietas van un peso por debajo**, la misma
-  gramática que la agenda usa para el evento que está pasando. Y ni una en `--danger`: una sesión
-  olvidada no es un error, es una decisión que todavía no se ha tomado.
+- **La que se está usando sube a `--ink-primary` —el nombre y también sus cifras—; las quietas van
+  un peso por debajo**, la misma gramática que la agenda usa para el evento que está pasando. La
+  unidad de cada cifra baja un peso más: `MB` y `ctx` se saben de memoria y no hay que volver a
+  leerlos, el número sí. Y ni una en `--danger`: una sesión olvidada no es un error, es una
+  decisión que todavía no se ha tomado.
 - El acento del apartado es `--accent-app` y no el de ningún proyecto (§3.1). No es un proyecto y
   no está dentro de uno.
 - «Cerrar» aparece al hover, en el hueco de la derecha, como el `⋯` de una fila de tarea (§3.5).
 - ↑↓ recorre las sesiones. Espacio y ⏎ no hacen nada aquí: no hay nada que completar ni que editar.
 
 El contexto es el `usage` del último mensaje del asistente —lo que ocupa la conversación ahora
-mismo— y no la suma de todo; los tokens gastados sí son la suma, y por eso van en la fila de
-abajo de la rejilla, pegados al costo que salen de multiplicar. No hay una pantalla de detalle:
+mismo— y no la suma de todo; los tokens gastados sí son la suma, y por eso van en el renglón de
+abajo, pegados al costo que salen de multiplicar. Y por eso el de abajo no lleva barras: lo
+gastado ya no se puede cerrar, así que compararlo de un vistazo no cambia ninguna decisión. No hay una pantalla de detalle:
 una sesión son cuatro números, y abrir algo para leerlos sería esconderlos.
 
 **El costo es una estimación y se dice así, en la propia etiqueta.** Sale de multiplicar tokens por
@@ -1178,6 +1231,23 @@ Vacío: «No hay ninguna sesión abierta.» Sin dibujo y sin frase de ánimo, co
 Un bloque al final del apartado, y no una fila por carpeta: `~/.claude` entero, con las dos piezas
 que explican el tamaño —las transcripciones y el historial de archivos— y el resto junto.
 
+```
+ DISCO                                           ⌸
+ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒░░   1.7 GB
+ ▓ Transcripciones                        1.5 GB
+ ▒ Historial de archivos                  151 MB
+ ░ Resto                                   15 MB
+```
+
+Las tres piezas van en **una sola barra partida** y no en tres: lo que se está preguntando es qué
+llena el disco, y eso es una proporción entre ellas — tres barras sueltas, cada una contra su
+propia vara, dirían tres veces «lleno». La partición es la de §3.11: el mismo acento en tres
+densidades, de mayor a menor, sin un segundo color de por medio. Cada pieza lleva su renglón
+debajo con su cuadradito, su nombre y su cifra, porque a la densidad más floja no se le puede
+pedir que se distinga sola y porque tres trozos sin rótulo no dicen de qué son (§3.11: la barra
+nunca es el dato). El total va contra el borde derecho y en `--ink-primary`: es la cifra que
+manda del bloque.
+
 **No se borra nada.** Ni un botón de limpiar, ni uno de vaciar lo viejo. Es la misma razón por la
 que §16.1 solo escribe una casilla: lo que hay ahí dentro es de otra app y tiene años encima, y una
 app de tareas que se equivoque borrando transcripciones es una app de tareas que borró el trabajo
@@ -1185,8 +1255,10 @@ de alguien. Lo que sí hay es el enlace a la carpeta en el Finder, la misma sali
 los datos de Riel: enseñar el número y abrir la puerta es todo lo que hace falta para decidir.
 
 Y el número tarda, porque recorrer `~/.claude` son varios miles de archivos. Se calcula aparte, con
-el apartado ya en pantalla, y mientras tanto el bloque dice que está contando en vez de saltar de
-vacío a un número.
+el apartado ya en pantalla, y mientras tanto el bloque dice «Contando…» en vez de saltar de vacío a
+un número. El rótulo DISCO sale desde el primer momento y el enlace al Finder no, que llega con la
+cifra: un botón que se puede pulsar antes de que haya nada que mirar promete un sitio al que
+todavía no lleva.
 
 ### 17.6 Dónde vive y cuándo se lee
 

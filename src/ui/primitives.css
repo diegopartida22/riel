@@ -552,6 +552,15 @@
   color: var(--ink-secondary);
 }
 
+/* Y una tarea terminada no está vencida. El rojo de `--danger` dice «esto hay que hacerlo ya», y
+   sobre algo que ya se hizo es una alarma que no lleva a ninguna parte: en Completadas la lista
+   entera se dibujaba en rojo. La fecha se queda —es cuándo vencía, y eso sigue siendo verdad—
+   pero baja al peso de un dato al margen, como el resto de la fila tachada. */
+.task-row.is-completed .due-chip,
+.subtask.is-completed .due-chip {
+  color: var(--ink-tertiary);
+}
+
 /* ── Agenda del día ──────────────────────────────────────────────────────────────────── */
 
 /* Los eventos del Calendario, encima de las tareas en Hoy (spec 15). Se parecen a una fila y
@@ -674,6 +683,35 @@
   .collapse.is-leaving {
     display: none;
   }
+}
+
+/* ── El medidor ──────────────────────────────────────────────────────────────────────── */
+
+/* La barra de magnitud: la pista y lo lleno. Un solo color —el acento de la app— sobre la misma
+   veladura con la que un segmentado de Ajustes dibuja su pista, así que sigue siendo una capa
+   con alfa sobre el vidrio y no un panel opaco encima (spec 3.2).
+
+   3px de alto. Es un dato al margen de un renglón de texto, no un gráfico: más alta se lee como
+   una barra de progreso —algo que avanza solo hacia un final— y aquí no avanza nada.
+
+   La pista es `--hairline` y no la del segmentado: aquella se hunde bajo el vidrio oscuro hasta
+   desaparecer, y una barra sin su parte vacía a la vista deja de comparar — se lee como una raya
+   suelta en vez de como un trozo de algo. La hairline es justo lo que la app usa para «una línea
+   que el ojo encuentra sin mirarla», que es lo que tiene que ser el hueco. */
+.meter {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-app);
 }
 
 /* ── Las sesiones de Claude ──────────────────────────────────────────────────────────── */
@@ -818,32 +856,53 @@
   color: var(--ink-secondary);
 }
 
-/* Y al pie los números, en dos columnas fijas. Medido en el panel: con el riel expandido al
-   cuerpo de la fila le quedan 218 px, que son treinta caracteres de la fuente de datos, y las
-   cuatro cifras con sus rótulos pasan de cuarenta — puestas en un solo renglón, el costo se
-   perdía por la derecha. La primera columna se fija en `10ch`, que es lo que mide la cifra más
-   ancha del bloque —y por eso la unidad va cortada a tres letras, `tok` como `ctx`: escrita
-   entera se comía el ancho que necesita el rótulo del costo, que es el que no puede faltar—,
-   así que las cuatro caen en el mismo sitio en todas las filas: comparar dos
-   sesiones es leer una columna y no dos renglones distintos, que es justo para lo que existe la
-   fuente de datos (spec 3.3). Sigue sin haber pantalla de detalle: son cuatro números y abrir
+/* Los renglones de datos: la barra a la izquierda y su cifra contra el borde derecho.
+
+   Antes eran cuatro números en una rejilla de dos columnas y en `--ink-tertiary`, y las dos
+   cosas estaban mal. La tinta terciaria es la de los rótulos y los encabezados de grupo, así que
+   el contenido del apartado se dibujaba con el peso de una etiqueta y no se leía; y la primera
+   columna, fijada en `10ch`, recortaba justo el dato que más crece — una sesión larga enseñaba
+   `115.2M t…`, que es la cifra a medias de la que sale el costo.
+
+   Con la barra delante, la comparación entre sesiones ya no depende de cuadrar dos columnas de
+   dígitos: se lee de un vistazo cuál pesa. Y la cifra, alineada a la derecha y con `tabular-nums`,
+   sigue cayendo en el mismo sitio en todas las filas (spec 3.3) sin tener que reservar un ancho
+   fijo que después no alcanza. Sigue sin haber pantalla de detalle: son cuatro números y abrir
    algo para leerlos sería esconderlos. */
-.claude__grid {
-  display: grid;
-  grid-template-columns: 10ch minmax(0, 1fr);
-  column-gap: 10px;
+.claude__gauge,
+.claude__totals {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 16px;
+}
+
+.claude__totals {
+  justify-content: space-between;
+}
+
+/* La cifra en la tinta del contenido y su rótulo un peso por debajo, la misma gramática de
+   Ajustes: el valor puesto pesa más que la palabra que lo nombra (spec 8). */
+.claude__value {
+  flex: 0 0 auto;
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-meta);
+  font-weight: 500;
   letter-spacing: 0.02em;
   line-height: 1.4;
-  color: var(--ink-tertiary);
+  white-space: nowrap;
+  color: var(--ink-secondary);
 }
 
-.claude__grid > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.claude__gauge .claude__value {
+  min-width: 8ch;
+  text-align: right;
+}
+
+.claude__unit {
+  font-weight: 400;
+  color: var(--ink-tertiary);
 }
 
 /* La que se está usando sube al primer plano, y es la única del bloque que lo hace — la misma
@@ -851,7 +910,8 @@
    una sesión olvidada no es un error, es una decisión que todavía no se ha tomado. */
 .claude__slot.is-now .claude__name,
 .claude__slot.is-now .claude__idle,
-.claude__slot.is-now .claude__time {
+.claude__slot.is-now .claude__time,
+.claude__slot.is-now .claude__value {
   color: var(--ink-primary);
 }
 
@@ -868,6 +928,64 @@
   font-family: var(--font-data);
   font-size: var(--text-meta);
   color: var(--ink-primary);
+}
+
+/* La barra apilada del disco. Más alta que las de una fila —6px contra 3— porque aquí no es un
+   dato al margen de otra cosa: es el sujeto del bloque. Va con el mismo relleno lateral que los
+   renglones de la leyenda, para que las tres cifras de debajo caigan bajo su propio trozo. */
+.claude__gauge--disk {
+  padding: 2px 8px 6px;
+}
+
+.claude__gauge--disk .claude__value {
+  color: var(--ink-primary);
+}
+
+.stack {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 1px;
+  height: 6px;
+}
+
+.stack__part {
+  min-width: 0;
+  border-radius: 1px;
+  background: var(--accent-app);
+}
+
+.stack__part:first-child {
+  border-start-start-radius: 3px;
+  border-end-start-radius: 3px;
+}
+
+.stack__part:last-child {
+  border-start-end-radius: 3px;
+  border-end-end-radius: 3px;
+}
+
+/* Tres densidades del mismo acento y no tres colores: el apartado no tiene paleta propia y no
+   la va a tener (spec 3.1). Lo que distingue las partes no es el color sino la leyenda, que las
+   nombra con su cifra — el color solo las ordena de mayor a menor peso visual. */
+.stack__part--1 {
+  opacity: 1;
+}
+
+.stack__part--2 {
+  opacity: 0.46;
+}
+
+.stack__part--3 {
+  opacity: 0.18;
+}
+
+.stack__swatch {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent-app);
 }
 
 /* ── El disco ────────────────────────────────────────────────────────────────────────── */
@@ -888,6 +1006,10 @@
 }
 
 .claude-disk__row dt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
   font-size: var(--text-meta);
   color: var(--ink-secondary);
 }

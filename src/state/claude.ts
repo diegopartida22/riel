@@ -104,6 +104,12 @@ export interface Claude {
   sessions: Session[];
   disk: Disk | null;
   loading: boolean;
+  /**
+   * Si todavía se está recorriendo `~/.claude`. Va aparte de `loading` porque las dos preguntas
+   * tardan órdenes de magnitud distintos (spec 17.5): la lista llega enseguida y el disco no, y
+   * el bloque tiene que decir que está contando en vez de saltar de vacío a un número.
+   */
+  counting: boolean;
   /** El fallo de cerrar una sesión. Leer no falla de forma que valga la pena enseñar. */
   error: string | null;
   /** Segundos desde epoch, para el «hace». Avanza solo mientras el apartado está a la vista. */
@@ -120,6 +126,7 @@ export function useClaude(open: boolean): Claude {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [disk, setDisk] = useState<Disk | null>(null);
   const [loading, setLoading] = useState(false);
+  const [counting, setCounting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [nonce, setNonce] = useState(0);
@@ -131,6 +138,7 @@ export function useClaude(open: boolean): Claude {
     let alive = true;
 
     setLoading(true);
+    setCounting(true);
     setNow(Date.now() / 1000);
 
     // Las dos preguntas van sueltas y no en un `Promise.all`: el disco tarda un orden de magnitud
@@ -151,7 +159,10 @@ export function useClaude(open: boolean): Claude {
       .then((found) => {
         if (alive) setDisk(found);
       })
-      .catch((cause) => console.error(cause));
+      .catch((cause) => console.error(cause))
+      .finally(() => {
+        if (alive) setCounting(false);
+      });
 
     return () => {
       alive = false;
@@ -179,5 +190,5 @@ export function useClaude(open: boolean): Claude {
     [reload],
   );
 
-  return { sessions, disk, loading, error, now, reload, close };
+  return { sessions, disk, loading, counting, error, now, reload, close };
 }

@@ -105,9 +105,10 @@ export function Rail({
           <RailItem
             key={project.id}
             label={project.name}
-            tooltip={expanded ? undefined : tooltipFor(project.name, counts.get(project.id) ?? 0)}
+            tooltip={tooltipFor(project.name, counts.get(project.id) ?? 0)}
             selected={!sessions && sameView(view, { kind: "proyecto", id: project.id })}
             tinted={project.color}
+            count={counts.get(project.id) ?? 0}
             onSelect={() => onSelect({ kind: "proyecto", id: project.id })}
             onEdit={() => onEditProject(project)}
             nodeRef={drag.register(project.id)}
@@ -188,6 +189,8 @@ interface RailItemProps {
   selected: boolean;
   /** Hex del proyecto: pinta el disco y, si está seleccionado, el acento de la fila. */
   tinted?: string;
+  /** Pendientes del proyecto. Solo se dibuja expandido y solo si hay alguno. */
+  count?: number;
   onSelect: () => void;
   onEdit?: () => void;
   nodeRef?: (node: HTMLElement | null) => void;
@@ -212,6 +215,7 @@ function RailItem({
   tooltip,
   selected,
   tinted,
+  count,
   onSelect,
   onEdit,
   nodeRef,
@@ -254,6 +258,19 @@ function RailItem({
           encima del hueco que el propio `.rail__item` reserva a su derecha, que se reserva
           siempre y no al pasar el puntero — si apareciera solo al hover, el nombre se
           recortaría de golpe justo cuando lo estás mirando. */}
+      {/* El conteo de pendientes, en el mismo hueco que el `⋯` y desvaneciéndose cuando entra
+          — la gramática de la fecha y las herramientas de una fila de tarea (spec 3.5). En el
+          riel colapsado no se dibuja: ahí no hay sitio, y el conteo ya lo dice el tooltip.
+
+          Fuera del árbol de accesibilidad a propósito: el `title` del botón lo dice con todas
+          sus letras («Infra — 3 pendientes»), y anunciar además un «3» suelto pegado al nombre
+          es leer el mismo dato dos veces, la segunda sin decir de qué es. */}
+      {!!count && (
+        <span className="rail__count" aria-hidden>
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+
       {onMenu && (
         <button
           type="button"
