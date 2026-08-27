@@ -30,7 +30,8 @@ Dentro:
 - La agenda del día: los eventos del Calendario de hoy, encima de la lista de Hoy (§15).
 - El vínculo con los Recordatorios de Apple, para las listas que se elijan (§16).
 - Las sesiones de Claude Code que quedan abiertas, y lo que ocupan (§17).
-- La captura rápida: una ventana que se abre con un atajo global, con menú de comandos (§18).
+- La captura rápida: una ventana que se abre con un atajo global, con menú de comandos y la
+  lista de Hoy (§18).
 
 Fuera de la v1, no lo construyas:
 
@@ -629,8 +630,8 @@ La v1 está lista cuando:
     presupuesto es el de antes de haberla abierto nunca, que es el estado en el que arranca la
     app y en el que pasa la mayor parte del tiempo.
 13. El atajo global abre la ventana de captura sobre lo que sea que haya delante —incluida una
-    app en pantalla completa— sin activar Riel: la app de detrás no pierde nada, y al cerrarse
-    la ventana el teclado vuelve donde estaba.
+    app en pantalla completa— y se lleva el teclado en el acto: lo que se escribe entra ahí y no
+    en la app de detrás. Al cerrarse, la activación vuelve a quien la tenía.
 
 ---
 
@@ -1394,10 +1395,19 @@ anclada al 30% de lo que sobra a lo alto.
   crece, crece hacia abajo.
 - **Es el mismo `RielPanel` que el panel de la barra**, con su vidrio y su excepción de foco:
   se le pide lo mismo —aparecer sobre lo que haya delante, incluida una app en pantalla
-  completa, y llevarse el teclado sin activar Riel. Lo único que cambia es dónde se coloca y
-  con qué arco: 26 con el vidrio nuevo y 16 con el heredado, que es la misma proporción que
-  guardan los dos radios del panel. 620 px de ancho con el arco de un popover se leen como una
-  barra recortada.
+  completa, y llevarse el teclado. Lo único que cambia es dónde se coloca y con qué arco: 26
+  con el vidrio nuevo y 16 con el heredado, que es la misma proporción que guardan los dos
+  radios del panel. 620 px de ancho con el arco de un popover se leen como una barra recortada.
+- **Abrirla activa Riel, y no hay forma de que no lo haga.** macOS entrega las teclas a la app
+  activa y no a la ventana que esté más arriba: una ventana flotante de una app inactiva se
+  dibuja entera, enseña su cursor parpadeando y no recibe una sola letra —lo que se escribe se
+  lo queda la app de detrás. Es lo mismo que hacen Spotlight, Alfred y Raycast. `NonactivatingPanel`
+  promete lo contrario y no es eso lo que evita: lo que evita es que **un clic** en la ventana
+  active la app, que es otra cosa. Lo que sí se puede prometer es lo de después, y por eso hay
+  que apuntar quién tenía el teclado antes de pedirlo: al cerrarse la ventana, la activación
+  vuelve a quien la tenía. macOS no lo hace por su cuenta —medido: con la ventana ya escondida
+  la app de delante seguía siendo Riel, que a esas alturas no tiene ninguna ventana donde poner
+  lo que se escriba.
 - **Se construye la primera vez que se pide, no al arrancar.** Un segundo `WKWebView` vivo
   desde el primer momento es memoria que el criterio 12 no tiene de dónde sacar, y la mayoría
   de los arranques —los de iniciar sesión— nunca la usan. A partir de ahí se queda: reconstruir
@@ -1441,14 +1451,44 @@ Lo mismo que en el pie del panel, salvo lo que de verdad cambia:
 ⏎        agregar y cerrar
 ⌘⏎       agregar y seguir aquí
 ⇧⏎       renglón nuevo, dentro de las notas
-Esc      cerrar el menú, luego limpiar, luego cerrar la ventana
+␣        con el campo vacío, ver Hoy — y ocultarlo
+Esc      cerrar lo abierto, luego limpiar, luego cerrar la ventana
 ```
 
 ⏎ cierra porque quien la abrió estaba escribiendo en otra app y quiere volver; ⌘⏎ es lo que
 deja apuntar tres cosas seguidas sin volver a pulsar el atajo. La escalera de Escape es la del
-panel (§4) con un peldaño más arriba, el del menú.
+panel (§4) con dos peldaños más arriba: el menú y la lista.
 
-### 18.5 Lo que no hereda, y lo que no pide
+**El espacio, y solo con el campo vacío.** Ahí no escribe nada —un título se recorta antes de
+guardarse— así que la tecla está libre, y es la más grande del teclado. Con algo escrito vuelve
+a ser un espacio, que es lo que tiene que ser.
+
+### 18.5 Hoy, sin salir de aquí
+
+El espacio con el campo vacío abre debajo lo que enseña la vista Hoy del panel: lo vencido y lo
+de hoy, pendiente y sin subtareas, hasta seis filas y el resto contado.
+
+Existe porque la ventana se abre para escribir lo que se acaba de recordar, y lo primero que se
+quiere saber antes de apuntarlo es si ya estaba. Ir a mirarlo cuesta subir a la barra, abrir el
+panel y volver — que es exactamente el viaje que esta ventana existe para ahorrar.
+
+Reglas:
+
+- **No es una fila de tarea y no lo finge**, por lo mismo que un evento de la agenda (§15): sin
+  casilla, sin manija de arrastre y sin `⋯`. Desde aquí una tarea no se completa ni se reordena.
+  Lo único que hace es estar.
+- **Seis, y lo que sobre se dice contado.** Lo que se contesta aquí es «¿qué tengo hoy?», que se
+  lee de un vistazo; la lista entera sería el panel abierto en medio de la pantalla, que es lo
+  que el icono de la barra ya hace.
+- **Se lee al pedirla, no al abrirse la ventana.** El alto de arranque es el del campo con su
+  renglón de pistas, y traer la lista siempre pondría medio panel delante de quien solo venía a
+  apuntar una cosa.
+- **Escribir la cierra.** Escribir es lo contrario de mirar, y los chips del parser necesitan el
+  sitio.
+- Sin nada para hoy dice «Nada para hoy.», sin el botón que lleva el mismo estado en el panel
+  (§3.7): el campo donde se agrega está justo encima.
+
+### 18.6 Lo que no hereda, y lo que no pide
 
 - **Nada se hereda de ninguna vista**, por lo mismo que un `riel://` (§14): la ventana se abre
   con el panel cerrado, y heredar de la vista que quedó abierta hace tres días es heredar de un
@@ -1464,7 +1504,7 @@ panel (§4) con un peldaño más arriba, el del menú.
   base se siente más rápido, pero si la escritura falla se lleva por delante lo que la persona
   escribió.
 
-### 18.6 El atajo
+### 18.7 El atajo
 
 `tauri-plugin-global-shortcut`, con ⌥Espacio de fábrica.
 
@@ -1483,3 +1523,30 @@ panel (§4) con un peldaño más arriba, el del menú.
   otro.» El anterior se queda puesto.
 - El plugin **no** aparece en ninguna capacidad: no se invoca desde JavaScript. Lo que cruza el
   puente es la preferencia, y quien registra es Rust.
+
+**Y elegirlo no se hace a ciegas.** Un atajo global que ya usa otra cosa casi nunca falla al
+ponerse: se pone, y luego no pasa nada al pulsarlo, porque quien llegó antes se lo queda.
+Enterarse así es enterarse tarde y sin nada alrededor que lo explique. Dos preguntas, y ninguna
+sale de esta máquina:
+
+- **Lo del sistema tiene nombre.** Sale de `com.apple.symbolichotkeys`, que es donde macOS
+  guarda las funciones rápidas del teclado, leído por `defaults` y no del archivo —quien manda
+  sobre las preferencias es `cfprefsd`, y el archivo puede llevar minutos sin el último cambio.
+  De la configuración de verdad y no de una tabla nuestra: a quien haya movido Spotlight a
+  ⌥Espacio hay que decírselo. Lo que sí sale de una tabla es cómo se llama cada función, porque
+  el plist solo guarda un número, y esa tabla es corta a propósito: lo que no está nombrado se
+  dice «el sistema», que sigue siendo verdad. **El aviso nunca se inventa; como mucho no da
+  nombres.**
+- **Lo de otras apps solo se sabe pidiéndolo.** No hay registro público de quién tiene qué, así
+  que la única forma es intentar registrarlo y soltarlo enseguida. Por eso de esas lo único que
+  se puede decir es que la combinación está cogida, nunca por quién — y por eso no se convierten
+  en un aviso: se caen de las sugerencias, que es donde no hace falta nombrar a nadie.
+
+Las **sugerencias** son tres combinaciones libres, escritas en la fuente de datos como el propio
+control, y pulsarlas lo pone. Salen en los dos momentos en que hay que pensar una —grabando y
+cuando la puesta choca— y en ningún otro, como la nota de ⌫ y ⎋: un renglón permanente debajo de
+un control que se usa una vez en la vida gasta el alto del popover en algo que ya se sabe. La
+que ya está puesta no se ofrece.
+
+Y **el aviso no bloquea nada**, igual que el del hex de un proyecto (§3.2): dice qué pasa —«⌘[
+ya lo usa el sistema: macOS se queda con él»— y deja la decisión donde estaba.

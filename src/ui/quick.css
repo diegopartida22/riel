@@ -9,7 +9,7 @@
      la ventana lo sigue, no al revés (ver el `ResizeObserver` de `QuickCapture`). */
   display: flex;
   flex-direction: column;
-  padding: 22px 22px 13px;
+  padding: 22px 22px 14px;
 }
 
 /* Dentro de un proyecto manda el proyecto, igual que en el panel (spec 3.1). Aquí «dentro de un
@@ -120,6 +120,52 @@
   font-size: var(--text-title);
 }
 
+/* Hoy, cuando se pide con el espacio (spec 18.5). Se separa del campo con la misma hairline y la
+   misma sangría negativa que el menú de comandos, porque es lo mismo: no es una superficie
+   nueva flotando encima —eso sería el segundo nivel de blur que la sección 4 prohíbe— sino la
+   misma que crece. */
+.quick__lista {
+  margin: 14px -8px 0;
+  padding: 11px 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.quick__tareas {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* La fila de una tarea sin lo que aquí no se puede hacer: sin casilla, sin manija y sin `⋯`.
+   Una tarea no se completa ni se reordena desde esta ventana, y darle los gestos de la lista
+   sería prometer tres cosas que ninguna funciona — lo mismo que dice la sección 15 de un
+   evento de la agenda. Lo único que hace es estar. */
+.quick__tarea {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  color: var(--ink-primary);
+}
+
+.quick__tarea-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.quick__vacio,
+.quick__mas {
+  margin: 6px 0 0;
+  padding: 0 8px;
+  font-size: var(--text-meta);
+  color: var(--ink-tertiary);
+}
+
 .quick__error {
   margin: 12px 0 0 31px;
   font-size: var(--text-meta);
@@ -132,10 +178,16 @@
 .quick__hints {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 14px;
-  font-size: var(--text-meta);
-  color: var(--ink-tertiary);
+  gap: 18px;
+  /* La misma hairline y la misma sangría que las del menú y la lista: las tres separan cosas
+     dentro de la misma superficie, y dos geometrías distintas para la misma línea se ven sin
+     saber nombrarlo. Con la lista abierta es además lo que impide que el renglón de teclas se
+     lea como una fila más de ella. */
+  margin: 16px -8px 0;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--text-subtitle);
+  color: var(--ink-secondary);
 }
 
 .quick__gap {
@@ -145,22 +197,23 @@
 .quick__hint {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   white-space: nowrap;
 }
 
 /* Lo que Enter va a hacer pesa más que el resto, porque es lo que se va a pulsar. */
 .quick__hint--strong {
-  color: var(--ink-secondary);
+  color: var(--ink-primary);
 }
 
 /* Sin caja alrededor de la tecla. macOS escribe ⌘ y ⏎ en sus menús sin encerrarlos en nada, y
    una tecla dibujada como un botón es de las cosas que delatan que esto no es del sistema. */
 .quick__hints kbd {
   font-family: var(--font-data);
-  font-size: var(--text-group);
+  font-size: var(--text-subtitle);
   font-weight: 500;
-  color: var(--ink-secondary);
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
 }
 
 /* La entrada. Solo el contenido: el vidrio lo pinta el sistema al mostrar la ventana y no hay

@@ -3,8 +3,8 @@
 //! Es la segunda ventana de la app y la única que se abre sin tocar la barra de menú. Reusa
 //! entera la maquinaria del panel —`RielPanel`, el vidrio, la excepción de foco— porque lo
 //! que se le pide es lo mismo: aparecer sobre lo que sea que haya delante, incluida una app
-//! en pantalla completa, y llevarse el teclado sin activar la app. Lo único que cambia es
-//! dónde se coloca y con qué arco.
+//! en pantalla completa, y llevarse el teclado. Lo único que cambia es dónde se coloca y con
+//! qué arco.
 //!
 //! **Se construye la primera vez que se pide, no al arrancar.** Un segundo `WKWebView` vivo
 //! desde el primer momento es memoria que el criterio 12 no tiene de dónde sacar, y la mayor
@@ -35,7 +35,7 @@ pub const WIDTH: f64 = 620.0;
 /// contenido en reposo y no uno holgado: de más, la ventana se abre con una banda de vidrio
 /// vacío bajo el renglón de pistas y no hay forma de que encoja; de menos, se abre corta y da
 /// un salto en el primer pintado. Medido con el `ResizeObserver` de `QuickCapture`.
-const HEIGHT: f64 = 90.0;
+const HEIGHT: f64 = 108.0;
 
 /// Tope de crecimiento, en puntos. Es lo que mide el menú de comandos con sus grupos abiertos
 /// más el campo y las pistas; de ahí en adelante la lista hace su propio scroll.
@@ -75,6 +75,10 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         None => build(app)?,
     };
 
+    // Antes de nada, porque lo de abajo ya nos pone delante: a quién hay que devolverle el
+    // teclado cuando esta ventana se vaya (spec 18.2).
+    crate::panel::remember_frontmost();
+
     // Antes de colocar: el alto decide dónde cae el borde de arriba, y una apertura no puede
     // heredar el alto al que la dejó crecer la anterior.
     let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
@@ -85,6 +89,8 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     crate::glass::ensure(&window, crate::glass::material(app).capture_radius());
 
     let _ = window.show();
+    // Y esto activa la app, que es lo que hace que las teclas lleguen aquí y no a lo que
+    // hubiera delante. De ahí que el apunte de arriba tenga que ir antes.
     let _ = window.set_focus();
     crate::glass::refresh_shadow(&window);
 
@@ -99,6 +105,9 @@ pub fn hide<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(LABEL) {
         let _ = window.hide();
     }
+    // El teclado vuelve donde estaba. No hace nada si la ventana se cerró justamente porque el
+    // usuario se fue a otra app: ahí el foco ya está donde tiene que estar.
+    crate::panel::give_focus_back();
 }
 
 /// Ajusta el alto al del contenido. Lo pide el webview cuando aparecen o se van los chips y
@@ -172,6 +181,12 @@ fn position<R: Runtime>(window: &WebviewWindow<R>) {
     ));
 }
 
+/// El atajo que está registrado ahora mismo, que es el único que no cuenta como ocupado al
+/// probar los demás: si sale que no se puede registrar es porque ya lo tenemos nosotros.
+#[cfg(desktop)]
+static PUESTO: std::sync::Mutex<Option<tauri_plugin_global_shortcut::Shortcut>> =
+    std::sync::Mutex::new(None);
+
 /// Registra el atajo global, suelta el anterior, o los suelta todos si no hay ninguno puesto.
 ///
 /// Quien decide cuál es es el usuario desde Ajustes, y la preferencia vive en `localStorage`
@@ -181,11 +196,8 @@ fn position<R: Runtime>(window: &WebviewWindow<R>) {
 #[cfg(desktop)]
 pub fn set_shortcut<R: Runtime>(app: &AppHandle<R>, accel: Option<&str>) -> Result<(), String> {
     use std::str::FromStr;
-    use std::sync::Mutex;
 
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-    static PUESTO: Mutex<Option<Shortcut>> = Mutex::new(None);
 
     let pedido = match accel.map(str::trim).filter(|accel| !accel.is_empty()) {
         Some(accel) => {
@@ -225,6 +237,52 @@ pub fn set_shortcut<R: Runtime>(app: &AppHandle<R>, accel: Option<&str>) -> Resu
     }
 
     Ok(())
+}
+
+/// De las combinaciones que se le pasen, las que ninguna otra app tiene cogidas.
+///
+/// Es lo único que contesta esa pregunta: macOS no lleva un registro público de quién tiene qué
+/// atajo global, así que la única forma de saberlo es pedirlo y ver si te lo dan. Se suelta
+/// enseguida —lo que dura es una llamada— y por eso lo que se puede decir de una combinación
+/// ocupada es eso, que lo está, y nunca por quién. Lo del sistema es la otra mitad y esa sí
+/// tiene nombre (ver `atajos`).
+///
+/// El que ya está puesto no se prueba: registrarlo fallaría porque lo tenemos nosotros, y
+/// contarlo como ajeno sería decirle a alguien que su propio atajo está cogido.
+#[cfg(desktop)]
+pub fn probe<R: Runtime>(app: &AppHandle<R>, accels: &[String]) -> Vec<String> {
+    use std::str::FromStr;
+
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    let manager = app.global_shortcut();
+    let nuestro = PUESTO.lock().ok().and_then(|puesto| *puesto);
+
+    accels
+        .iter()
+        .filter(|accel| {
+            let Ok(atajo) = Shortcut::from_str(accel) else {
+                return false;
+            };
+            if Some(atajo) == nuestro {
+                return true;
+            }
+            match manager.register(atajo) {
+                Ok(()) => {
+                    let _ = manager.unregister(atajo);
+                    true
+                }
+                Err(_) => false,
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+#[cfg(not(desktop))]
+pub fn probe<R: Runtime>(app: &AppHandle<R>, accels: &[String]) -> Vec<String> {
+    let _ = app;
+    accels.to_vec()
 }
 
 #[cfg(not(desktop))]

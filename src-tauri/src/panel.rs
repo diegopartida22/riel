@@ -1,6 +1,8 @@
 //! Todo lo que tiene que ver con la ventana-panel: vidrio, posición y visibilidad.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicI32;
 
 use tauri::{Emitter, Manager, Runtime, WebviewWindow, Window};
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -134,6 +136,74 @@ pub fn make_menu_bar_panel<R: Runtime>(window: &WebviewWindow<R>) {
 pub fn make_menu_bar_panel<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window;
 }
+
+/// El pid de la app que estaba delante cuando la captura rápida se llevó el teclado, o cero si
+/// no hay ninguna a la que devolvérselo.
+#[cfg(target_os = "macos")]
+static ANTERIOR: AtomicI32 = AtomicI32::new(0);
+
+/// Apunta quién tenía el teclado justo antes de que la captura rápida se lo lleve.
+///
+/// **Abrir la captura activa la app, y no hay forma de que no lo haga.** macOS entrega las
+/// teclas a la app activa y no a la ventana que esté más arriba: una ventana flotante de una
+/// app inactiva se dibuja entera, enseña su cursor parpadeando y no recibe una sola letra —lo
+/// que se escribe se lo queda la app de detrás. Es también lo que hacen Spotlight, Alfred y
+/// Raycast, que tampoco tienen otra. Quien activa es tao al darle el foco a la ventana; aquí
+/// solo se anota a quién se lo estamos quitando.
+///
+/// `NonactivatingPanel` promete justo lo contrario y no lo cumple, y por eso costó verlo: lo
+/// que esa máscara evita es que **un clic** en la ventana active la app, que es otra cosa —y es
+/// la que sí hace falta aquí, porque sin ella la ventana no entra en el espacio de una app en
+/// pantalla completa (ver [`make_menu_bar_panel`]).
+///
+/// Lo que sí se puede prometer es lo de después, y de eso va [`give_focus_back`]: al cerrarse
+/// la ventana la activación vuelve a quien la tenía. macOS no lo hace por su cuenta —medido:
+/// con la captura ya escondida, la app de delante seguía siendo Riel, que a esas alturas no
+/// tiene ninguna ventana donde poner lo que se escriba.
+#[cfg(target_os = "macos")]
+pub fn remember_frontmost() {
+    use objc2_app_kit::NSWorkspace;
+
+    // Cero si ya éramos nosotros: entonces no hay nada que devolver, y lo que quedara apuntado
+    // de una apertura anterior es justo lo que no hay que traer de vuelta.
+    let anterior = NSWorkspace::sharedWorkspace()
+        .frontmostApplication()
+        .map(|app| app.processIdentifier())
+        .filter(|pid| *pid != std::process::id() as i32)
+        .unwrap_or(0);
+
+    ANTERIOR.store(anterior, Ordering::SeqCst);
+}
+
+/// Devuelve la activación a quien la tenía antes de abrirse la captura rápida.
+///
+/// Solo si el teclado sigue siendo nuestro: si la ventana se cerró porque el usuario se fue a
+/// otra app, devolvérselo a la de antes se lo quitaría a la que acaba de pulsar.
+#[cfg(target_os = "macos")]
+pub fn give_focus_back() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationOptions, NSRunningApplication};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+
+    let pid = ANTERIOR.swap(0, Ordering::SeqCst);
+    if pid == 0 || !NSApplication::sharedApplication(mtm).isActive() {
+        return;
+    }
+
+    // Un pid que ya no corre devuelve `None`, así que no hay que comprobar que siga vivo.
+    if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
+        app.activateWithOptions(NSApplicationActivationOptions::empty());
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn remember_frontmost() {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn give_focus_back() {}
 
 /// Aire entre el área de trabajo y el borde superior del panel, en puntos.
 ///
@@ -315,9 +385,7 @@ pub fn on_focus_lost<R: Runtime>(window: &Window<R>) {
     // `KEEP_OPEN`, que es del panel, y ocultar el panel porque ella perdió el foco cerraría
     // dos cosas con un solo gesto.
     if window.label() == crate::captura::LABEL {
-        if let Some(quick) = window.get_webview_window(crate::captura::LABEL) {
-            let _ = quick.hide();
-        }
+        crate::captura::hide(window.app_handle());
         return;
     }
 

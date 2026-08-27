@@ -55,6 +55,14 @@ objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
+  # Devolver la activación a quien tenía el teclado antes de abrirse la captura rápida
+  # (spec 18.2). Activar no hay que pedirlo —tao ya lo hace al darle el foco a la ventana—,
+  # pero volver sí: macOS no la devuelve por su cuenta cuando una app accesoria esconde la
+  # suya, y sin esto el teclado se queda en Riel, que ya no tiene dónde ponerlo.
+  "NSApplication",
+  "NSRunningApplication",
+  # Los pid de `NSRunningApplication` van en `libc::pid_t`, que la caja solo genera con esto.
+  "libc",
   # El acento del sistema: `NSColor::controlAccentColor`, resuelto a sRGB bajo cada una de las
   # dos apariencias. Las tres van juntas — el color no se puede leer sin espacio al que
   # convertirlo ni sin apariencia bajo la que resolverlo.
@@ -66,9 +74,10 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSResponder",
   "NSView",
   "NSWindow",
-  # `NSWorkspace`: qué editores de código hay instalados (spec 13). Se pregunta al registro de
-  # Launch Services por identificador de paquete, que es lo único que no cambia cuando una app
-  # se renombra o se instala fuera de `/Applications`.
+  # `NSWorkspace`: qué editores de código hay instalados (spec 13) y quién estaba delante justo
+  # antes de que la captura rápida se llevara el teclado (spec 18.2). Lo primero se pregunta al
+  # registro de Launch Services por identificador de paquete, que es lo único que no cambia
+  # cuando una app se renombra o se instala fuera de `/Applications`.
   "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [

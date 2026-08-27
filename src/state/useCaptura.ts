@@ -8,7 +8,7 @@
  * hace Escape.
  */
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import type { Project } from "../data";
 import {
@@ -199,13 +199,22 @@ export function useCaptura({ projects, today, notes = false, onNotes }: Options)
     box.current?.focus();
   };
 
-  const reset = () => {
+  /**
+   * Estable a propósito, y no una función suelta más.
+   *
+   * De ella cuelga el `open()` de la ventana de captura, y de `open()` cuelga el efecto que la
+   * vacía al abrirse. Recreada en cada pintado, ese efecto se desmontaba y se volvía a montar
+   * en cada tecla: se escribía una letra, el estado cambiaba, el efecto corría otra vez y
+   * `reset()` la borraba. Desde fuera se veía como que la ventana no recibía el teclado —que es
+   * lo que parecía— y no como lo que era, que lo recibía y lo tiraba.
+   */
+  const reset = useCallback(() => {
     setText("");
     setCaret(0);
     setDismissed(new Set());
     setHighlight(0);
     setMenuOff(false);
-  };
+  }, []);
 
   /**
    * Las teclas que son del menú, y solo esas. Devuelve cierto cuando se la quedó, para que

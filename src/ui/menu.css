@@ -305,6 +305,39 @@
   color: var(--ink-secondary);
 }
 
+/* Las combinaciones libres, cuando hay que elegir una (spec 18.7). Cuelgan de la misma sangría
+   que la nota de arriba porque son la continuación de lo que dice: qué poner en su lugar. Son
+   el control de arriba a escala de renglón —pista y la combinación en la fuente de datos— y no
+   una segunda lista de opciones: lo que hacen es escribir en él. */
+.settings__libres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings__libres-label {
+  color: var(--ink-tertiary);
+}
+
+.settings__libre {
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--track-bg);
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.settings__libre:hover {
+  background: var(--layer-selected);
+}
+
 /* El mínimo es el ancho que da un glifo de la barra con su relleno —18 + 5 + 5— y así los dos
    renglones de iconos salen con el mismo paso aunque el de la vista dibuje a 15 y el de la
    barra a 18. Van uno debajo del otro y alineados a la derecha: con anchos distintos, las dos

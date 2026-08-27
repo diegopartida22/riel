@@ -13,7 +13,7 @@ import {
   snapshot,
   type Retention,
 } from "../data";
-import { describe, fromEvent, type Atajo as AtajoState } from "../state/atajo";
+import { describe, fromEvent, useConflictos, type Atajo as AtajoState } from "../state/atajo";
 import type { Editor } from "../state/editors";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
@@ -216,6 +216,11 @@ function Choices<T>({
  *
  * Grabando, el popover se queda con todas las teclas: sin eso, ⌘F escaparía a la búsqueda de
  * detrás y ⎋ cerraría el panel entero en vez de cancelar la grabación.
+ *
+ * Y debajo, solo mientras hace falta, lo que dice `useConflictos` (spec 18.7): si lo puesto ya
+ * lo usa el sistema —que es lo que hace que el atajo no responda sin que nada lo explique— y
+ * tres combinaciones libres para pulsar. Las sugerencias salen al grabar, que es cuando hay que
+ * pensar una, y al haber choque, que es cuando hay que cambiarla.
  */
 function Atajo({
   accel,
@@ -227,6 +232,7 @@ function Atajo({
   onPick: (accel: string | null) => void;
 }) {
   const [grabando, setGrabando] = useState(false);
+  const { owner, free } = useConflictos(accel);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!grabando) return;
@@ -254,6 +260,11 @@ function Atajo({
     onPick(next);
   };
 
+  // Lo que se está grabando manda sobre todo lo demás: mientras se espera una tecla, un aviso
+  // de lo de antes es de algo que ya se está cambiando.
+  const choque = owner ? `${describe(accel)} ya lo usa ${owner}: macOS se queda con él.` : null;
+  const aviso = grabando ? null : (error ?? choque);
+
   return (
     <>
       <div className="settings__row">
@@ -273,7 +284,30 @@ function Atajo({
       {/* Solo mientras hace falta. Un renglón de instrucciones permanente debajo de un control
           que se usa una vez en la vida gasta el alto del popover en algo que ya se sabe. */}
       {grabando && <p className="settings__note">⌫ lo quita · ⎋ lo deja como estaba.</p>}
-      {!grabando && error && <p className="settings__note">{error}</p>}
+      {aviso && <p className="settings__note">{aviso}</p>}
+
+      {/* Las libres, y solo cuando hay que elegir. El `onMouseDown` es lo que las hace
+          pulsables mientras se graba: sin él, el botón pierde el foco antes del clic, la
+          grabación se cancela y la sugerencia no llega a ponerse. */}
+      {(grabando || aviso) && free.length > 0 && (
+        <p className="settings__note settings__libres">
+          <span className="settings__libres-label">Libres</span>
+          {free.map((uno) => (
+            <button
+              key={uno}
+              type="button"
+              className="settings__libre"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setGrabando(false);
+                onPick(uno);
+              }}
+            >
+              {describe(uno)}
+            </button>
+          ))}
+        </p>
+      )}
     </>
   );
 }

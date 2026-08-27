@@ -9,7 +9,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const KEY = "riel:atajo-captura";
 
@@ -129,4 +129,94 @@ export function useAtajo(): Atajo {
   }, []);
 
   return { accel, error, set };
+}
+
+/**
+ * Las combinaciones que se ofrecen cuando hay que elegir una, en orden de preferencia.
+ *
+ * Todas llevan una tecla que no se escribe —espacio o una letra con dos modificadores— y
+ * ninguna es de las que macOS trae puestas de fábrica. No es una lista cerrada de lo que se
+ * puede poner: se puede poner cualquier cosa que el grabador acepte. Es lo que se enseña a
+ * quien no quiere pensarlo, que es casi todo el mundo.
+ */
+const CANDIDATOS = [
+  "alt+Space",
+  "control+shift+Space",
+  "alt+shift+Space",
+  "super+shift+Space",
+  "control+alt+KeyN",
+  "alt+shift+KeyN",
+  "control+alt+KeyT",
+];
+
+/** Lo que contesta Rust: una combinación cogida y quién la tiene, ya dicho en castellano. */
+interface Ocupado {
+  accel: string;
+  name: string;
+}
+
+export interface Conflictos {
+  /** Quién usa el atajo puesto, o nulo si no lo usa nadie más. Va detrás de «ya lo usa». */
+  owner: string | null;
+  /** Hasta tres combinaciones libres, listas para pulsarse. */
+  free: string[];
+}
+
+/**
+ * Qué hay ya cogido en esta Mac, para que elegir un atajo no sea a ciegas (spec 18.7).
+ *
+ * Un atajo global que ya usa otra cosa no falla al ponerse: se pone, y luego no pasa nada al
+ * pulsarlo, porque quien llegó antes se lo queda. Enterarse de eso es enterarse tarde.
+ *
+ * Las dos mitades de la pregunta se contestan distinto y por eso dicen cosas distintas. Los del
+ * sistema salen de la configuración de verdad —quien haya movido Spotlight a ⌥Espacio tiene que
+ * verlo— y se pueden nombrar. Los de otras apps solo se saben probando a registrarlos, así que
+ * de esos lo único que se puede decir es que la combinación no está libre, y por eso salen de
+ * la lista de sugerencias en vez de convertirse en un aviso.
+ *
+ * Se pregunta al abrirse Ajustes y no al arrancar: son dos procesos y una vuelta al sistema por
+ * algo que se mira una vez en la vida.
+ */
+export function useConflictos(accel: string | null): Conflictos {
+  const [sistema, setSistema] = useState<Map<string, string>>(() => new Map());
+  const [libres, setLibres] = useState<string[]>([]);
+
+  useEffect(() => {
+    let vivo = true;
+
+    void (async () => {
+      let usados = new Map<string, string>();
+      try {
+        const ocupados = await invoke<Ocupado[]>("system_shortcuts");
+        usados = new Map(ocupados.map((uno) => [uno.accel, uno.name]));
+      } catch (cause) {
+        // Sin esto se elige a ciegas, que es como se elegía antes. No es un error que enseñar.
+        console.error(cause);
+      }
+      if (!vivo) return;
+      setSistema(usados);
+
+      const candidatos = CANDIDATOS.filter((uno) => !usados.has(uno));
+      try {
+        const free = await invoke<string[]>("free_shortcuts", { accels: candidatos });
+        if (vivo) setLibres(free);
+      } catch (cause) {
+        console.error(cause);
+        if (vivo) setLibres(candidatos);
+      }
+    })();
+
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  return useMemo(
+    () => ({
+      owner: accel ? (sistema.get(accel) ?? null) : null,
+      // El puesto no se ofrece: sugerir lo que ya está es no sugerir nada.
+      free: libres.filter((uno) => uno !== accel).slice(0, 3),
+    }),
+    [accel, sistema, libres],
+  );
 }

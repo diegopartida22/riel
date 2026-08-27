@@ -1,5 +1,6 @@
 mod accent;
 mod agenda;
+mod atajos;
 mod autostart;
 mod captura;
 mod claude;
@@ -262,6 +263,21 @@ fn set_capture_shortcut(app: tauri::AppHandle, accel: Option<String>) -> Result<
     captura::set_shortcut(&app, accel.as_deref())
 }
 
+/// Qué atajos globales tiene ya puestos esta Mac, y para qué (spec 18.7).
+///
+/// Solo los del sistema, que son los que se pueden nombrar. Los de otras apps los contesta
+/// `free_shortcuts`, que es la otra mitad de la misma pregunta.
+#[tauri::command]
+fn system_shortcuts() -> Vec<atajos::Ocupado> {
+    atajos::system()
+}
+
+/// De las combinaciones que se le pasen, las que no tiene cogidas ninguna otra app.
+#[tauri::command]
+fn free_shortcuts(app: tauri::AppHandle, accels: Vec<String>) -> Vec<String> {
+    captura::probe(&app, &accels)
+}
+
 /// Cierra la captura rápida. Lo pide ella misma al guardar o con Escape.
 #[tauri::command]
 fn close_capture(app: tauri::AppHandle) {
@@ -428,6 +444,8 @@ pub fn run() {
             claude_disk,
             close_claude_session,
             set_capture_shortcut,
+            system_shortcuts,
+            free_shortcuts,
             close_capture,
             resize_capture,
             quit,
