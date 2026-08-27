@@ -30,6 +30,11 @@ tauri-plugin-dialog = "2"
 # plugin contra `pubkey` antes de reemplazar nada, así que un GitHub comprometido no basta
 # para colar un binario: harían falta también las llaves.
 tauri-plugin-updater = "2"
+# El atajo global que abre la captura rápida (spec 18). Es lo único que la app escucha con el
+# panel cerrado, y lo registra y lo suelta el propio usuario desde Ajustes: sin atajo puesto,
+# el plugin no tiene nada registrado. No se invoca desde JavaScript —Rust es quien registra y
+# quien atiende— así que no lleva permiso en `capabilities/`.
+tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # El tipo con el que llegan los `riel://` (spec 14). Es la misma versión que ya arrastra

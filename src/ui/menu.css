@@ -266,6 +266,45 @@
   color: var(--ink-secondary);
 }
 
+/* El atajo global (spec 18). Es el valor y el control a la vez, así que se dibuja como la
+   pista de un segmentado con una sola opción dentro: así cae contra el mismo borde derecho
+   que los cuatro de abajo y no se lee como un botón suelto entre ellos.
+
+   En la fuente de datos, porque ⌥⇧K es un dato y no una palabra: los glifos de modificador
+   solo quedan a la misma altura con anchos fijos. */
+.settings__atajo {
+  flex: 0 0 auto;
+  min-width: 78px;
+  height: calc(var(--choice-height) + var(--track-pad) * 2);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--track-radius);
+  background: var(--track-bg);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-primary);
+  text-align: center;
+  cursor: default;
+}
+
+.settings__atajo:hover {
+  background: var(--layer-selected);
+}
+
+/* Grabando no hay atajo que enseñar todavía, así que lo que hay es una invitación: baja de
+   peso y se sale de la fuente de datos, que es para cifras y no para una frase. El acento lo
+   marca porque es el único control del popover que se queda esperando algo. */
+.settings__atajo.is-grabando {
+  background: var(--layer-selected);
+  box-shadow: inset 0 0 0 1.5px var(--accent-app);
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-secondary);
+}
+
 /* El mínimo es el ancho que da un glifo de la barra con su relleno —18 + 5 + 5— y así los dos
    renglones de iconos salen con el mismo paso aunque el de la vista dibuje a 15 y el de la
    barra a 18. Van uno debajo del otro y alineados a la derecha: con anchos distintos, las dos
@@ -469,4 +508,47 @@
 .menu__lleva {
   flex: 0 0 auto;
   color: var(--ink-tertiary);
+}
+
+/* ── Los renglones del menú de captura (spec 18) ──────────────────────────────────────── */
+
+/* El literal que el renglón va a escribir, contra el borde derecho y en la fuente de datos.
+   Es lo que hace que el menú enseñe la gramática en vez de sustituirla. `aria-hidden` porque
+   la etiqueta ya lo dice con palabras: leerlo dos veces es leerlo dos veces. */
+.menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__hint {
+  margin-left: auto;
+  padding-left: 14px;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+
+.menu__item.is-active .menu__hint,
+.menu__item:hover .menu__hint {
+  color: var(--ink-secondary);
+}
+
+/* Los grupos se separan con su rótulo y no con hairlines, igual que en Ajustes (spec 8): una
+   regla dice que hay un corte pero no de qué, y cinco reglas en una lista de veinte renglones
+   la convierten en una reja. */
+.menu__grupo {
+  padding: 9px var(--indent, 6px) 3px;
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-tertiary);
+}
+
+.menu__grupo:first-child {
+  padding-top: 3px;
 }

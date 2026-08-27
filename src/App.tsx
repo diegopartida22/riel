@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Project } from "./data";
 import { tint } from "./design/palette";
+import { useAtajo } from "./state/atajo";
+import { CREATED_EVENT } from "./state/useCaptura";
 import { useAgenda } from "./state/agenda";
 import { useClaude } from "./state/claude";
 import { useDevMode } from "./state/editors";
@@ -38,6 +40,9 @@ const NUMBERED = ["hoy", "proximas", "todas", "completadas"] as const;
 export default function App() {
   const riel = useRiel();
   const prefs = usePreferencias();
+  // El atajo global vive aquí y no en el popover: hay que registrarlo al arrancar, y el
+  // popover se monta la primera vez que alguien abre el `⚙︎` — que puede no pasar nunca.
+  const atajo = useAtajo();
   const updates = useUpdates();
   const dev = useDevMode();
   const agenda = useAgenda(riel.today);
@@ -93,6 +98,19 @@ export default function App() {
       void unlisten.then((off) => off());
     };
   }, [select, startView]);
+
+  /**
+   * Una tarea escrita desde la captura rápida (spec 18). El panel está escondido pero vivo, así
+   * que se entera ahora y no cuando alguien lo abra: es lo que hace que la tarea ya esté en la
+   * lista al abrirlo, y programada si traía hora — el plan de avisos cuelga de `tasks` (spec 7).
+   */
+  const { reloadAll } = riel;
+  useEffect(() => {
+    const unlisten = listen(CREATED_EVENT, () => void reloadAll());
+    return () => {
+      void unlisten.then((off) => off());
+    };
+  }, [reloadAll]);
 
   // ⌘N puede llegar con el detalle abierto o con el editor de proyecto delante, y el campo de
   // captura no está en el DOM hasta que esa capa se cierra. Pedirle el foco en el mismo golpe
@@ -255,6 +273,7 @@ export default function App() {
           onRowText={prefs.setRowText}
           trayGlyph={prefs.trayGlyph}
           onTrayGlyph={prefs.setTrayGlyph}
+          atajo={atajo}
           editors={dev.editors}
           editor={dev.editor}
           onEditor={dev.setEditor}

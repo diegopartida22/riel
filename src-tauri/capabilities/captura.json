@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "captura",
+  "description": "Lo que puede pedir la ventana de captura rápida (spec 18), y nada más: leer proyectos, escribir una tarea y avisar al panel de que la escribió. Sin diálogos, sin actualizador, sin abrir nada fuera.",
+  "windows": ["captura"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-emit-to",
+    "sql:default",
+    "sql:allow-execute"
+  ]
+}

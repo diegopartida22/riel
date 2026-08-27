@@ -1,6 +1,7 @@
 mod accent;
 mod agenda;
 mod autostart;
+mod captura;
 mod claude;
 mod db;
 mod deeplink;
@@ -252,6 +253,27 @@ fn close_claude_session(id: String) -> Result<(), String> {
     claude::close(&id)
 }
 
+/// Pone —o quita— el atajo global que abre la captura rápida (spec 18).
+///
+/// El error vuelve dicho en castellano y se enseña tal cual en Ajustes, porque el caso normal
+/// de fallo es el único que el usuario puede arreglar: la combinación ya la tiene otra app.
+#[tauri::command]
+fn set_capture_shortcut(app: tauri::AppHandle, accel: Option<String>) -> Result<(), String> {
+    captura::set_shortcut(&app, accel.as_deref())
+}
+
+/// Cierra la captura rápida. Lo pide ella misma al guardar o con Escape.
+#[tauri::command]
+fn close_capture(app: tauri::AppHandle) {
+    captura::hide(&app);
+}
+
+/// Ajusta el alto de la captura rápida al de su contenido.
+#[tauri::command]
+fn resize_capture(app: tauri::AppHandle, height: f64) {
+    captura::set_height(&app, height);
+}
+
 /// Cierra la app desde Ajustes.
 ///
 /// Sin Dock y sin ⌘Tab (spec 4), una app de la barra no tiene ⌘Q ni menú de aplicación, así
@@ -405,6 +427,9 @@ pub fn run() {
             claude_sessions,
             claude_disk,
             close_claude_session,
+            set_capture_shortcut,
+            close_capture,
+            resize_capture,
             quit,
             restart
         ])
@@ -423,8 +448,15 @@ pub fn run() {
             // bueno. No hace nada en el caso normal.
             autostart::reparar(app.handle());
 
-            let material = panel::apply_glass(&window)?;
+            let material = panel::apply_glass(&window, glass::Material::Popover.corner_radius())?;
             app.manage(material);
+
+            // El atajo global de la captura rápida (spec 18). El plugin entra aquí y no en la
+            // cadena del builder porque no existe fuera del escritorio, y porque así queda
+            // claro que sin atajo puesto no registra nada: quién es lo dice el webview.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
             // Antes del primer `show`: es lo que hace que el panel se vea también sobre una
             // app en pantalla completa, que es su propio espacio y no el del escritorio.
             panel::make_menu_bar_panel(&window);
@@ -450,21 +482,26 @@ pub fn run() {
         })
         .on_page_load(|webview, _payload| {
             let material = *webview.state::<glass::Material>();
-            glass::publish_to_css(&webview, material);
+            let radius = if webview.label() == captura::LABEL {
+                material.capture_radius()
+            } else {
+                material.corner_radius()
+            };
+            glass::publish_to_css(webview, material, radius);
 
             // El acento del sistema va por aquí y no por `setup` por lo mismo que el material:
             // es el único momento con la página lista y antes del primer pintado, y así cubre
             // también las recargas de Vite.
             if let Some(accent) = accent::current() {
-                let _ = webview.eval(&accent::css_script(&accent));
+                let _ = webview.eval(accent::css_script(&accent));
             }
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(active) = event {
                 // Antes de ocultar: mientras KEEP_OPEN esté en alto el panel sigue delante, y
                 // es justo el caso en el que hay que verse inactivo.
-                if let Some(panel) = window.get_webview_window("main") {
-                    glass::publish_active_to_css(&panel, *active);
+                if let Some(propia) = window.get_webview_window(window.label()) {
+                    glass::publish_active_to_css(&propia, *active);
                 }
                 if !active {
                     panel::on_focus_lost(window);

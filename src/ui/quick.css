@@ -1,0 +1,184 @@
+/* La ventana de captura rápida (spec 18).
+   Es el campo del pie del panel con sitio para respirar. Todo lo que se ve aquí sale de los
+   mismos tokens que el panel — los mismos chips, el mismo menú, las mismas dos familias
+   tipográficas (spec 3.3) — y lo único que cambia de verdad es la escala: 620 px de ancho y un
+   solo renglón que leer piden un cuerpo que el pie de un panel de 440 no puede permitirse. */
+
+.quick {
+  /* `height: auto` y no el 100% de las demás ventanas: aquí el alto lo decide el contenido y
+     la ventana lo sigue, no al revés (ver el `ResizeObserver` de `QuickCapture`). */
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 13px;
+}
+
+/* Dentro de un proyecto manda el proyecto, igual que en el panel (spec 3.1). Aquí «dentro de un
+   proyecto» es que el texto lo haya nombrado, que es la misma cosa dicha con lo que se escribe. */
+.quick--project {
+  --accent: var(--project);
+}
+
+.quick__row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+/* La casilla de una fila de tarea (spec 3.5), a la escala de este campo: mismo grosor de trazo,
+   mismo tono en reposo, y toma el color del proyecto en cuanto el texto lo nombra — que es lo
+   mismo que hace la casilla de una fila al pasarle el ratón por encima. */
+.quick__mark {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--ink-tertiary);
+  border-radius: 50%;
+}
+
+.quick--project .quick__mark {
+  border-color: var(--project);
+}
+
+/* Sin caja, igual que la búsqueda y el campo del pie: encuadrar algo que ocupa todo el ancho de
+   una superficie de vidrio la apaga. El cuerpo grande es lo único que hace falta para que se
+   lea como el sitio donde se escribe.
+
+   El `letter-spacing` negativo no es un adorno: la del sistema se dibuja con el tracking
+   pensado para 13 px, y a 21 px las letras quedan sueltas. macOS hace lo mismo por su cuenta a
+   partir de los tamaños de título — aquí hay que pedirlo porque el navegador no lo hace. */
+.quick__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-hero);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.011em;
+  color: var(--ink-primary);
+  caret-color: var(--accent);
+}
+
+.quick__field::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.quick__field:focus,
+.quick__notes:focus {
+  outline: none;
+}
+
+/* El anillo de foco vive en la ventana entera y no en el campo: el campo no tiene caja de la
+   que colgarlo, y aquí no hay más que un sitio donde escribir — decir cuál con un anillo sería
+   señalar lo único que hay. Lo que sí queda es el cursor, que es del color del acento. */
+
+/* Las notas salen del `/notas` del menú, que es el único comando que no escribe en el título.
+   Un peso por debajo y sin caja propia: son el pie de lo de arriba, no un segundo campo con el
+   mismo rango. */
+.quick__notes {
+  margin: 10px 0 0 31px;
+  border: 0;
+  padding: 0;
+  background: none;
+  resize: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  line-height: 1.45;
+  color: var(--ink-secondary);
+  caret-color: var(--accent);
+}
+
+.quick__notes::placeholder {
+  color: var(--ink-tertiary);
+}
+
+/* Alineados con el texto del campo y no con el borde de la ventana, por lo mismo que en el pie
+   del panel: leídos en columna con el título dicen «esto salió de lo que escribiste». */
+.quick__chips {
+  padding: 12px 0 0 31px;
+}
+
+/* El menú va **dentro** de la ventana y no colgado de ella como una superficie aparte: lo que
+   flota sobre el vidrio lleva su material, y aquí no flota nada — es la misma superficie, que
+   crece. Un segundo material encima del primero sería el segundo nivel de blur que la sección 4
+   prohíbe. Así que ni fondo, ni borde, ni sombra: una hairline y ya. */
+.quick__menu {
+  max-height: 296px;
+  margin: 12px -8px 0;
+  padding: 9px 8px 0;
+  border-top: 1px solid var(--hairline);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  --indent: 8px;
+}
+
+.quick__menu .menu__item {
+  padding: 6px 10px 6px 8px;
+  font-size: var(--text-title);
+}
+
+.quick__error {
+  margin: 12px 0 0 31px;
+  font-size: var(--text-meta);
+  color: var(--danger);
+}
+
+/* El renglón de pistas. Es lo que separa esto de una línea de comandos: dice qué teclas hay sin
+   pedir que se prueben. Va en la fuente de datos para las teclas y en la de interfaz para las
+   palabras — el mismo reparto de roles de toda la app (spec 3.3). */
+.quick__hints {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  font-size: var(--text-meta);
+  color: var(--ink-tertiary);
+}
+
+.quick__gap {
+  flex: 1 1 auto;
+}
+
+.quick__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* Lo que Enter va a hacer pesa más que el resto, porque es lo que se va a pulsar. */
+.quick__hint--strong {
+  color: var(--ink-secondary);
+}
+
+/* Sin caja alrededor de la tecla. macOS escribe ⌘ y ⏎ en sus menús sin encerrarlos en nada, y
+   una tecla dibujada como un botón es de las cosas que delatan que esto no es del sistema. */
+.quick__hints kbd {
+  font-family: var(--font-data);
+  font-size: var(--text-group);
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+/* La entrada. Solo el contenido: el vidrio lo pinta el sistema al mostrar la ventana y no hay
+   forma de acompañarlo desde CSS, así que lo que se anima es lo que se puede — y 110 ms es
+   corto de sobra para que no se lea como que el texto llega tarde. */
+@keyframes quick-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.quick {
+  animation: quick-in 110ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick {
+    animation: none;
+  }
+}

@@ -30,6 +30,7 @@ Dentro:
 - La agenda del día: los eventos del Calendario de hoy, encima de la lista de Hoy (§15).
 - El vínculo con los Recordatorios de Apple, para las listas que se elijan (§16).
 - Las sesiones de Claude Code que quedan abiertas, y lo que ocupan (§17).
+- La captura rápida: una ventana que se abre con un atajo global, con menú de comandos (§18).
 
 Fuera de la v1, no lo construyas:
 
@@ -37,7 +38,10 @@ Fuera de la v1, no lo construyas:
   cuenta y no sale nada de esta Mac — habla con otra app del sistema por su base local, igual
   que §15 habla con el Calendario.
 - Subtareas anidadas más allá de un nivel.
-- Atajo global de teclado.
+- Atajo global de teclado **para el panel**. El de §18 abre la captura rápida, que es otra
+  ventana y otra cosa: entra escribiendo una tarea y se va sola. Un atajo que sacara el panel
+  entero delante de lo que se esté haciendo es lo que el icono de la barra ya hace, con la
+  diferencia de que ahí hay que haber decidido mirarlo.
 - Adjuntos, etiquetas, colaboración.
 
 ---
@@ -402,6 +406,16 @@ Esc          limpiar búsqueda, luego cerrar
 ⌘Z           deshacer la última acción destructiva
 ```
 
+Y en cualquier campo de captura, el del pie y el de la ventana de §18:
+
+```
+/            abrir el menú de comandos
+@  ·  #      abrir el menú de proyectos
+↑ ↓          moverse por el menú abierto
+⏎  ·  ⇥      aceptar lo señalado
+Esc          cerrar el menú, luego limpiar el campo, luego cerrar
+```
+
 Anillo de foco visible siempre: 2px del color de acento en contexto, con 2px de offset.
 Nunca `outline: none` sin reemplazo.
 
@@ -424,8 +438,9 @@ El campo inferior acepta texto plano y lo parsea al vuelo, mostrando los tokens 
 como chips debajo del campo antes de confirmar:
 
 - `hoy`, `mañana`, `lun`…`dom`, `12 ago`, `14:30` → fecha y hora
-- `#proyecto` → asigna proyecto (autocompletado al escribir `#`)
+- `#proyecto` y `@proyecto` → asigna proyecto (autocompletado al escribir la marca)
 - `!` / `!!` → prioridad media / alta
+- `cada día`, `cada 3 semanas`, `cada martes` → la regla de §12
 
 Ejemplo: `Renovar dominio mañana 10:00 #infra !!` crea la tarea con todo asignado y deja el
 título limpio en "Renovar dominio". Si el parseo se equivoca, un clic en el chip lo quita y
@@ -433,6 +448,19 @@ el texto vuelve al título.
 
 Usa `chrono-node` o equivalente en español, o escribe el parser a mano — es un dominio
 acotado y un parser propio de ~80 líneas es más predecible que una librería que adivina.
+
+**El `@` vale lo mismo que el `#`, y ninguno sustituye al otro.** El `#` es el que estaba y el
+que va escrito en los atajos que ya existen: cambiarlo rompería en silencio un
+`riel://nueva?texto=…#infra` guardado hace meses, que es justo lo que §14 promete que no pasa.
+El `@` está porque es lo que la gente intenta primero — fuera de aquí es la marca de «esto va a
+alguien o a algún sitio»— y porque es el que escribe el menú de comandos de §18, que es donde
+se aprende. Una marca pegada a una palabra sigue siendo parte de ella, y eso es lo que deja en
+paz a `diego@gmail.com`.
+
+Y **una barra abre el menú de comandos** (§18). Lo que ese menú hace es escribir esta misma
+gramática y no una segunda: cada renglón enseña a su derecha el literal que va a insertar, así
+que quien pulse «Alta» veinte veces acaba escribiendo `!!` sin abrir nada. Es el mismo
+argumento por el que §14 se niega a que `riel://` tenga un parámetro por campo.
 
 ---
 
@@ -459,6 +487,7 @@ hace que las notificaciones funcionen de verdad.
 Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 
 - Abrir al iniciar sesión (`tauri-plugin-autostart`).
+- El atajo global que abre la captura rápida (§18).
 - Vista al abrir, texto de las tareas, icono de la barra y retención de completadas.
 - Exportar e importar JSON, y un enlace a los datos en Finder.
 - La versión, el renglón de la actualización cuando hay una (§11) y salir de Riel (§4).
@@ -472,7 +501,17 @@ tapaban la lista entera— ni el nombre encima de sus opciones, que gasta una l�
 píxeles de texto y deja medio popover en blanco al lado: apretaba a lo alto justo donde sobraba
 a lo ancho.
 
-Cuatro de las cinco son la misma forma, un segmentado; la quinta es booleana y va con
+La del atajo (§18) no es ninguna de las dos formas de abajo, y por eso va entre ellas y no en
+un extremo: no tiene dos estados ni una lista de opciones que quepa a la derecha, porque lo que
+enseña es una combinación que solo se conoce pulsándola. Así que el control **es** el valor —el
+atajo escrito en la fuente de datos, sobre la misma pista que un segmentado, contra el mismo
+borde derecho— y pulsarlo lo pone a escuchar. Grabando se queda con todas las teclas, o ⌘F se
+escaparía a la búsqueda de detrás y ⎋ cerraría el panel en vez de cancelar; ⌫ lo quita y ⎋ lo
+deja como estaba, dicho en una nota que solo sale mientras hace falta. Va entre los
+interruptores y los segmentados para no partir en dos las cuatro de lista cerrada, que se leen
+como una tabla.
+
+Cuatro de las otras son la misma forma, un segmentado; las de sí o no van con
 interruptor. Lo que no vale para ella es la palomita a la izquierda —la gramática de un menú
 metida entre cuatro filas que ya eran tabla— pero un segmentado de «Sí / No» tampoco: pide leer
 dos palabras para saber un estado que un interruptor puede simplemente *tener*, y es el control
@@ -585,7 +624,13 @@ La v1 está lista cuando:
 10. Con `prefers-reduced-transparency` activo no queda una sola superficie translúcida.
 11. Nada delata que es una webview: sin menú contextual del navegador, sin rebote elástico de
     la página, sin selección de texto fuera de los campos, sin arrastre de imágenes.
-12. En reposo, con el panel cerrado, el proceso se mantiene por debajo de 60 MB.
+12. En reposo, con el panel cerrado, el proceso se mantiene por debajo de 60 MB. La ventana de
+    captura (§18) se construye la primera vez que se pide y a partir de ahí se queda: el
+    presupuesto es el de antes de haberla abierto nunca, que es el estado en el que arranca la
+    app y en el que pasa la mayor parte del tiempo.
+13. El atajo global abre la ventana de captura sobre lo que sea que haya delante —incluida una
+    app en pantalla completa— sin activar Riel: la app de detrás no pierde nada, y al cerrarse
+    la ventana el teclado vuelve donde estaba.
 
 ---
 
@@ -1274,3 +1319,167 @@ todavía no lleva.
   Se lee al entrar, y hay un botón para volver a leer. Lo que sí avanza solo es el «hace 3 h 55
   min», que se dibuja del reloj sobre un sello ya leído y no vuelve a tocar el disco.
 - La búsqueda no entra aquí. `⌘F` busca tareas (§5), y una sesión no lo es.
+
+---
+
+## 18. La captura rápida
+
+Añadida después de la v1. Es la segunda ventana de la app y la única que se abre sin tocar la
+barra de menú: un atajo global la pone en medio de la pantalla, se escribe una tarea y se va.
+
+Existe por lo mismo que el esquema `riel://` (§14) y donde aquel no llega. El enlace resuelve
+el caso de la otra app que ya sabe qué apuntar —un atajo, un lanzador, la hoja de compartir—
+pero no el de acordarse de algo a media frase: para eso hay que ir a escribir el enlace a algún
+sitio, que es más viaje que el que se quería ahorrar. Y el icono de la barra pide subir el
+ratón hasta la esquina, apuntar a un glifo de 22 px y volver. La captura rápida es la misma
+gramática con una tecla delante.
+
+Y resuelve además lo que el panel no resolvía bien: **poner los detalles al escribir, no
+después.** Antes, una tarea con proyecto, fecha y prioridad era escribirla, abrir su detalle y
+elegir tres veces. El parser de §6 ya evitaba eso desde el primer día, pero solo para quien se
+supiera la gramática de memoria — y no había en ninguna parte dónde aprenderla. Eso es lo que
+hace el menú de comandos.
+
+### 18.1 El menú de comandos
+
+Una barra abre una lista de lo que se puede poner, agrupada por qué pone: cuándo, prioridad,
+proyecto, repetición, notas. Se filtra escribiendo, se recorre con las flechas y se acepta con
+⏎ o ⇥.
+
+Y **cada renglón enseña a su derecha el literal que va a escribir** —«Alta … !!», «Cada mes …
+cada mes»—, en la fuente de datos y un tono por debajo. Eso es lo único que separa un menú que
+enseña la gramática de uno que la esconde, y es la decisión entera del apartado: lo que el menú
+inserta es texto en el campo, no un estado invisible pegado a la tarea. Quien pulse «Alta»
+veinte veces acaba escribiendo `!!` sin abrir nada, y entonces el menú ya hizo su trabajo.
+
+Por eso tampoco hay una segunda gramática. Es el mismo argumento con el que §14 se niega a que
+`riel://` tenga un parámetro por campo: mantener dos formas de decir lo mismo cuesta el doble y
+la que la persona ya se sabe es la de la app.
+
+Reglas:
+
+- **Filtra por prefijo y por palabra, no difuso.** `/ma` da «Mañana» y «Martes», y eso se puede
+  predecir de memoria. La búsqueda de tareas (§5) sí es difusa porque ahí lo buscado puede
+  estar escrito de cualquier forma; aquí hay veinte renglones que uno acaba de ver, y un menú
+  que reordena por parecido no se aprende nunca. Casa también contra el literal, porque lo que
+  a veces se recuerda es el `!!` y no el nombre.
+- **La barra tiene que ir suelta**: al principio o detrás de un espacio. Es lo mismo que se le
+  pide a las marcas de proyecto, y es lo que deja que una fecha escrita `3/5` no abra nada.
+- **`/notas` es el único comando que no escribe en el título.** Abre un segundo campo debajo,
+  y por eso solo existe donde ese campo cabe — en esta ventana. En el pie del panel un comando
+  que abre algo que no está sería un renglón prometiendo lo que no hay.
+- El menú vive **dentro** de la superficie, que crece para hacerle sitio. No es un popover
+  encima: lo que flota sobre el vidrio lleva su material, y un segundo material sobre el
+  primero es el segundo nivel de blur que §4 prohíbe. Una hairline lo separa del campo y ya.
+
+### 18.2 La ventana
+
+620 × lo que mida su contenido, centrada a lo ancho de la pantalla donde está el puntero y
+anclada al 30% de lo que sobra a lo alto.
+
+- **620 y no los 440 del panel.** Aquí no hay riel ni lista: hay un renglón que se lee de una
+  pasada, y eso quiere ancho. Es también lo que hace que los chips del parser quepan en una
+  sola fila.
+- **El 30% y no la mitad.** Es lo que hacen Spotlight y cualquier alerta del sistema, y por lo
+  mismo: una superficie centrada de verdad se lee como baja, porque el ojo pone el centro
+  óptico por encima del geométrico. Deja además sitio por debajo para que los chips y el menú
+  crezcan sin que la ventana salte hacia arriba para seguir cabiendo.
+- **La pantalla la decide el puntero**, como el panel. Aquí además no hay icono de barra del
+  que tirar: el atajo se pulsa mirando cualquiera de las dos pantallas, y la que se está
+  mirando es donde está el ratón.
+- **El alto lo decide el contenido y la ventana lo sigue.** Sin eso habría que elegir entre un
+  alto fijo con vidrio vacío debajo del campo o uno que recorta el menú, y las dos se ven mal
+  de la misma forma. Cada apertura vuelve al alto de arranque aunque la anterior hubiera
+  crecido, así que el borde de arriba cae siempre en la misma fila de la pantalla y lo que
+  crece, crece hacia abajo.
+- **Es el mismo `RielPanel` que el panel de la barra**, con su vidrio y su excepción de foco:
+  se le pide lo mismo —aparecer sobre lo que haya delante, incluida una app en pantalla
+  completa, y llevarse el teclado sin activar Riel. Lo único que cambia es dónde se coloca y
+  con qué arco: 26 con el vidrio nuevo y 16 con el heredado, que es la misma proporción que
+  guardan los dos radios del panel. 620 px de ancho con el arco de un popover se leen como una
+  barra recortada.
+- **Se construye la primera vez que se pide, no al arrancar.** Un segundo `WKWebView` vivo
+  desde el primer momento es memoria que el criterio 12 no tiene de dónde sacar, y la mayoría
+  de los arranques —los de iniciar sesión— nunca la usan. A partir de ahí se queda: reconstruir
+  el webview en cada pulsación metería su arranque entre el atajo y el cursor, que es justo lo
+  que esto existe para no tener.
+- Se oculta al perder el foco, como el panel, y sin mirar el `KEEP_OPEN` de aquel: son dos
+  ventanas y cerrar una no puede cerrar la otra.
+
+### 18.3 Que no se lea como una línea de comandos
+
+Es lo que más fácil sale mal. Un campo ancho sobre vidrio, con barra y arroba, es exactamente
+la forma de una terminal, y una app de tareas que parece una terminal la usan tres personas.
+Lo que lo separa:
+
+- **La casilla de una fila de tarea a la izquierda**, a escala: 18 px, el mismo grosor de trazo
+  y el mismo tono en reposo, y toma el color del proyecto en cuanto el texto lo nombra. Dice
+  con el vocabulario que la app ya tiene qué es lo que se está escribiendo. Un prompt diría
+  otra cosa.
+- **El cuerpo grande**, 21 px, que es la única escala de toda la app por encima del título de
+  una fila y existe solo aquí. Con tracking negativo, porque la fuente del sistema se dibuja
+  con el suyo pensado para 13 px y a 21 las letras quedan sueltas — macOS lo corrige solo a
+  partir de los tamaños de título, y en un webview hay que pedirlo. No es otra tipografía: §3.3
+  dice que cualquier cosa que no sea la del sistema delata a la app, y sigue diciéndolo.
+- **El renglón de pistas abajo**, con las teclas en la fuente de datos y las palabras en la de
+  interfaz. Dice qué hay sin pedir que se pruebe, que es lo contrario de un prompt vacío
+  esperando a que aciertes. Las dos marcas van siempre porque son lo que hay que aprender; lo
+  de la derecha cambia con lo que ya se puede hacer. Y las teclas sin caja alrededor: macOS
+  escribe ⌘ y ⏎ en sus menús sin encerrarlos en nada.
+- **El acento de la ventana es el del proyecto en cuanto el texto lo nombra.** La misma regla
+  que hace que dentro de un proyecto manden sus colores (§3.1), y aquí «dentro de un proyecto»
+  es que se haya escrito. Es también la única confirmación en color de que la marca se entendió.
+- **Sin anillo de foco en el campo.** No tiene caja de la que colgarlo y no hay más que un
+  sitio donde escribir: señalarlo sería señalar lo único que hay. Lo que sí queda es el cursor,
+  del color del acento.
+
+### 18.4 Qué hacen las teclas
+
+Lo mismo que en el pie del panel, salvo lo que de verdad cambia:
+
+```
+⏎        agregar y cerrar
+⌘⏎       agregar y seguir aquí
+⇧⏎       renglón nuevo, dentro de las notas
+Esc      cerrar el menú, luego limpiar, luego cerrar la ventana
+```
+
+⏎ cierra porque quien la abrió estaba escribiendo en otra app y quiere volver; ⌘⏎ es lo que
+deja apuntar tres cosas seguidas sin volver a pulsar el atajo. La escalera de Escape es la del
+panel (§4) con un peldaño más arriba, el del menú.
+
+### 18.5 Lo que no hereda, y lo que no pide
+
+- **Nada se hereda de ninguna vista**, por lo mismo que un `riel://` (§14): la ventana se abre
+  con el panel cerrado, y heredar de la vista que quedó abierta hace tres días es heredar de un
+  azar. Lo que el texto no diga, no lo pone nadie — y los chips son lo que dice, antes de
+  guardar, a dónde va.
+- **El permiso de avisos no se pide desde aquí**, aunque la tarea traiga hora, exactamente por
+  lo que dice §14: el diálogo del sistema saldría sin panel delante y sin que nadie lo haya
+  provocado. Se pedirá la próxima vez que se ponga una hora a mano.
+- **La tarea creada se le dice al panel por un evento**, no se espera a que alguien lo abra. El
+  panel sigue vivo con la ventana escondida, así que se entera en el momento: es lo que hace
+  que la tarea ya esté ahí y ya programada si trae hora.
+- **Y el texto que no se pudo guardar no se borra.** Vaciar el campo antes de que conteste la
+  base se siente más rápido, pero si la escritura falla se lleva por delante lo que la persona
+  escribió.
+
+### 18.6 El atajo
+
+`tauri-plugin-global-shortcut`, con ⌥Espacio de fábrica.
+
+- **Puesto de fábrica y no en blanco.** Un atajo global que hay que ir a configurar antes de
+  que exista no lo encuentra nadie, y entonces esta ventana es una que no se puede abrir.
+  ⌥Espacio está libre en macOS —⌘Espacio es Spotlight— y quitarlo es un clic.
+- **Pide al menos un modificador.** Un atajo global sin modificador se queda con esa tecla en
+  todas las apps de la máquina, incluida la que se esté usando para escribir.
+- **La preferencia vive en `localStorage`**, con el riel y la vista de arranque (§13): es del
+  equipo y no de la lista, y perderla no borra ninguna tarea. Rust no la puede leer, así que se
+  la pasa el webview al arrancar y cada vez que cambia. Con la app recién instalada no hay nada
+  registrado hasta que la página del panel corre, que es lo mismo que ya pasa con el glifo de
+  la barra.
+- **Un atajo que ya usa otra app se dice y no se pone.** Es el único fallo que quien lo pulsó
+  puede arreglar, así que es el único que se enseña: «Ese atajo ya lo usa otra app. Prueba con
+  otro.» El anterior se queda puesto.
+- El plugin **no** aparece en ninguna capacidad: no se invoca desde JavaScript. Lo que cruza el
+  puente es la preferencia, y quien registra es Rust.

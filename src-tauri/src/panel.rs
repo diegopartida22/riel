@@ -16,11 +16,18 @@ pub fn set_keep_open(value: bool) {
 
 /// El vidrio lo pinta el sistema. Nosotros solo pedimos el material correcto y nos
 /// quitamos de en medio: cualquier fondo opaco encima mata el efecto.
-pub fn apply_glass<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<crate::glass::Material> {
-    let material = crate::glass::apply(window)?;
+pub fn apply_glass<R: Runtime>(
+    window: &WebviewWindow<R>,
+    radius: f64,
+) -> tauri::Result<crate::glass::Material> {
+    let material = crate::glass::apply(window, radius)?;
 
     if cfg!(debug_assertions) {
-        eprintln!("[riel] vidrio: {}", material.as_str());
+        eprintln!(
+            "[riel] vidrio de «{}»: {}",
+            window.label(),
+            material.as_str()
+        );
     }
 
     Ok(material)
@@ -266,7 +273,10 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
     // Entre colocar y mostrar: el vidrio nuevo necesita saber sobre qué pantalla va a dibujar,
     // y no puede haber un fotograma de ventana transparente antes de que esté puesto. De la
     // segunda apertura en adelante no hace nada.
-    crate::glass::ensure(window);
+    crate::glass::ensure(
+        window,
+        crate::glass::material(window.app_handle()).corner_radius(),
+    );
     let _ = window.show();
     let _ = window.set_focus();
 
@@ -295,12 +305,23 @@ pub fn toggle<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 pub fn on_focus_lost<R: Runtime>(window: &Window<R>) {
-    if KEEP_OPEN.load(Ordering::SeqCst) {
-        return;
-    }
     // En desarrollo estorba: cada vez que tocas la terminal o el navegador el panel
     // desaparece y no puedes ni mirarlo.
     if std::env::var_os("RIEL_NO_AUTOHIDE").is_some() {
+        return;
+    }
+
+    // La captura rápida (sección 18) es otra ventana y se oculta por su cuenta: no la sujeta
+    // `KEEP_OPEN`, que es del panel, y ocultar el panel porque ella perdió el foco cerraría
+    // dos cosas con un solo gesto.
+    if window.label() == crate::captura::LABEL {
+        if let Some(quick) = window.get_webview_window(crate::captura::LABEL) {
+            let _ = quick.hide();
+        }
+        return;
+    }
+
+    if KEEP_OPEN.load(Ordering::SeqCst) {
         return;
     }
     if let Some(panel) = window.get_webview_window("main") {

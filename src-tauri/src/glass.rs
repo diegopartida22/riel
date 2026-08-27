@@ -47,6 +47,21 @@ impl Material {
             Material::Popover => 12.0,
         }
     }
+
+    /// El radio de la ventana de captura (spec 18), que es más ancha y va suelta en medio de
+    /// la pantalla.
+    ///
+    /// Sale de la misma escalera que ya escribe `tokens.css` para lo que flota —menú 8,
+    /// popover 10, panel 12— leída hacia arriba: cuanto más grande y más superficie es lo que
+    /// se dibuja, más arco se le da. 620 px de ancho con el arco de un popover se leían como
+    /// una barra recortada. Los dos valores guardan la proporción del panel entre sus dos
+    /// materiales, que es la que Tahoe ya decidió.
+    pub fn capture_radius(self) -> f64 {
+        match self {
+            Material::Liquid => 26.0,
+            Material::Popover => 16.0,
+        }
+    }
 }
 
 /// Decide qué material va a pintar el panel, y deja puesto el que se puede poner ya.
@@ -72,7 +87,7 @@ impl Material {
 /// Lo que sí se resuelve aquí en los dos casos es *cuál* de los dos es, porque de eso dependen
 /// el radio y el `data-glass` que `on_page_load` le pasa al CSS, y eso pasa antes de que el
 /// panel se abra por primera vez. Preguntar si la clase existe no dibuja nada.
-pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
+pub fn apply<R: Runtime>(window: &WebviewWindow<R>, radius: f64) -> tauri::Result<Material> {
     #[cfg(target_os = "macos")]
     {
         if liquid::disponible() {
@@ -99,7 +114,7 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
             window,
             NSVisualEffectMaterial::Popover,
             Some(NSVisualEffectState::FollowsWindowActiveState),
-            Some(Material::Popover.corner_radius()),
+            Some(radius),
         )
         .expect("la vibrancy de macOS requiere 10.10 o superior");
 
@@ -108,7 +123,7 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = window;
+        let _ = (window, radius);
         Ok(Material::Popover)
     }
 }
@@ -122,13 +137,28 @@ pub fn apply<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<Material> {
 ///
 /// Idempotente: de la segunda apertura en adelante no hace nada. El material heredado no pasa
 /// por aquí; ese ya quedó puesto en `apply`.
-pub fn ensure<R: Runtime>(window: &WebviewWindow<R>) {
+///
+/// Lo idempotente se lleva por etiqueta de ventana y no con un solo booleano, porque desde la
+/// captura rápida (sección 18) hay dos ventanas de vidrio y con un booleano global la segunda
+/// en abrirse se quedaba sin material: la primera ya lo había puesto en alto.
+pub fn ensure<R: Runtime>(window: &WebviewWindow<R>, radius: f64) {
     #[cfg(target_os = "macos")]
     {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        static PUESTO: AtomicBool = AtomicBool::new(false);
+        use std::collections::HashSet;
+        use std::sync::{Mutex, OnceLock};
 
-        if !liquid::disponible() || PUESTO.swap(true, Ordering::Relaxed) {
+        static PUESTO: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+        if !liquid::disponible() {
+            return;
+        }
+
+        let puestas = PUESTO.get_or_init(|| Mutex::new(HashSet::new()));
+        let nueva = puestas
+            .lock()
+            .map(|mut set| set.insert(window.label().to_string()))
+            .unwrap_or(false);
+        if !nueva {
             return;
         }
 
@@ -138,22 +168,22 @@ pub fn ensure<R: Runtime>(window: &WebviewWindow<R>) {
 
         // SAFETY: `ns_view()` devuelve la `NSView` viva de la ventana, y esto se llama desde
         // `show()`, en el hilo principal.
-        unsafe { liquid::apply(ns_view, Material::Liquid.corner_radius()) };
+        unsafe { liquid::apply(ns_view, radius) };
     }
 
     #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    let _ = (window, radius);
 }
 
 /// Le pasa al CSS qué material ganó y con qué radio, para que no haya dos números que
 /// mantener a mano. Va en `on_page_load` porque es el único momento con la página lista y
 /// antes del primer pintado, y porque así también cubre las recargas de Vite.
-pub fn publish_to_css<R: Runtime>(webview: &tauri::Webview<R>, material: Material) {
+pub fn publish_to_css<R: Runtime>(webview: &tauri::Webview<R>, material: Material, radius: f64) {
     let script = format!(
         "document.documentElement.dataset.glass='{}';\
          document.documentElement.style.setProperty('--panel-radius','{}px');",
         material.as_str(),
-        material.corner_radius(),
+        radius,
     );
     let _ = webview.eval(&script);
 }
@@ -170,7 +200,7 @@ pub fn publish_to_css<R: Runtime>(webview: &tauri::Webview<R>, material: Materia
 /// Un atributo y no una clase por lo mismo que `data-glass`: lo mira solo el CSS.
 pub fn publish_active_to_css<R: Runtime>(window: &WebviewWindow<R>, active: bool) {
     let value = if active { "activo" } else { "inactivo" };
-    let _ = window.eval(&format!(
+    let _ = window.eval(format!(
         "document.documentElement.dataset.window='{value}';"
     ));
 }
@@ -284,4 +314,16 @@ mod liquid {
             host.addSubview_positioned_relativeTo(&glass, NSWindowOrderingMode::Below, None);
         }
     }
+}
+
+/// El material que ganó, tal y como lo dejó `setup` en el estado de la app.
+///
+/// Cae a `Popover` si todavía no está puesto, que es el material de siempre y el que menos
+/// promete: equivocarse hacia el vidrio nuevo dibujaría un radio que la ventana no tiene.
+pub fn material<R: Runtime>(app: &tauri::AppHandle<R>) -> Material {
+    use tauri::Manager;
+
+    app.try_state::<Material>()
+        .map(|state| *state)
+        .unwrap_or(Material::Popover)
 }

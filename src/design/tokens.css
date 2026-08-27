@@ -91,6 +91,13 @@
   --text-meta: 11px;
   --text-group: 10px;
 
+  /* El campo de la captura rápida (spec 18), y nada más. Está en la escala y no suelto en su
+     hoja porque es un tamaño de la app, aunque solo lo use una ventana: la escala de la 3.3 se
+     ciñe a propósito, y un sexto valor tiene que verse al lado de los otros cinco para que se
+     note si algún día sobra. 21 es lo que mide un título de ventana de macOS, que es el rango
+     que le toca — es lo único que hay que leer en esa superficie. */
+  --text-hero: 21px;
+
   /* Geometría recurrente */
 
   /* Los dos radios de lo que flota, y en este orden a propósito. El popover de Ajustes es una

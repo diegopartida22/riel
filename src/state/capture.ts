@@ -73,7 +73,7 @@ const DIACRITICOS = /[\u0300-\u036f]/g;
  * Aquí la ñ sí se pliega a n — al revés que en la búsqueda. Buscando, confundirlas haría que
  * `ano` encontrara «año»; escribiendo, `manana` es solo alguien que no puso la tilde.
  */
-function fold(text: string): string {
+export function fold(text: string): string {
   let out = "";
   for (let i = 0; i < text.length; i++) {
     const lower = text[i].toLowerCase();
@@ -185,9 +185,21 @@ function dayLabel(day: string, today: string): string {
 }
 
 /**
- * El proyecto de un `#`. Pide el nombre **completo** — `#inf` no es «Infra». Es lo que hace
- * que el autocompletado tenga sentido: mientras el nombre esté a medias no hay chip, y en
- * cuanto se completa aparece. Adivinar por prefijo asignaría proyectos a media palabra.
+ * Las dos marcas que nombran un proyecto.
+ *
+ * El `#` es el del spec 6 y el que se sabe de memoria; el `@` es el que se lee como «esto va
+ * a alguien o a algún sitio» en todo lo que uno escribe fuera de aquí, y es lo que la gente
+ * intenta primero. Valen los dos y ninguno sustituye al otro: cambiar el `#` por el `@`
+ * rompería en silencio los atajos ya escritos, que es lo que el spec 14 promete que no pasa
+ * — un `riel://nueva?texto=…#infra` guardado hace meses tiene que seguir significando lo
+ * mismo. El menú de comandos escribe `@`, que es el que hay que enseñar.
+ */
+export const SIGILOS = ["#", "@"] as const;
+
+/**
+ * El proyecto de un `#` o un `@`. Pide el nombre **completo** — `#inf` no es «Infra». Es lo
+ * que hace que el autocompletado tenga sentido: mientras el nombre esté a medias no hay chip,
+ * y en cuanto se completa aparece. Adivinar por prefijo asignaría proyectos a media palabra.
  */
 function projectAt(folded: string, hash: number, projects: Project[]): Project | null {
   let best: Project | null = null;
@@ -310,8 +322,10 @@ export function parse(
     });
   }
 
-  for (let hash = folded.indexOf("#"); hash >= 0; hash = folded.indexOf("#", hash + 1)) {
-    // Un `#` pegado a una palabra es parte de ella, no una etiqueta.
+  for (let hash = 0; hash < folded.length; hash++) {
+    if (!SIGILOS.includes(folded[hash] as (typeof SIGILOS)[number])) continue;
+    // Una marca pegada a una palabra es parte de ella y no una etiqueta. Es también lo que
+    // deja en paz a un correo: la arroba de `diego@gmail.com` va detrás de una letra.
     if (hash > 0 && /[a-z0-9]/.test(folded[hash - 1])) continue;
     const project = projectAt(folded, hash, projects);
     if (!project) continue;
@@ -418,22 +432,50 @@ function complete({ rule, fromDay }: NonNullable<Draft["repeat"]>, day: string):
 }
 
 /**
- * El `#` a medio escribir bajo el cursor, si lo hay. Es lo que dispara el autocompletado.
- * Devuelve nulo en cuanto el fragmento tiene un espacio: ahí el `#` ya quedó atrás.
+ * La marca a medio escribir bajo el cursor, si la hay. Es lo que dispara el autocompletado.
+ * Devuelve nulo en cuanto el fragmento tiene un espacio: ahí la marca ya quedó atrás.
+ *
+ * Devuelve también cuál de las dos era, para que al completar se reescriba la que se estaba
+ * escribiendo. Empezar con `@` y que el menú devuelva un `#` sería enseñar a mano una
+ * gramática que no es la que se acaba de usar.
  */
-export function hashAt(text: string, caret: number): { at: number; fragment: string } | null {
+export function sigilAt(
+  text: string,
+  caret: number,
+): { at: number; fragment: string; sigilo: string } | null {
   const before = text.slice(0, caret);
-  const hash = before.lastIndexOf("#");
-  if (hash < 0) return null;
-  if (hash > 0 && !/\s/.test(text[hash - 1])) return null;
 
-  const fragment = before.slice(hash + 1);
+  let at = -1;
+  for (const sigilo of SIGILOS) {
+    at = Math.max(at, before.lastIndexOf(sigilo));
+  }
+  if (at < 0) return null;
+  if (at > 0 && !/\s/.test(text[at - 1])) return null;
+
+  const fragment = before.slice(at + 1);
   if (/\s/.test(fragment)) return null;
 
-  return { at: hash, fragment };
+  return { at, fragment, sigilo: before[at] };
 }
 
-/** Los proyectos que empiezan por lo escrito tras el `#`. Sin nada escrito, todos. */
+/**
+ * La barra a medio escribir bajo el cursor, si la hay. Es lo que abre el menú de comandos
+ * (spec 18). Mismas dos reglas que las marcas de proyecto, y por eso una fecha escrita como
+ * `3/5` no lo dispara: su barra va detrás de un número.
+ */
+export function slashAt(text: string, caret: number): { at: number; fragment: string } | null {
+  const before = text.slice(0, caret);
+  const at = before.lastIndexOf("/");
+  if (at < 0) return null;
+  if (at > 0 && !/\s/.test(text[at - 1])) return null;
+
+  const fragment = before.slice(at + 1);
+  if (/\s/.test(fragment)) return null;
+
+  return { at, fragment };
+}
+
+/** Los proyectos que empiezan por lo escrito tras la marca. Sin nada escrito, todos. */
 export function completions(fragment: string, projects: Project[]): Project[] {
   const needle = fold(fragment);
   return projects.filter((project) => fold(project.name).startsWith(needle));

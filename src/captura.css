@@ -1,0 +1,17 @@
+/* La hoja de la ventana de captura rápida (spec 18). Trae lo que comparte con el panel y nada
+   más: sin riel, sin lista, sin detalle. Es también lo que hace que su bundle sea el de una
+   ventana que tiene que estar en pantalla en cuanto se suelta el atajo. */
+
+@import "./design/base.css";
+@import "./ui/menu.css";
+@import "./ui/capture.css";
+@import "./ui/quick.css";
+
+/* La única regla de `base.css` que aquí no vale: el alto lo decide el contenido, y la ventana
+   lo sigue. Con el 100% heredado, medir el contenido devolvería siempre el alto de la ventana y
+   no crecería nunca. */
+html,
+body,
+#root {
+  height: auto;
+}

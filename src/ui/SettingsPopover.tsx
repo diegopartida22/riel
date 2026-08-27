@@ -13,6 +13,7 @@ import {
   snapshot,
   type Retention,
 } from "../data";
+import { describe, fromEvent, type Atajo as AtajoState } from "../state/atajo";
 import type { Editor } from "../state/editors";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
@@ -34,6 +35,8 @@ export interface SettingsPopoverProps {
   onRowText: (value: RowText) => void;
   trayGlyph: TrayGlyph;
   onTrayGlyph: (value: TrayGlyph) => void;
+  /** El atajo global que abre la captura rápida (spec 18). */
+  atajo: AtajoState;
   /** Los editores de código instalados y el puesto (spec 13). */
   editors: Editor[];
   editor: Editor | null;
@@ -203,6 +206,79 @@ function Choices<T>({
 }
 
 /**
+ * El renglón que graba el atajo global de la captura rápida (spec 18).
+ *
+ * No es un booleano ni una lista cerrada, así que no es ninguna de las dos formas de arriba:
+ * lo que hay que enseñar es una combinación que solo se conoce pulsándola. Por eso el control
+ * *es* el valor —el atajo escrito en la fuente de datos, sobre la misma pista que un
+ * segmentado— y pulsarlo lo pone a escuchar en vez de abrir una lista de teclas que nadie
+ * quiere recorrer.
+ *
+ * Grabando, el popover se queda con todas las teclas: sin eso, ⌘F escaparía a la búsqueda de
+ * detrás y ⎋ cerraría el panel entero en vez de cancelar la grabación.
+ */
+function Atajo({
+  accel,
+  error,
+  onPick,
+}: {
+  accel: string | null;
+  error: string | null;
+  onPick: (accel: string | null) => void;
+}) {
+  const [grabando, setGrabando] = useState(false);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!grabando) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Arrepentirse sin cambiar nada, y quitarlo del todo. Las dos van antes de `fromEvent`
+    // porque las dos son teclas sueltas, que es justo lo que un atajo no puede ser.
+    if (event.key === "Escape") {
+      setGrabando(false);
+      return;
+    }
+    if (event.key === "Backspace" || event.key === "Delete") {
+      setGrabando(false);
+      onPick(null);
+      return;
+    }
+
+    // Un modificador suelto no es un atajo todavía: se está a media combinación, así que se
+    // sigue escuchando en vez de rechazarlo.
+    const next = fromEvent(event);
+    if (!next) return;
+
+    setGrabando(false);
+    onPick(next);
+  };
+
+  return (
+    <>
+      <div className="settings__row">
+        <span className="settings__label">Atajo de captura</span>
+        <button
+          type="button"
+          className={`settings__atajo${grabando ? " is-grabando" : ""}`}
+          aria-label={`Atajo de captura: ${describe(accel)}`}
+          onClick={() => setGrabando((antes) => !antes)}
+          onBlur={() => setGrabando(false)}
+          onKeyDown={onKeyDown}
+        >
+          {grabando ? "Pulsa el atajo…" : describe(accel)}
+        </button>
+      </div>
+
+      {/* Solo mientras hace falta. Un renglón de instrucciones permanente debajo de un control
+          que se usa una vez en la vida gasta el alto del popover en algo que ya se sabe. */}
+      {grabando && <p className="settings__note">⌫ lo quita · ⎋ lo deja como estaba.</p>}
+      {!grabando && error && <p className="settings__note">{error}</p>}
+    </>
+  );
+}
+
+/**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
  */
 export function SettingsPopover({
@@ -215,6 +291,7 @@ export function SettingsPopover({
   onRowText,
   trayGlyph,
   onTrayGlyph,
+  atajo,
   editors,
   editor,
   onEditor,
@@ -535,6 +612,12 @@ export function SettingsPopover({
           </button>
         </>
       )}
+
+      {/* El atajo global (spec 18), entre los interruptores y los segmentados porque no es
+          ninguna de las dos cosas: no tiene dos estados ni una lista de opciones que quepa a la
+          derecha. Va aquí y no al final del bloque para no partir en dos las cuatro de lista
+          cerrada, que se leen como una tabla. */}
+      <Atajo accel={atajo.accel} error={atajo.error} onPick={atajo.set} />
 
       {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
           quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que

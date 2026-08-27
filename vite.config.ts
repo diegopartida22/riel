@@ -8,6 +8,19 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
+  // Dos páginas y no una. La captura rápida (spec 18) es otra ventana con otro webview, y
+  // meterla en el bundle del panel le costaría cargar el riel, la lista, el detalle y los
+  // ajustes para enseñar un campo de texto — justo lo que no puede pagar algo que tiene que
+  // estar en pantalla en cuanto se suelta el atajo.
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        captura: "captura.html",
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

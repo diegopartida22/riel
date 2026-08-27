@@ -117,14 +117,21 @@ pub fn watch<R: Runtime>(app: &tauri::AppHandle<R>) {
 
     let app = app.clone();
 
-    let block = block2::RcBlock::new(move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| {
-        let Some(accent) = current() else {
-            return;
-        };
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.eval(&css_script(&accent));
-        }
-    });
+    let block = block2::RcBlock::new(
+        move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| {
+            let Some(accent) = current() else {
+                return;
+            };
+            // A todas las ventanas y no solo al panel: la de captura rápida (spec 18) se queda
+            // cargada y escondida entre atajo y atajo, así que su `on_page_load` pasó hace horas y
+            // no vuelve a pasar. Sin esto se quedaría con el acento que hubiera al abrirla la
+            // primera vez, que es justo lo que el criterio 9 no permite.
+            let script = css_script(&accent);
+            for window in app.webview_windows().values() {
+                let _ = window.eval(&script);
+            }
+        },
+    );
 
     // SAFETY: se llama desde `setup`, en el hilo principal. El observador se registra para toda
     // la vida del proceso a propósito: no hay nada que desregistrar porque no hay un momento en

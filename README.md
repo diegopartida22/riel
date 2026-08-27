@@ -3,7 +3,7 @@
 Tareas en la barra de menú de macOS. Un clic en el icono abre un panel de vidrio para
 capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 
-> **Estado: v0.1.1.** Solo para Apple Silicon. Lo que hay funciona; lo que
+> **Estado: v0.5.0.** Solo para Apple Silicon. Lo que hay funciona; lo que
 > falta está anotado abajo sin adornos.
 
 ## Qué hace
@@ -11,9 +11,18 @@ capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 - Tareas con notas, fecha, hora, prioridad, proyecto y un nivel de subtareas.
 - Proyectos con color, en un riel lateral que se colapsa a una columna de discos.
 - Vistas Hoy, Próximas, Todas, Completadas y una por proyecto.
-- Captura en lenguaje natural: `Renovar dominio mañana 10:00 #infra !!` crea la tarea con la
-  fecha, la hora, el proyecto y la prioridad ya puestas, y el título limpio.
-- Búsqueda difusa, reordenar arrastrando, export a JSON, arranque al iniciar sesión.
+- Captura en lenguaje natural: `Renovar dominio mañana 10:00 @infra !!` crea la tarea con la
+  fecha, la hora, el proyecto y la prioridad ya puestas, y el título limpio. Una `/` abre el
+  menú de comandos, que enseña esa gramática mientras la escribe por ti.
+- **Captura rápida con ⌥Espacio**: una ventana en medio de la pantalla, sobre lo que sea que
+  haya delante, para apuntar algo sin dejar de estar donde estabas.
+- Tareas que se repiten: `cada mes`, `cada 3 días`, `cada martes`.
+- La agenda del día del Calendario encima de la lista de Hoy, y el vínculo con los
+  Recordatorios de Apple para las listas que elijas.
+- La carpeta de un proyecto, abierta en tu editor desde la lista.
+- El esquema `riel://`, para escribir una tarea desde Atajos, Raycast o la terminal.
+- Las sesiones de Claude Code abiertas y lo que ocupan, con lo que `~/.claude` llena de disco.
+- Búsqueda difusa, reordenar arrastrando, export e import de JSON, arranque al iniciar sesión.
 - Se actualiza sola desde las releases de este repo, cuando se lo pides.
 
 ## Qué no hace, a propósito
@@ -21,6 +30,11 @@ capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 No hay cuenta, ni sincronización, ni nube, ni telemetría. Los datos son un archivo SQLite en
 `~/Library/Application Support/com.riel.app`, y se pueden exportar a JSON desde Ajustes o
 abrir con cualquier cliente de SQLite.
+
+Lo único que cruza el borde de la app además de eso es lo que ya está en esta Mac: el
+Calendario y Recordatorios por EventKit —de Recordatorios solo se lee, salvo la casilla de
+completado— y los archivos que Claude Code deja en `~/.claude`, de los que no se leen los
+mensajes. Nada de eso sale de la máquina.
 
 La única vez que Riel sale a la red es para preguntar si hay versión nueva: baja el
 `latest.json` de las releases de este repo al arrancar, y como mucho una vez al día a partir
@@ -38,7 +52,7 @@ vibrancy heredado.
 
 ## Instalar
 
-Baja `Riel_0.1.1_aarch64.dmg` de la
+Baja `Riel_0.5.0_aarch64.dmg` de la
 [última release](https://github.com/diegopartida22/riel/releases/latest). Es solo para Apple
 Silicon: en una Mac Intel no abre.
 
@@ -84,8 +98,8 @@ APPLE_SIGNING_IDENTITY="Apple Development: tu@correo (EQUIPO)" npm run tauri bui
 
 ```bash
 export APPLE_SIGNING_IDENTITY="Apple Development: tu@correo (EQUIPO)"
-npm run release -- 0.1.2              # sube la versión, compila, etiqueta y publica
-npm run release -- 0.1.2 --dry-run    # todo lo local, sin tocar git ni GitHub
+npm run release -- 0.5.1              # sube la versión, compila, etiqueta y publica
+npm run release -- 0.5.1 --dry-run    # todo lo local, sin tocar git ni GitHub
 ```
 
 El script sube la versión en los tres archivos que tienen que decir lo mismo —`package.json`,
@@ -107,16 +121,17 @@ Stack: Tauri v2 + React + TypeScript + Vite, SQLite vía `tauri-plugin-sql`.
 
 ```
 src/            React: data (SQL), state (hooks), ui (primitivos), views (pantallas)
-src-tauri/      Rust: bandeja, panel, vidrio, avisos, migraciones
+src-tauri/      Rust: bandeja, panel, vidrio, avisos, migraciones, EventKit, atajo global
 CLAUDE.md       El spec. Es la fuente de verdad del diseño y del alcance.
 ```
 
 ## Diseño
 
 [`CLAUDE.md`](CLAUDE.md) tiene la dirección completa: la paleta, la tipografía, el
-comportamiento del panel y los criterios de aceptación. Dos reglas gobiernan el resto: la app
-no tiene color de acento propio —lo presta el proyecto en contexto— y en ninguna superficie
-aparece el azul de sistema de macOS.
+comportamiento del panel y los criterios de aceptación. Una regla gobierna el resto: **la app
+no tiene color de acento propio.** Usa el que elegiste en Ajustes del Sistema, y dentro de un
+proyecto manda el color del proyecto. Ningún hex de acento va escrito en el código: lo lee
+Rust de `NSColor.controlAccentColor` y lo publica al CSS.
 
 ## Apoyar
 
