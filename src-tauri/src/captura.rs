@@ -148,37 +148,13 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R>> {
 
 /// Centrada a lo ancho de la pantalla donde está el puntero, y anclada por arriba.
 ///
-/// La pantalla la decide el puntero por lo mismo que en el panel: es lo único que habla del
-/// mismo espacio de coordenadas que los monitores. Aquí además no hay icono de barra del que
-/// tirar — el atajo puede pulsarse mirando cualquiera de las dos pantallas, y la que se está
-/// mirando es donde está el ratón.
+/// La pantalla la decide el puntero, como en el panel. Aquí además no hay icono de barra del
+/// que tirar — el atajo puede pulsarse mirando cualquiera de las dos pantallas, y la que se
+/// está mirando es donde está el ratón.
+///
+/// El alto va por parámetro porque `set_size` acaba de pedirse: ver [`crate::pantalla::centered`].
 fn position<R: Runtime>(window: &WebviewWindow<R>) {
-    let monitor = window
-        .cursor_position()
-        .ok()
-        .and_then(|point| window.monitor_from_point(point.x, point.y).ok().flatten())
-        .or_else(|| window.primary_monitor().ok().flatten());
-
-    let Some(monitor) = monitor else {
-        return;
-    };
-    let Ok(size) = window.outer_size() else {
-        return;
-    };
-
-    let work = monitor.work_area();
-    let left = work.position.x as f64;
-    let top = work.position.y as f64;
-    let width = work.size.width as f64;
-    let height = work.size.height as f64;
-
-    let x = left + (width - size.width as f64) / 2.0;
-    let y = top + (height - size.height as f64).max(0.0) * TOP_FRACTION;
-
-    let _ = window.set_position(tauri::PhysicalPosition::new(
-        x.round() as i32,
-        y.round() as i32,
-    ));
+    crate::pantalla::centered(window, (WIDTH, HEIGHT), TOP_FRACTION);
 }
 
 /// El atajo que está registrado ahora mismo, que es el único que no cuenta como ocupado al

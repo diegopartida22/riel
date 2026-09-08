@@ -70,6 +70,11 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSColor",
   "NSColorSpace",
   "NSGraphics",
+  # En qué pantalla se abre cada ventana (ver `pantalla`). `NSEvent` por `mouseLocation`, que
+  # es el puntero en puntos de Cocoa y sin la conversión que tao le hace encima; `NSScreen`
+  # por `visibleFrame`, que es el área de trabajo ya descontadas la barra de menú y el Dock.
+  "NSEvent",
+  "NSScreen",
   "NSPanel",
   "NSResponder",
   "NSView",

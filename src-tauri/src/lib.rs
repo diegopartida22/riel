@@ -11,6 +11,7 @@ mod eventkit;
 mod glass;
 mod notify;
 mod panel;
+mod pantalla;
 mod reminders;
 mod tray;
 

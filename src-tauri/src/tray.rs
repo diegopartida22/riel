@@ -70,7 +70,6 @@ static LAST_RECT: Mutex<Option<TrayRect>> = Mutex::new(None);
 #[derive(Clone, Copy, Debug)]
 pub struct TrayRect {
     pub x: f64,
-    pub y: f64,
     pub width: f64,
 }
 
@@ -93,13 +92,17 @@ fn remember(event: &TrayIconEvent) {
         _ => return,
     };
 
-    // Los eventos de macOS ya vienen en físicos, así que la escala es irrelevante aquí.
+    // Solo el eje horizontal: el alto al que se pega el panel lo da el área de trabajo de la
+    // pantalla (ver `pantalla`), así que la Y del icono no la lee nadie.
+    //
+    // Y en las unidades en que llega, que no son puntos: `tray-icon` multiplica el rect por la
+    // escala de la pantalla donde está el icono. Deshacer esa escala es cosa de quien sabe cuál
+    // es esa pantalla, y aquí no se sabe.
     let position = rect.position.to_physical::<f64>(1.0);
     let size = rect.size.to_physical::<f64>(1.0);
 
     *LAST_RECT.lock().expect("LAST_RECT nunca entra en pánico") = Some(TrayRect {
         x: position.x,
-        y: position.y,
         width: size.width,
     });
 }
