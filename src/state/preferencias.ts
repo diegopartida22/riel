@@ -1,13 +1,12 @@
 /**
- * Las preferencias de esta máquina: el riel, la vista de arranque, el texto de la fila y el
- * glifo de la barra.
+ * Las preferencias de esta máquina: el riel, la vista de arranque, el texto de la fila, hasta
+ * dónde llega la lista y el glifo de la barra.
  *
- * Las cuatro viven en `localStorage` y no en SQLite, y eso es lo que las junta aquí. No son
+ * Las cinco viven en `localStorage` y no en SQLite, y eso es lo que las junta aquí. No son
  * datos del usuario: perderlas devuelve el riel colapsado, Hoy y el icono de omisión, y no
  * borra ninguna tarea. Por eso tampoco salen en el export (spec 8) — un respaldo de la lista
  * que además reordenara el riel de la máquina donde se restaura estaría de más — y por eso la
- * quinta preferencia, la retención, no está: esa sí decide qué se borra, así que va con los
- * datos.
+ * que falta, la retención, no está aquí: esa sí decide qué se borra, así que va con los datos.
  *
  * Estaban dentro de `useRiel`, que es donde no pintan nada: no consultan la base, no dependen
  * de la vista y nadie las relee al cambiar de día. Lo que hacían ahí era engordar su interfaz
@@ -16,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { storeHorizonte, storedHorizonte, type Horizonte } from "./horizonte";
 import { storeRowText, storedRowText, type RowText } from "./rowText";
 import { applyTrayGlyph, storeTrayGlyph, storedTrayGlyph, type TrayGlyph } from "./trayGlyph";
 import { SYSTEM_VIEWS, type SystemKind } from "./views";
@@ -52,6 +52,10 @@ export interface Preferencias {
   rowText: RowText;
   setRowText: (value: RowText) => void;
 
+  /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
+  horizonte: Horizonte;
+  setHorizonte: (value: Horizonte) => void;
+
   /** Qué silueta dibuja el icono de la barra de menú (spec 4). */
   trayGlyph: TrayGlyph;
   setTrayGlyph: (value: TrayGlyph) => void;
@@ -61,9 +65,10 @@ export function usePreferencias(): Preferencias {
   const [start, setStart] = useState<SystemKind>(startView);
   const [railExpanded, setRailExpanded] = useState(() => localStorage.getItem(RAIL_KEY) === "1");
   const [rowText, setRowText] = useState<RowText>(storedRowText);
+  const [horizonte, setHorizonte] = useState<Horizonte>(storedHorizonte);
   const [trayGlyph, setTrayGlyph] = useState<TrayGlyph>(storedTrayGlyph);
 
-  // La silueta es la única de las cuatro que tiene efecto fuera del webview, y Rust no puede
+  // La silueta es la única de las cinco que tiene efecto fuera del webview, y Rust no puede
   // leerla: hay que mandársela. Va en un efecto y no dentro del que la cambia porque este
   // también cubre el arranque — Rust monta el icono con el de omisión, porque la preferencia
   // vive en el webview y el webview todavía no existe cuando se monta la barra, y esta es la
@@ -88,6 +93,11 @@ export function usePreferencias(): Preferencias {
     setRowText(value);
   }, []);
 
+  const changeHorizonte = useCallback((value: Horizonte) => {
+    storeHorizonte(value);
+    setHorizonte(value);
+  }, []);
+
   const changeTrayGlyph = useCallback((value: TrayGlyph) => {
     storeTrayGlyph(value);
     setTrayGlyph(value);
@@ -100,6 +110,8 @@ export function usePreferencias(): Preferencias {
     toggleRail,
     rowText,
     setRowText: changeRowText,
+    horizonte,
+    setHorizonte: changeHorizonte,
     trayGlyph,
     setTrayGlyph: changeTrayGlyph,
   };

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { ChevronRight } from "./icons";
+
 /**
  * El encabezado de un grupo de la lista — HOY, PRÓXIMAS, un día suelto. Mono a 10px, en
  * mayúsculas y con mucho tracking (spec 3.3), que es lo que lo separa del título de una fila
@@ -16,5 +18,39 @@ export function GroupHeader({ children, action }: { children: ReactNode; action?
       {children}
       {action}
     </h2>
+  );
+}
+
+/**
+ * El encabezado que pliega: MÁS ADELANTE · 7 (spec 19).
+ *
+ * Del mismo peso y la misma mono que los otros, porque nombra un grupo igual que ellos; lo
+ * único que lo separa es que se pulsa, y eso lo dice el triángulo. El conteo va pegado al
+ * nombre y no contra el borde derecho: no es una columna que se compare con nada, es cuánto
+ * hay ahí dentro, y sin él un grupo plegado no dice si esconde una tarea o cuarenta.
+ */
+export function FoldHeader({
+  label,
+  count,
+  open,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li className="group-fold">
+      <button
+        type="button"
+        className="group-header group-header--fold"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <ChevronRight size={9} className="group-header__caret" aria-hidden />
+        {label} · {count}
+      </button>
+    </li>
   );
 }

@@ -32,6 +32,7 @@ Dentro:
 - Las sesiones de Claude Code que quedan abiertas, y lo que ocupan (§17).
 - La captura rápida: una ventana que se abre con un atajo global, con menú de comandos y la
   lista de Hoy (§18).
+- El horizonte de la lista: lo que cae muy adelante se pliega al final en vez de estorbar (§19).
 
 Fuera de la v1, no lo construyas:
 
@@ -489,7 +490,8 @@ Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 
 - Abrir al iniciar sesión (`tauri-plugin-autostart`).
 - El atajo global que abre la captura rápida (§18).
-- Vista al abrir, texto de las tareas, icono de la barra y retención de completadas.
+- Vista al abrir, texto de las tareas, hasta dónde llega la lista (§19), icono de la barra y
+  retención de completadas.
 - Exportar e importar JSON, y un enlace a los datos en Finder.
 - La versión, el renglón de la actualización cuando hay una (§11) y salir de Riel (§4).
 
@@ -497,7 +499,7 @@ Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 tiene dónde desbordarse, así que se sujeta contra los dos bordes y no solo contra el derecho.
 
 Una preferencia es una línea: su nombre a la izquierda y sus opciones a la derecha, alineadas
-todas al mismo borde. Ni un renglón con palomita por opción —las cinco costaban quince líneas y
+todas al mismo borde. Ni un renglón con palomita por opción —las seis costaban dieciocho líneas y
 tapaban la lista entera— ni el nombre encima de sus opciones, que gasta una línea para diez
 píxeles de texto y deja medio popover en blanco al lado: apretaba a lo alto justo donde sobraba
 a lo ancho.
@@ -509,10 +511,10 @@ atajo escrito en la fuente de datos, sobre la misma pista que un segmentado, con
 borde derecho— y pulsarlo lo pone a escuchar. Grabando se queda con todas las teclas, o ⌘F se
 escaparía a la búsqueda de detrás y ⎋ cerraría el panel en vez de cancelar; ⌫ lo quita y ⎋ lo
 deja como estaba, dicho en una nota que solo sale mientras hace falta. Va entre los
-interruptores y los segmentados para no partir en dos las cuatro de lista cerrada, que se leen
+interruptores y los segmentados para no partir en dos las cinco de lista cerrada, que se leen
 como una tabla.
 
-Cuatro de las otras son la misma forma, un segmentado; las de sí o no van con
+Cinco de las otras son la misma forma, un segmentado; las de sí o no van con
 interruptor. Lo que no vale para ella es la palomita a la izquierda —la gramática de un menú
 metida entre cuatro filas que ya eran tabla— pero un segmentado de «Sí / No» tampoco: pide leer
 dos palabras para saber un estado que un interruptor puede simplemente *tener*, y es el control
@@ -527,7 +529,7 @@ Tres niveles de tinta y no dos: el nombre y el valor puesto en `--ink-primary`, 
 elegir en `--ink-secondary`. Un rótulo que no se pulsa no puede pesar lo mismo que algo que sí.
 El elegido de un segmentado lleva fondo y nunca un anillo de color, y el interruptor encendido
 lleva el acento **del sistema** y no el del proyecto: el popover se dibuja dentro del panel, así
-que dentro de un proyecto heredaría su color, y ninguna de las cinco preferencias es de un
+que dentro de un proyecto heredaría su color, y ninguna de las preferencias es de un
 proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el proyecto no sobreescribe. La vista al abrir se elige con los iconos del riel, que es donde ya se aprendieron, y el
 icono de la barra con los glifos mismos a 18px, que es el tamaño al que macOS los dibuja: la
 previsualización no es una versión del glifo, es el glifo.
@@ -810,7 +812,7 @@ Reglas:
 - **Cuál se usa es una preferencia de la máquina**, en `localStorage` con el riel y la vista de
   arranque. Sale en Ajustes solo con dos o más instalados: con uno, un segmentado de una opción
   no es una elección, es un rótulo. Es la única fila del popover que puede no estar, así que va
-  la última de las preferencias y las cinco de siempre no cambian de sitio según la máquina.
+  la última de las preferencias y las de siempre no cambian de sitio según la máquina.
 - Nada de git, ramas ni estado del repositorio. Eso es otra app.
 
 ---
@@ -1550,3 +1552,58 @@ que ya está puesta no se ofrece.
 
 Y **el aviso no bloquea nada**, igual que el del hex de un proyecto (§3.2): dice qué pasa —«⌘[
 ya lo usa el sistema: macOS se queda con él»— y deja la decisión donde estaba.
+
+---
+
+## 19. El horizonte de la lista
+
+Añadido después de la v1, y es lo que arregla el ruido que trajeron las tareas recurrentes
+(§12). Una regla no guarda el año por delante: la vuelta siguiente nace al completar la de
+ahora, y nace *ya*. Pagar los impuestos el 10 de septiembre deja «17 de octubre» en la lista
+ese mismo día, y de ahí en adelante el mes que viene está delante todo el mes.
+
+En Hoy y en Próximas eso no molesta —la primera no la enseña y a la segunda se entra a
+propósito a ver lo que viene— pero Todas es donde hay que mirar, porque es la única vista donde
+vive lo que todavía no tiene fecha. Y ahí la fila de octubre se lee cada vez, no se puede hacer
+nada con ella, y sube el ruido de fondo hasta que la lista deja de contestar lo que se le
+pregunta.
+
+**No se filtra: se pliega.** Lo que pasa del horizonte se junta al final bajo un encabezado que
+lo cuenta —`MÁS ADELANTE · 7`— y un clic lo abre. Esconder tareas de la vista que se llama
+«Todas» sería mentirle al nombre; una lista de tareas solo sirve mientras se pueda creer que
+está entera.
+
+Reglas:
+
+- **Todas y las vistas de proyecto, y ninguna más.** Son las dos que traen la lista completa de
+  una vez. Próximas se queda entera, porque plegarle lo de más adelante sería quitarle lo único
+  que enseña; en Hoy no hay nada que plegar; en Completadas el orden lo da la fecha en que se
+  terminó cada tarea y no la de vencimiento, así que un horizonte de futuro no aplica.
+- **Lo que no tiene fecha nunca se pliega.** No está «más adelante», está sin decidir — y es
+  justo lo que se viene a ver a Todas.
+- **Fin de mes de fábrica**, con 30 días, 90 días y todo detrás. La preferencia vive en Ajustes
+  y en `localStorage` con el riel y la vista de arranque (§8): es de la máquina, no de la lista,
+  y perderla no borra nada. El mes y no los treinta días aunque midan casi lo mismo: la
+  frontera del mes ya se tiene en la cabeza y se queda quieta, mientras que «30 días» el 25 de
+  septiembre alcanza al 25 de octubre y vuelve a colar la vuelta siguiente de lo mensual, que es
+  exactamente el ruido del que esto viene a librar.
+- **Plegado de fábrica, y se vuelve a plegar al cambiar de vista.** No es un estado que
+  persista: lo que el grupo existe para hacer es que la lista arranque sin lo del mes que
+  viene, y una vista que recuerda que la abriste hace media hora no arranca así.
+- **Si no queda nada de este lado, no se pliega nada.** Un grupo que se lleva todas las filas
+  dejaría la vista en blanco diciendo «No hay nada pendiente», que es mentira. Sin nada que
+  separar, la lista se enseña entera y el encabezado no sale.
+- **El encabezado va dentro de la misma lista**, no entre dos listas: una fila se sigue pudiendo
+  arrastrar de un lado al otro del corte, y dos `ul` separadas lo harían imposible. Del mismo
+  peso y la misma mono que HOY o PRÓXIMAS (§3.3), porque nombra un grupo igual que ellos; lo
+  único que lo separa es que se pulsa, y eso lo dice el triángulo que gira. El conteo va pegado
+  al nombre y no contra el borde derecho: no es una columna que se compare con nada, es cuánto
+  hay ahí dentro, y sin él un grupo plegado no dice si esconde una tarea o cuarenta.
+- **Lo plegado no está en el recorrido de ↑↓**, porque no está pintado. Nada que no se vea puede
+  tener el foco.
+- **La búsqueda no lleva horizonte.** `⌘F` mira todo (§5) — es la salida de emergencia de «sé
+  que la escribí y no sé dónde la puse», y esconderle a quien busca lo que cae en diciembre es
+  justo lo contrario de eso.
+- **Los conteos del riel tampoco.** Lo que dice un proyecto al lado de su nombre es cuántas
+  pendientes tiene, no cuántas caben en este mes: un conteo que no cuadra con lo que se ve al
+  entrar es peor que uno grande.

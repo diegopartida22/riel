@@ -271,6 +271,8 @@ export default function App() {
           onStartView={prefs.setStartView}
           rowText={prefs.rowText}
           onRowText={prefs.setRowText}
+          horizonte={prefs.horizonte}
+          onHorizonte={prefs.setHorizonte}
           trayGlyph={prefs.trayGlyph}
           onTrayGlyph={prefs.setTrayGlyph}
           atajo={atajo}
@@ -407,6 +409,9 @@ export default function App() {
               tasks={riel.tasks}
               projectsById={riel.projectsById}
               today={riel.today}
+              /* La búsqueda no lleva horizonte: buscar mira todo (spec 5), y esconderle a
+                 quien busca lo que cae en diciembre sería justo lo contrario. */
+              horizonte={prefs.horizonte}
               loading={riel.loading}
               /* El fallo de abrir la carpeta sale por el mismo renglón que los de la lista:
                  es el único sitio donde ese botón está, y dos avisos distintos en la misma

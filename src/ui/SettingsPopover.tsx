@@ -15,6 +15,7 @@ import {
 } from "../data";
 import { describe, fromEvent, useConflictos, type Atajo as AtajoState } from "../state/atajo";
 import type { Editor } from "../state/editors";
+import { HORIZONTES, type Horizonte } from "../state/horizonte";
 import { notificationPermission, type Permission } from "../state/notifications";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
 import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
@@ -33,6 +34,9 @@ export interface SettingsPopoverProps {
   onStartView: (kind: SystemKind) => void;
   rowText: RowText;
   onRowText: (value: RowText) => void;
+  /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
+  horizonte: Horizonte;
+  onHorizonte: (value: Horizonte) => void;
   trayGlyph: TrayGlyph;
   onTrayGlyph: (value: TrayGlyph) => void;
   /** El atajo global que abre la captura rápida (spec 18). */
@@ -323,6 +327,8 @@ export function SettingsPopover({
   onStartView,
   rowText,
   onRowText,
+  horizonte,
+  onHorizonte,
   trayGlyph,
   onTrayGlyph,
   atajo,
@@ -676,6 +682,19 @@ export function SettingsPopover({
         options={ROW_TEXTS.map((option) => ({ ...option, content: option.label }))}
         value={rowText}
         onPick={onRowText}
+      />
+
+      {/* Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). Fin de mes de
+          fábrica: es la frontera que ya se tiene en la cabeza, y a diferencia de «30 días» no se
+          va corriendo hacia el mes siguiente conforme avanza este.
+
+          Los cuatro en la fuente de datos y abreviados, como la retención de abajo: son plazos,
+          y dos filas de plazos escritos igual se leen como una tabla. */}
+      <Choices
+        label="Ver por delante"
+        options={HORIZONTES.map((option) => ({ ...option, content: option.short }))}
+        value={horizonte}
+        onPick={onHorizonte}
       />
 
       {/* Los glifos y no sus nombres: «Cuadro» no dice qué va a salir en la barra, y lo que se

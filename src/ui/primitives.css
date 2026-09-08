@@ -41,6 +41,43 @@
   outline-offset: 1px;
 }
 
+/* El encabezado que pliega lo de más adelante (spec 19). Del mismo peso y la misma mono que
+   los demás encabezados, porque nombra un grupo igual que ellos; lo único que lo separa es que
+   se pulsa, y eso lo dice el triángulo. Va dentro de la lista, así que su `li` no dibuja nada. */
+.group-fold {
+  list-style: none;
+}
+
+.group-header--fold {
+  width: 100%;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: default;
+}
+
+.group-header--fold:hover {
+  color: var(--ink-secondary);
+}
+
+.group-header--fold:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Apunta a la derecha plegado y hacia abajo abierto, que es la gramática del sistema para
+   esto. El giro no es decoración: es lo que dice que el encabezado tiene algo debajo. */
+.group-header__caret {
+  flex: none;
+  transition: transform 140ms ease;
+}
+
+.group-header--fold[aria-expanded="true"] .group-header__caret {
+  transform: rotate(90deg);
+}
+
 /* ── Fila ────────────────────────────────────────────────────────────────────────────── */
 
 .task-list,
@@ -676,7 +713,8 @@
      Lo que se apaga es lo único que aquí era animación: el deslizamiento con el que las demás
      filas le hacen sitio, que pasa a ser un salto (criterio 7). */
   .task-list.is-sorting .task-row,
-  .subtasks.is-sorting .subtask-row {
+  .subtasks.is-sorting .subtask-row,
+  .group-header__caret {
     transition: none;
   }
 

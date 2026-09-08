@@ -3,10 +3,11 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import type { Between, Priority, Project, Task, TaskPatch, TaskTree } from "../data";
 import { tint } from "../design/palette";
 import type { CalendarEvent } from "../state/agenda";
-import { emptyMessage, titleOf, type View } from "../state/views";
+import { beyond, horizonEnd, usesHorizon, type Horizonte } from "../state/horizonte";
+import { emptyMessage, titleOf, viewKey, type View } from "../state/views";
 import { Agenda } from "../ui/Agenda";
 import { EmptyState } from "../ui/EmptyState";
-import { GroupHeader } from "../ui/GroupHeader";
+import { FoldHeader, GroupHeader } from "../ui/GroupHeader";
 import { Code } from "../ui/icons";
 import { RowMenu } from "../ui/RowMenu";
 import { TaskRow } from "../ui/TaskRow";
@@ -39,6 +40,8 @@ export interface TaskListProps {
   onOpenFolder?: (folder: string) => void;
   /** Los eventos del Calendario de hoy, si la agenda está encendida (spec 15). */
   events?: CalendarEvent[];
+  /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
+  horizonte: Horizonte;
 }
 
 /** Qué fila tiene el menú abierto y dónde anclarlo. */
@@ -73,6 +76,7 @@ export function TaskList({
   editorName,
   onOpenFolder,
   events,
+  horizonte,
 }: TaskListProps) {
   const project = view.kind === "proyecto" ? projectsById.get(view.id) : undefined;
   const title = titleOf(view, project?.name);
@@ -111,22 +115,53 @@ export function TaskList({
     [tasks, undoing],
   );
 
+  /**
+   * El horizonte (spec 19): el último día que se queda arriba. `null` en las vistas que no
+   * recortan, y entonces `far` sale vacío y aquí abajo no cambia nada.
+   */
+  const end = usesHorizon(view) ? horizonEnd(horizonte, today) : null;
+
+  const near = useMemo(() => visible.filter((task) => !beyond(task, end)), [visible, end]);
+  const far = useMemo(() => visible.filter((task) => beyond(task, end)), [visible, end]);
+
+  /**
+   * Plegado de fábrica, y se vuelve a plegar al cambiar de vista: lo que el grupo existe para
+   * hacer es que la lista arranque sin lo del mes que viene, y una vista que recuerda que la
+   * abriste hace media hora no arranca así.
+   */
+  const [unfolded, setUnfolded] = useState(false);
+  const key = viewKey(view);
+  useEffect(() => setUnfolded(false), [key]);
+
+  /**
+   * Si no queda nada de este lado del horizonte no hay nada que separar, y la lista se enseña
+   * entera: un grupo plegado que se lleva todas las filas deja la vista en blanco diciendo que
+   * no hay nada pendiente, que es mentira.
+   */
+  const folding = near.length > 0 && far.length > 0;
+
+  /** Lo que llega a pintarse, en el orden en que se pinta. */
+  const shown = useMemo(
+    () => (!folding ? visible : unfolded ? [...near, ...far] : near),
+    [folding, unfolded, near, far, visible],
+  );
+
   // Las raíces en un grupo y las subtareas de cada una en el suyo: se ordena entre hermanas.
   const groups = useMemo(
     () => [
-      visible.map((task) => task.id),
-      ...visible.map((task) => task.subtasks.map((subtask) => subtask.id)),
+      shown.map((task) => task.id),
+      ...shown.map((task) => task.subtasks.map((subtask) => subtask.id)),
     ],
-    [visible],
+    [shown],
   );
 
   const drag = useReorder(groups, reorder);
 
   // El orden en que se ven las filas, subtareas incluidas: es el recorrido de ↑↓ y quien
-  // decide cuál entra en el Tab.
+  // decide cuál entra en el Tab. Lo plegado no está pintado, así que tampoco se recorre.
   const order = useMemo(
-    () => visible.flatMap((task) => [task.id, ...task.subtasks.map((subtask) => subtask.id)]),
-    [visible],
+    () => shown.flatMap((task) => [task.id, ...task.subtasks.map((subtask) => subtask.id)]),
+    [shown],
   );
 
   const find = (id: string): Task | undefined =>
@@ -150,7 +185,7 @@ export function TaskList({
     if (!restore) return;
     focus(restore);
     setRestore(null);
-  }, [restore, focus, visible]);
+  }, [restore, focus, shown]);
 
   const saveTitle = (id: string, text: string, andAnother: boolean) => {
     const task = find(id);
@@ -225,6 +260,70 @@ export function TaskList({
    */
   const openFolderOf = open?.projectId ? projectsById.get(open.projectId)?.folder : null;
 
+  /**
+   * Una fila y, si le toca, el campo de la tarea que todavía no existe colgando debajo.
+   * Sale del `map` porque la lista se pinta en dos tandas cuando hay horizonte —lo de aquí,
+   * el encabezado que pliega, y lo de más adelante— y las dos tandas dibujan lo mismo.
+   */
+  const renderRow = (task: TaskTree) => (
+    <Fragment key={task.id}>
+      <TaskRow
+        ref={drag.register(task.id)}
+        task={task}
+        project={task.projectId ? projectsById.get(task.projectId) : null}
+        showProjectDot={view.kind !== "proyecto"}
+        subtasks={task.subtasks}
+        today={today}
+        leaving={leaving}
+        offset={drag.offsetOf(task.id)}
+        flying={drag.dragging === task.id}
+        onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
+        sortSubtasks={sortable ? drag : undefined}
+        onToggle={toggle}
+        onOpen={() => onOpen(task.id)}
+        onMenu={(anchor) =>
+          setMenu((current) =>
+            current?.id === task.id ? null : { id: task.id, anchor },
+          )
+        }
+        focused={keys.focused}
+        editing={editing}
+        onEditSave={saveTitle}
+        onEditCancel={() => {
+          setEditing(null);
+          setRestore(task.id);
+        }}
+      />
+
+      {/* La fila que todavía no existe. Nada llega a la base hasta que tenga
+          título: así un ⌘⏎ del que uno se arrepiente no deja una tarea en blanco
+          que después hay que ir a buscar y borrar. */}
+      {draftAfter === task.id && (
+        <li
+          className="task-row task-row--draft tinted"
+          style={tint(task.projectId ? projectsById.get(task.projectId)?.color : undefined)}
+        >
+          <div className="task-row__main">
+            {/* El anillo de la casilla, inerte: la tarea no existe, así que no hay
+                nada que completar. Sin él la fila arranca desalineada con las de
+                arriba y se lee como si faltara algo. */}
+            <span className="task-row__ghost" aria-hidden />
+            <div className="task-row__text">
+              <TitleEditor
+                placeholder="Nueva tarea"
+                onSave={(text, andAnother) => void saveDraft(task.id, text, andAnother)}
+                onCancel={() => {
+                  setDraftAfter(null);
+                  setRestore(task.id);
+                }}
+              />
+            </div>
+          </div>
+        </li>
+      )}
+    </Fragment>
+  );
+
   return (
     <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
       {error && <p className="notice notice--error">{error}</p>}
@@ -253,64 +352,21 @@ export function TaskList({
           {agenda}
           <GroupHeader action={openFolder}>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
-            {visible.map((task) => (
-              <Fragment key={task.id}>
-                <TaskRow
-                  ref={drag.register(task.id)}
-                  task={task}
-                  project={task.projectId ? projectsById.get(task.projectId) : null}
-                  showProjectDot={view.kind !== "proyecto"}
-                  subtasks={task.subtasks}
-                  today={today}
-                  leaving={leaving}
-                  offset={drag.offsetOf(task.id)}
-                  flying={drag.dragging === task.id}
-                  onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
-                  sortSubtasks={sortable ? drag : undefined}
-                  onToggle={toggle}
-                  onOpen={() => onOpen(task.id)}
-                  onMenu={(anchor) =>
-                    setMenu((current) =>
-                      current?.id === task.id ? null : { id: task.id, anchor },
-                    )
-                  }
-                  focused={keys.focused}
-                  editing={editing}
-                  onEditSave={saveTitle}
-                  onEditCancel={() => {
-                    setEditing(null);
-                    setRestore(task.id);
-                  }}
-                />
+            {(folding ? near : visible).map(renderRow)}
 
-                {/* La fila que todavía no existe. Nada llega a la base hasta que tenga
-                    título: así un ⌘⏎ del que uno se arrepiente no deja una tarea en blanco
-                    que después hay que ir a buscar y borrar. */}
-                {draftAfter === task.id && (
-                  <li
-                    className="task-row task-row--draft tinted"
-                    style={tint(task.projectId ? projectsById.get(task.projectId)?.color : undefined)}
-                  >
-                    <div className="task-row__main">
-                      {/* El anillo de la casilla, inerte: la tarea no existe, así que no hay
-                          nada que completar. Sin él la fila arranca desalineada con las de
-                          arriba y se lee como si faltara algo. */}
-                      <span className="task-row__ghost" aria-hidden />
-                      <div className="task-row__text">
-                        <TitleEditor
-                          placeholder="Nueva tarea"
-                          onSave={(text, andAnother) => void saveDraft(task.id, text, andAnother)}
-                          onCancel={() => {
-                            setDraftAfter(null);
-                            setRestore(task.id);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </li>
-                )}
-              </Fragment>
-            ))}
+            {/* El corte del horizonte (spec 19). Va dentro de la misma lista y no entre dos
+                `ul`: lo de más adelante se sigue pudiendo arrastrar contra lo de aquí, y dos
+                listas separadas por un encabezado harían que cruzar el corte fuera imposible. */}
+            {folding && (
+              <FoldHeader
+                label="Más adelante"
+                count={far.length}
+                open={unfolded}
+                onToggle={() => setUnfolded((current) => !current)}
+              />
+            )}
+
+            {folding && unfolded && far.map(renderRow)}
           </ul>
         </>
       )}
