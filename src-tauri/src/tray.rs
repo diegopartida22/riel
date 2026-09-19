@@ -133,14 +133,24 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             remember(&event);
             log_event(&event);
 
+            // El gesto se mira entero, y no solo al soltar, porque pulsar el icono le da el
+            // teclado al `NSStatusItem` y el panel se esconde solo por haber perdido el foco:
+            // para cuando llega el clic ya está cerrado, y mirar solo ese instante lo leía como
+            // «estaba cerrado, ábrelo». De ahí que un clic con el panel abierto lo volviera a
+            // abrir en vez de cerrarlo, que es lo que hace cualquier otro extra de la barra.
+            //
+            // Al bajar el botón se apunta cómo estaba; al soltarlo se decide con ese apunte.
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
+                button_state,
                 ..
             } = event
             {
                 if let Some(window) = tray.app_handle().get_webview_window("main") {
-                    panel::toggle(&window);
+                    match button_state {
+                        MouseButtonState::Down => panel::tray_pressed(&window),
+                        MouseButtonState::Up => panel::tray_toggle(&window),
+                    }
                 }
             }
         })

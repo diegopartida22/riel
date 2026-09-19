@@ -3,6 +3,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "macos")]
 use std::sync::atomic::AtomicI32;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use tauri::{Emitter, Manager, Runtime, WebviewWindow, Window};
 
@@ -13,6 +15,47 @@ static KEEP_OPEN: AtomicBool = AtomicBool::new(false);
 
 pub fn set_keep_open(value: bool) {
     KEEP_OPEN.store(value, Ordering::SeqCst);
+}
+
+/// Cuándo se escondió el panel **por haber perdido el foco**, que es lo único que se apunta:
+/// un cierre explícito —Escape, el propio icono— no pasa por aquí.
+///
+/// Existe por el clic en el icono estando el panel abierto, que es el gesto con el que se
+/// cierra cualquier extra de la barra y era el único que en Riel no cerraba nada. Lo que
+/// pasaba: pulsar el icono le da el teclado al `NSStatusItem`, el panel pierde el foco y se
+/// esconde solo, y para cuando llega el clic ya no está visible — así que `toggle` leía
+/// «cerrado» y lo volvía a abrir. Dos gestos en uno, y el visible era el segundo.
+///
+/// El apunte es lo que permite distinguir «estaba cerrado» de «lo acabo de cerrar yo mismo al
+/// pulsar», que es la diferencia entre abrir y no hacer nada.
+static AUTOHIDE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Cuánto vale ese apunte. Entre el `resignKey` y el clic hay milisegundos —los dos salen de
+/// la misma pulsación y del mismo bucle de eventos—, así que la ventana es corta a propósito:
+/// lo bastante ancha para cubrir ese salto y lo bastante estrecha para que volver a pulsar el
+/// icono enseguida abra el panel en vez de tragarse el clic.
+const GRACIA: Duration = Duration::from_millis(250);
+
+/// Si el panel estaba abierto cuando empezó la pulsación sobre el icono.
+///
+/// Se decide al bajar el botón y no al soltarlo, porque un clic sostenido dura más que la
+/// gracia de arriba: la única lectura fiable de «estaba abierto» es la del instante en que
+/// el gesto empezó.
+static PULSADO_ABIERTO: AtomicBool = AtomicBool::new(false);
+
+fn apuntar_autohide() {
+    *AUTOHIDE.lock().expect("AUTOHIDE nunca entra en pánico") = Some(Instant::now());
+}
+
+fn olvidar_autohide() {
+    *AUTOHIDE.lock().expect("AUTOHIDE nunca entra en pánico") = None;
+}
+
+fn recien_autohide() -> bool {
+    AUTOHIDE
+        .lock()
+        .expect("AUTOHIDE nunca entra en pánico")
+        .is_some_and(|cuando| cuando.elapsed() < GRACIA)
 }
 
 /// El vidrio lo pinta el sistema. Nosotros solo pedimos el material correcto y nos
@@ -215,6 +258,8 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
     );
     let _ = window.show();
     let _ = window.set_focus();
+    // Abierto de nuevo: lo que se hubiera apuntado del cierre anterior ya no describe nada.
+    olvidar_autohide();
 
     crate::glass::refresh_shadow(window);
     // Que el panel se abrió, para que el frontend pueda volver a su vista de siempre. Va por
@@ -232,8 +277,30 @@ pub fn hide<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.hide();
 }
 
-pub fn toggle<R: Runtime>(window: &WebviewWindow<R>) {
-    if window.is_visible().unwrap_or(false) {
+/// Empieza la pulsación sobre el icono de la barra: apunta si el panel estaba abierto.
+///
+/// Las dos condiciones son la misma pregunta hecha de dos formas, porque el orden en que
+/// llegan el aviso de foco perdido y el del botón no está garantizado: si el panel todavía se
+/// ve, estaba abierto; si acaba de esconderse solo, también lo estaba — y fue esta misma
+/// pulsación la que lo escondió.
+pub fn tray_pressed<R: Runtime>(window: &WebviewWindow<R>) {
+    let abierto = window.is_visible().unwrap_or(false) || recien_autohide();
+    PULSADO_ABIERTO.store(abierto, Ordering::SeqCst);
+}
+
+/// Se soltó el botón sobre el icono: abre o cierra según lo que se apuntó al pulsar.
+///
+/// Un clic con el panel abierto lo deja cerrado y ahí se acaba, que es lo que hace cualquier
+/// otro extra de la barra. El apunte se consume siempre —también el del autohide— para que la
+/// pulsación siguiente arranque de cero: sin eso, pulsar dos veces seguidas para reabrir
+/// leería el cierre de la primera y se tragaría la segunda.
+pub fn tray_toggle<R: Runtime>(window: &WebviewWindow<R>) {
+    let abierto = PULSADO_ABIERTO.swap(false, Ordering::SeqCst)
+        || window.is_visible().unwrap_or(false)
+        || recien_autohide();
+    olvidar_autohide();
+
+    if abierto {
         hide(window);
     } else {
         show(window);
@@ -259,6 +326,13 @@ pub fn on_focus_lost<R: Runtime>(window: &Window<R>) {
         return;
     }
     if let Some(panel) = window.get_webview_window("main") {
+        // Solo si de verdad había algo que esconder. Cuando el clic en el icono se adelanta al
+        // aviso de foco, el panel ya está cerrado por su propia mano y apuntar el cierre aquí
+        // haría que la pulsación siguiente lo leyera como suyo y no abriera nada.
+        if !panel.is_visible().unwrap_or(false) {
+            return;
+        }
+        apuntar_autohide();
         hide(&panel);
     }
 }
