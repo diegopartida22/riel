@@ -24,6 +24,7 @@ import { Rail } from "./ui/Rail";
 import { RemindersSheet } from "./ui/RemindersSheet";
 import { SettingsPopover } from "./ui/SettingsPopover";
 import { TopBar } from "./ui/TopBar";
+import { UninstallSheet } from "./ui/UninstallSheet";
 import { ClaudeSessions } from "./views/ClaudeSessions";
 import { SearchResults } from "./views/SearchResults";
 import { TaskDetail } from "./views/TaskDetail";
@@ -56,6 +57,9 @@ export default function App() {
   const [picking, setPicking] = useState(false);
   /** Si lo que ocupa el área de contenido es la hoja de preferencias (spec 8). */
   const [tuning, setTuning] = useState(false);
+  // La hoja de desinstalar (spec 20). Va con las otras tres y no en el popover por lo mismo:
+  // los dos modos se eligen leyendo qué se lleva cada uno, y eso no cabe colgado del `⚙︎`.
+  const [removing, setRemoving] = useState(false);
   /** Si lo que ocupa el área de contenido es el apartado de Claude (spec 17). */
   const [sessions, setSessions] = useState(false);
   // Solo lee mientras el apartado está a la vista: contar `~/.claude` cuesta más que el
@@ -64,6 +68,38 @@ export default function App() {
   const [wantsCapture, setWantsCapture] = useState(false);
 
   useFocoDeTeclado();
+
+  /**
+   * Deja libre el área de contenido. No toca la vista ni la búsqueda: solo quita lo que esté
+   * dibujándose encima de la lista.
+   *
+   * Existe porque las tres hojas —importar, elegir listas, preferencias— se dibujan antes que
+   * todo lo demás ahí dentro, y ninguna de las formas de navegar las cerraba: pulsar un
+   * proyecto en el riel movía la selección y dejaba la hoja delante, así que el clic parecía
+   * no hacer nada. Con ⌘N era peor y más callado — la petición de foco se guarda para
+   * cobrarla cuando el campo aparece, y con una hoja delante el campo no aparece nunca, así
+   * que la tecla se perdía sin dejar rastro.
+   *
+   * Cada gesto de navegación lo llama entero en vez de apagar las capas que se le ocurren:
+   * son seis, y la lista escrita a mano en cada sitio es la que se quedó corta tres veces.
+   */
+  const despejar = () => {
+    setEditing(null);
+    setImporting(false);
+    setPicking(false);
+    setTuning(false);
+    setRemoving(false);
+    setSessions(false);
+    riel.closeDetail();
+  };
+
+  /**
+   * Si el área de contenido está enseñando la lista y no una capa encima: exactamente el estado
+   * en el que `despejar` la deja. Dicho una vez, porque la lista de capas escrita a mano en cada
+   * sitio es la que se quedó corta tres veces.
+   */
+  const despejado =
+    !editing && !importing && !picking && !tuning && !removing && !sessions && !riel.detail;
 
   // El foco del primer arranque (spec 3.7) no puede ser `autoFocus`: cuando el componente se
   // monta todavía no se sabe si la base está vacía, y para cuando se sabe ya es tarde.
@@ -95,6 +131,7 @@ export default function App() {
       setImporting(false);
       setPicking(false);
       setTuning(false);
+      setRemoving(false);
       setSessions(false);
       select({ kind: startView });
     });
@@ -116,14 +153,17 @@ export default function App() {
     };
   }, [reloadAll]);
 
-  // ⌘N puede llegar con el detalle abierto o con el editor de proyecto delante, y el campo de
-  // captura no está en el DOM hasta que esa capa se cierra. Pedirle el foco en el mismo golpe
-  // de tecla no haría nada, así que la petición se guarda y se cobra cuando el campo aparece.
+  // ⌘N puede llegar con el detalle abierto, con el editor de proyecto delante o con una hoja
+  // ocupando el área de contenido, y el campo de captura no está en el DOM hasta que esa capa
+  // se cierra. Pedirle el foco en el mismo golpe de tecla no haría nada, así que la petición
+  // se guarda y se cobra cuando el campo aparece. Las hojas van en las dependencias por eso
+  // mismo: sin ellas la petición se quedaba pendiente para siempre, porque cerrar una hoja no
+  // cambia ninguna de las otras tres.
   useEffect(() => {
     if (!wantsCapture || !composer.current) return;
     composer.current.focus();
     setWantsCapture(false);
-  }, [wantsCapture, editing, riel.detail, riel.view]);
+  }, [wantsCapture, editing, importing, picking, tuning, removing, sessions, riel.detail, riel.view]);
 
   /**
    * Lo que el oyente de teclas necesita leer, siempre en su versión de este render.
@@ -138,9 +178,9 @@ export default function App() {
    * Un `keydown` se atiende siempre después de que los efectos se hayan vaciado, así que lo que
    * lee el oyente es lo del render que se acaba de pintar.
    */
-  const teclado = useRef({ riel, editing, importing, picking, tuning });
+  const teclado = useRef({ riel, editing, importing, picking, tuning, removing, despejar });
   useEffect(() => {
-    teclado.current = { riel, editing, importing, picking, tuning };
+    teclado.current = { riel, editing, importing, picking, tuning, removing, despejar };
   });
 
   /**
@@ -155,7 +195,7 @@ export default function App() {
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const { riel, editing, importing, picking, tuning } = teclado.current;
+      const { riel, editing, importing, picking, tuning, removing, despejar } = teclado.current;
 
       if (event.key === "Escape") {
         event.preventDefault();
@@ -167,6 +207,8 @@ export default function App() {
           setPicking(false);
         } else if (tuning) {
           setTuning(false);
+        } else if (removing) {
+          setRemoving(false);
         } else if (editing) {
           setEditing(null);
         } else if (riel.detail) {
@@ -196,9 +238,7 @@ export default function App() {
 
       if (event.key === "n") {
         event.preventDefault();
-        setEditing(null);
-        setSessions(false);
-        riel.closeDetail();
+        despejar();
         // En Completadas no hay campo de captura, y una tecla que no hace nada es peor que una
         // que te mueve: ⌘N lleva a la vista donde siempre se puede agregar.
         if (!acceptsNew(riel.view)) riel.select({ kind: "hoy" });
@@ -210,8 +250,7 @@ export default function App() {
       // y no tiene sitio en ella.
       if (event.key === "5") {
         event.preventDefault();
-        setEditing(null);
-        riel.closeDetail();
+        despejar();
         riel.setQuery("");
         setSessions(true);
         return;
@@ -220,8 +259,7 @@ export default function App() {
       const numbered = NUMBERED[Number(event.key) - 1];
       if (numbered) {
         event.preventDefault();
-        setEditing(null);
-        setSessions(false);
+        despejar();
         riel.select({ kind: numbered });
       }
     };
@@ -258,11 +296,7 @@ export default function App() {
         onQuery={(value) => {
           // Escribir manda sobre lo que estuviera tapando la lista: el resultado se ve donde
           // se ve la lista, y dejarlo detrás de un editor abierto sería teclear a ciegas.
-          if (value) {
-            setEditing(null);
-            setSessions(false);
-            riel.closeDetail();
-          }
+          if (value) despejar();
           riel.setQuery(value);
         }}
         onSettings={(anchor) => setSettings((current) => (current ? null : anchor))}
@@ -274,9 +308,7 @@ export default function App() {
           onPrefs={() => {
             // Igual que la importación y las listas: la hoja se lleva el área de contenido
             // entera, así que lo que hubiera puesto ahí se cierra antes.
-            setEditing(null);
-            setSessions(false);
-            riel.closeDetail();
+            despejar();
             setTuning(true);
           }}
           agenda={agenda.enabled}
@@ -289,19 +321,21 @@ export default function App() {
           onPickLists={() => {
             // Igual que la importación: la hoja se lo lleva el área de contenido entera, así
             // que lo que hubiera puesto ahí se cierra antes.
-            setEditing(null);
-            setSessions(false);
-            riel.closeDetail();
+            despejar();
             setPicking(true);
           }}
           updates={updates}
+          onUninstall={() => {
+            // Igual que las otras tres hojas: se lleva el área de contenido entera, así que lo
+            // que hubiera puesto ahí se cierra antes.
+            despejar();
+            setRemoving(true);
+          }}
           onImport={() => {
             // La hoja se lo lleva todo el área de contenido, así que lo que hubiera puesto ahí
             // se cierra: importar puede borrar la tarea que se estaba leyendo o el proyecto que
             // se estaba editando, y volver a ellos después sería volver a un fantasma.
-            setEditing(null);
-            setSessions(false);
-            riel.closeDetail();
+            despejar();
             setImporting(true);
           }}
           onClose={() => setSettings(null)}
@@ -316,20 +350,24 @@ export default function App() {
           expanded={prefs.railExpanded}
           sessions={sessions}
           onSelect={(next) => {
-            setEditing(null);
-            setSessions(false);
+            despejar();
             riel.select(next);
           }}
           onSessions={() => {
-            setEditing(null);
-            riel.closeDetail();
+            despejar();
             // La búsqueda es de tareas y aquí no hay ninguna (spec 17.6). Dejarla puesta haría
             // que volver al riel devolviera a unos resultados que nadie pidió otra vez.
             riel.setQuery("");
             setSessions(true);
           }}
-          onNewProject={() => setEditing({ project: null })}
-          onEditProject={(target) => setEditing({ project: target })}
+          onNewProject={() => {
+            despejar();
+            setEditing({ project: null });
+          }}
+          onEditProject={(target) => {
+            despejar();
+            setEditing({ project: target });
+          }}
           onReorder={riel.reorderProject}
         />
 
@@ -357,6 +395,8 @@ export default function App() {
               onEditor={dev.setEditor}
               onClose={() => setTuning(false)}
             />
+          ) : removing ? (
+            <UninstallSheet onClose={() => setRemoving(false)} />
           ) : picking ? (
             <RemindersSheet
               lists={reminders.lists}
@@ -470,10 +510,10 @@ export default function App() {
           </button>
         </div>
 
-        {/* El pie no captura mientras hay una hoja delante —editar un proyecto, importar, elegir
-            listas, las preferencias— ni leyendo el detalle de una tarea: en ninguno hay lista a
-            la que agregar. */}
-        {!editing && !importing && !picking && !tuning && !sessions && !riel.detail && acceptsNew(riel.view) && (
+        {/* El pie no captura mientras hay una capa delante —editar un proyecto, importar, elegir
+            listas, las preferencias, desinstalar— ni leyendo el detalle de una tarea: en ninguna
+            hay lista a la que agregar. */}
+        {despejado && acceptsNew(riel.view) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}

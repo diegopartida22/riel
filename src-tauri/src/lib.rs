@@ -14,6 +14,7 @@ mod panel;
 mod pantalla;
 mod reminders;
 mod tray;
+mod uninstall;
 
 use tauri::Manager;
 
@@ -389,7 +390,7 @@ fn relanzar() {
 /// El `.app` desde el que corre esta copia, o nada si corre suelta — que es el caso de
 /// `tauri dev`, donde no hay actualizador y aquí no se llega.
 #[cfg(target_os = "macos")]
-fn paquete() -> Option<std::path::PathBuf> {
+pub(crate) fn paquete() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     // …/Riel.app/Contents/MacOS/riel → …/Riel.app
     let bundle = exe.parent()?.parent()?.parent()?;
@@ -397,6 +398,22 @@ fn paquete() -> Option<std::path::PathBuf> {
         return None;
     }
     Some(bundle.to_path_buf())
+}
+
+/// Quita lo que Riel deja puesto fuera de su paquete y se cierra (spec 20).
+///
+/// `data` decide si se va también la carpeta con las tareas. Lo pregunta la hoja antes, con la
+/// cifra delante y un segundo sí, como reemplazar al importar (spec 8): es la otra acción de la
+/// app que se lleva por delante todo lo que hay.
+///
+/// `cleanup_before_exit` por lo mismo que en `restart`: desmonta el icono de la barra. Salir sin
+/// él dejaría el glifo puesto hasta el siguiente inicio de sesión, que en una desinstalación es
+/// exactamente el rastro que esto viene a quitar.
+#[tauri::command]
+fn uninstall(app: tauri::AppHandle, data: bool) {
+    uninstall::run(&app, data);
+    app.cleanup_before_exit();
+    app.exit(0);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -450,7 +467,8 @@ pub fn run() {
             close_capture,
             resize_capture,
             quit,
-            restart
+            restart,
+            uninstall
         ])
         .setup(|app| {
             // Sin Dock y sin ⌘Tab. Tiene que correr aquí y no solo vía LSUIElement,

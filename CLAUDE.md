@@ -33,6 +33,7 @@ Dentro:
 - La captura rápida: una ventana que se abre con un atajo global, con menú de comandos y la
   lista de Hoy (§18).
 - El horizonte de la lista: lo que cae muy adelante se pliega al final en vez de estorbar (§19).
+- Desinstalar: quitar lo que la papelera no se lleva, empezando por el arranque (§20).
 
 Fuera de la v1, no lo construyas:
 
@@ -1623,3 +1624,59 @@ Reglas:
 - **Los conteos del riel tampoco.** Lo que dice un proyecto al lado de su nombre es cuántas
   pendientes tiene, no cuántas caben en este mes: un conteo que no cuadra con lo que se ve al
   entrar es peor que uno grande.
+
+---
+
+## 20. Desinstalar
+
+Añadido después de la v1. En macOS una app se quita arrastrándola a la papelera, y eso está
+bien: no hace falta un desinstalador para borrar un programa. Lo que hace falta es para lo que
+la papelera no alcanza.
+
+Porque de lo que Riel deja escrito fuera de su paquete hay una pieza que no se queda quieta:
+**el registro de `launchd` del arranque al iniciar sesión (§8)**. Es un plist en
+`~/Library/LaunchAgents` con la ruta absoluta del ejecutable de dentro del paquete, así que con
+el paquete en la papelera `launchd` sigue intentando abrir un binario que ya no existe, en cada
+sesión, para siempre y sin decirlo. Es el único rastro que sigue *haciendo* algo, y es el único
+que solo Riel puede quitar: de fuera hay que saber que existe y dónde vive.
+
+Lo demás —la caché, el almacén del webview, las preferencias de ventana que macOS guarda por su
+cuenta a nombre del identificador— no molesta a nadie, pero ya que se pregunta se pregunta una
+vez.
+
+Reglas:
+
+- **Riel no se borra a sí misma.** Una app que se manda sola a la papelera mientras corre es una
+  promesa que se rompe en cuanto algo falla a mitad, y el gesto de quitar una app en macOS es
+  arrastrarla. Lo que sí hace es dejar el paquete **señalado en el Finder** al salir, que es
+  donde se termina el gesto.
+- **Dos modos, como importar (§8)**, y por lo mismo: hacen cosas incomparables y elegir sin leer
+  qué se lleva cada uno es elegir a ciegas. «Conservar» quita lo que Riel dejó puesto y deja la
+  carpeta de datos donde está —volver a instalarla la encuentra—; «Borrarlo todo» se lleva
+  además las tareas y las copias de `Backups/`.
+- **Borrarlo todo pide un segundo sí, con la cifra delante**, exactamente como reemplazar al
+  importar: son las dos acciones de la app que se llevan por delante todo lo que hay. Y **no lo
+  pide cuando no hay nada que perder** — una confirmación que sale siempre se aprende a pulsar
+  sin leerla.
+- **Y lleva el export al lado**, solo en ese modo. Es lo que convierte «esto no se puede
+  deshacer» en una decisión reversible, que es el mismo argumento por el que importar va pegado
+  a exportar.
+- **El renglón de `launchd` se dice entero, y solo cuando es verdad.** Con el arranque apagado no
+  hay nada que explicar; con él puesto es la razón por la que el botón existe.
+- **Lo que no se puede hacer en caliente se hace desde fuera.** El registro de `launchd` se quita
+  con la API del propio plugin, que es suyo. El resto no: `~/Library/WebKit/<id>` está abierto
+  bajo un `WKWebView` vivo, y las preferencias no las manda el archivo sino `cfprefsd`, que tiene
+  su copia en memoria y la vuelve a escribir al salir la app —borrar el plist en caliente lo
+  resucita medio segundo después—. Así que lo hace el mismo `sh` huérfano que pide el relevo tras
+  actualizar (§11), y por las mismas razones: espera a ver morir este proceso y corre en grupo
+  propio, o `launchd` se lo llevaría por delante cuando el arranque al iniciar sesión está puesto.
+- **Las rutas las calcula Rust, nunca un comodín.** Al guion llegan una por una como argumentos,
+  así que una ruta con una comilla dentro no puede acabar siendo parte del guion. Una
+  desinstalación es el peor sitio posible para que un `rm -rf` se coma algo por un patrón que
+  casó de más.
+- **El renglón vive en el grupo de la versión** (§8), junto a actualizar y a salir: las tres son
+  lo que se le hace a la app misma. Con puntos suspensivos, porque al pulsarlo no pasa nada
+  todavía. La hoja ocupa el área de contenido, como la importación y por lo mismo.
+- Y **nada de una lista de rastros con sus tamaños.** Todo junto no llega al medio mega; enseñar
+  un desglose de eso sería dibujar un dato que no cambia ninguna decisión (§3.11). Lo que sí se
+  dice es cuántas tareas hay, que es de lo que va la única pregunta que se hace aquí.

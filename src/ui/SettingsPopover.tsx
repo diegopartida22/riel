@@ -31,6 +31,8 @@ export interface SettingsPopoverProps {
   updates: Updates;
   /** Abre la hoja de importación, que vive en el área de contenido y no aquí dentro. */
   onImport: () => void;
+  /** Abre la hoja de desinstalar, en el área de contenido como las otras tres (spec 20). */
+  onUninstall: () => void;
   onClose: () => void;
 }
 
@@ -79,6 +81,7 @@ export function SettingsPopover({
   onPickLists,
   updates,
   onImport,
+  onUninstall,
   onClose,
 }: SettingsPopoverProps) {
   /** Sacado del objeto para que TypeScript pueda estrechar la unión dentro del JSX. */
@@ -448,6 +451,21 @@ export function SettingsPopover({
         onClick={() => void invoke("quit").catch((cause) => console.error(cause))}
       >
         Salir de Riel
+      </button>
+
+      {/* En este grupo y no en el de los datos: lo que se desinstala es la app, igual que lo
+          que se actualiza y lo que se cierra son la app. Puntos suspensivos porque al pulsar
+          no pasa nada todavía — primero hay que elegir qué se lleva (spec 20). */}
+      <button
+        type="button"
+        className="menu__item menu__item--lleva"
+        onClick={() => {
+          onUninstall();
+          onClose();
+        }}
+      >
+        <span>Desinstalar Riel…</span>
+        <ChevronRight size={12} className="menu__lleva" aria-hidden />
       </button>
     </div>
   );
