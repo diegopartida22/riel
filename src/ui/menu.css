@@ -107,10 +107,10 @@
    clase de cosa —algo pequeño colgado de un botón— y darle un material propio sería inventar
    una segunda gramática para lo mismo. */
 .settings {
-  /* El mínimo casi nunca manda: ni el nombre ni las opciones de un renglón se encogen, así que
-     el ancho lo fija la preferencia más larga —«Conservar completadas» con sus cuatro plazos— y
-     sale por encima de esto. Las demás no se estiran: lo que crece es el hueco de en medio, que
-     es lo que deja el nombre a la izquierda y todos los controles alineados a la derecha. */
+  /* El mínimo manda más desde que las de lista cerrada se fueron a su hoja: lo que queda son
+     tres interruptores y renglones de menú, y el más ancho —«Mostrar los datos en Finder»— pasa
+     de esto por poco. Los interruptores no se estiran: lo que crece es el hueco de en medio,
+     que es lo que deja el nombre a la izquierda y el control contra el borde derecho. */
   min-width: 208px;
   /* 6 y no los 4 del menú de la fila: aquí hay rótulos de grupo y notas además de renglones, y
      al ras del canto el popover se leía como una caja llena hasta el borde. */
@@ -203,6 +203,31 @@
   text-overflow: ellipsis;
 }
 
+/* Las preferencias de lista cerrada, en el área de contenido y no dentro del popover (spec 8).
+   Son exactamente los mismos renglones —nombre a la izquierda, opciones a la derecha— en un
+   sitio donde no hay renglones de menú con los que alinearse: `--indent` es la sangría del
+   popover, y aquí no cuelga nada de ella, así que vale cero.
+
+   Siete renglones con su control y la leyenda de los dos que dibujan estiraban el popover hasta
+   los 545px dentro de un panel de 580: ahí dejaba de ser algo pequeño colgado de un botón y
+   pasaba a ser un segundo panel tapando el primero. Aquí, además, sobran cuarenta píxeles de
+   ancho — justo los que les faltaban a los segmentados de cinco opciones. */
+.editor__prefs {
+  --indent: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sin el hueco de `.editor`: el aire entre preferencias lo pone el alto de cada renglón, y
+   sumarle doce más las separaría el doble que en el popover del que vienen. */
+.editor__prefs .settings__row {
+  margin: 0;
+}
+
+.editor__prefs .settings__note {
+  margin: 2px 0 6px;
+}
+
 /* El conteo junto al nombre de una lista de Recordatorios (spec 16). Es un dato y no un rótulo,
    así que va en mono y tabular como todos los números de la app (§3.3): las cifras de las filas
    quedan en columna y la hoja no baila al cambiar de dos a tres dígitos. */
@@ -238,7 +263,7 @@
    alinearlas por la izquierda dejaría las opciones en cinco sitios diferentes.
 
    La pista de debajo es lo que las hace un control y no cinco botones sueltos flotando sobre
-   el menú: sin ella, la única diferencia entre elegido y no elegido era un fondo del 9% que en
+   la hoja: sin ella, la única diferencia entre elegido y no elegido era un fondo del 9% que en
    una fila de glifos no se leía como «este». Es la misma capa con alfa de siempre y no un
    panel opaco (spec 3.2), y sigue sin haber color de por medio (spec 3.1).
 
@@ -268,7 +293,7 @@
 
 /* El atajo global (spec 18). Es el valor y el control a la vez, así que se dibuja como la
    pista de un segmentado con una sola opción dentro: así cae contra el mismo borde derecho
-   que los cuatro de abajo y no se lee como un botón suelto entre ellos.
+   que las de abajo y no se lee como un botón suelto entre ellas.
 
    En la fuente de datos, porque ⌥⇧K es un dato y no una palabra: los glifos de modificador
    solo quedan a la misma altura con anchos fijos. */
@@ -397,8 +422,7 @@
 }
 
 /* El elegido lleva fondo y tinta primaria, no un anillo de color: el acento aquí sería el del
-   proyecto que se esté mirando, y ninguna de estas cinco preferencias es de un proyecto
-   (spec 3.1). El icono hereda la tinta por `currentcolor`, así que se apaga y se enciende con
+   proyecto que se esté mirando, y ninguna de estas preferencias es de un proyecto (spec 3.1). El icono hereda la tinta por `currentcolor`, así que se apaga y se enciende con
    el texto sin una regla aparte.
 
    Se levanta de su pista en vez de hundirse en ella, que es como macOS dibuja un segmentado:
@@ -411,8 +435,8 @@
 
 /* ── Interruptor ─────────────────────────────────────────────────────────────────────── */
 
-/* El del arranque automático, que es el único booleano del popover. Las medidas son las del
-   sistema —38×22 con pulgar de 18— y no una aproximación: un interruptor con otras
+/* Los tres booleanos del popover, y las filas de la hoja de Recordatorios. Las medidas son
+   las del sistema —38×22 con pulgar de 18— y no una aproximación: un interruptor con otras
    proporciones es de lo primero que delata un control hecho a mano, y aquí todos lo están.
 
    El encendido va con `--accent-app` y no con `--accent`: el popover se dibuja dentro de

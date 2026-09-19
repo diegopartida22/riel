@@ -3,48 +3,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { disable, enable } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import {
-  RETENTIONS,
-  countSweepable,
-  dbPath,
-  exportName,
-  snapshot,
-  type Retention,
-} from "../data";
-import { describe, fromEvent, useConflictos, type Atajo as AtajoState } from "../state/atajo";
-import type { Editor } from "../state/editors";
-import { HORIZONTES, type Horizonte } from "../state/horizonte";
+import { dbPath, exportName, snapshot } from "../data";
 import { notificationPermission, type Permission } from "../state/notifications";
-import { ROW_TEXTS, type RowText } from "../state/rowText";
-import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
 import type { Updates } from "../state/updates";
-import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
 import { ChevronRight } from "./icons";
-import { SYSTEM_ICONS } from "./Rail";
 import { Switch } from "./Switch";
 
 export interface SettingsPopoverProps {
   /** Rectángulo del `⚙︎` que lo abrió. */
   anchor: DOMRect;
-  retention: Retention;
-  onRetention: (retention: Retention) => void;
-  startView: SystemKind;
-  onStartView: (kind: SystemKind) => void;
-  rowText: RowText;
-  onRowText: (value: RowText) => void;
-  /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
-  horizonte: Horizonte;
-  onHorizonte: (value: Horizonte) => void;
-  trayGlyph: TrayGlyph;
-  onTrayGlyph: (value: TrayGlyph) => void;
-  /** El atajo global que abre la captura rápida (spec 18). */
-  atajo: AtajoState;
-  /** Los editores de código instalados y el puesto (spec 13). */
-  editors: Editor[];
-  editor: Editor | null;
-  onEditor: (id: string) => void;
+  /** Abre la hoja de preferencias, que vive en el área de contenido como la de importación. */
+  onPrefs: () => void;
   /** La agenda del día en Hoy y el permiso del Calendario (spec 15). */
   agenda: boolean;
   onAgenda: (value: boolean) => void;
@@ -64,15 +35,6 @@ export interface SettingsPopoverProps {
 }
 
 const EDGE = 8;
-
-/**
- * Lo que espera la cuenta de completadas tras la última tecla, antes de consultar.
- *
- * Los mismos 120 ms que el campo de búsqueda, y por lo mismo: cada pulsación es un `COUNT`
- * contra la base, y recorrer los cuatro plazos con las flechas los lanzaba todos para quedarse
- * con el último.
- */
-const COUNT_MS = 120;
 
 /** El panel de Notificaciones de Ajustes del Sistema, para la nota de permiso denegado. */
 const NOTIFICATIONS_PANE = "x-apple.systempreferences:com.apple.preference.notifications";
@@ -101,240 +63,12 @@ const autostartState = () => invoke<Autostart>("autostart_state");
 /** La salida manual cuando el actualizador no puede: bajar el `.dmg` a mano siempre funciona. */
 const RELEASES = "https://github.com/diegopartida22/riel/releases/latest";
 
-interface Choice<T> {
-  value: T;
-  /** Lo que se lee: el tooltip, y el nombre para quien no ve el glifo. */
-  label: string;
-  /** Lo que se ve: un texto corto o un icono. */
-  content: ReactNode;
-}
-
-/**
- * Una preferencia: su nombre a la izquierda, sus opciones a la derecha.
- *
- * Las cinco del popover son listas cerradas de dos a cinco opciones, y como renglones con
- * palomita costaban quince líneas: el popover pasaba de los 580px del panel y la lista quedaba
- * tapada de arriba abajo. En fila cuestan una línea cada una, y de paso dejan de existir dos
- * gramáticas para lo mismo —la fila de glifos ya era esto, y al lado de los renglones parecía
- * pegada con cinta.
- *
- * El precio es que las etiquetas tienen que ser cortas, y dos de las cinco no caben en texto.
- * Ahí van dibujos —los iconos del riel, los glifos de la barra— y con ellos la leyenda de
- * `caption`: un dibujo de 15px se distingue de sus vecinos pero no se lee, y sin pasar el ratón
- * por cada uno no había forma de saber cuál está puesto.
- *
- * El grupo entero es una sola parada del tabulador y por dentro se recorre con las flechas,
- * que es como se comporta un control segmentado del sistema y lo que pide ARIA para un
- * `radiogroup`. Con cada opción tabulable, cruzar el popover costaba dieciocho tabuladores
- * para ocho cosas que tocar.
- */
-function Choices<T>({
-  label,
-  options,
-  value,
-  onPick,
-  caption = false,
-}: {
-  label: string;
-  options: readonly Choice<T>[];
-  /** `null` cuando todavía no se sabe: el arranque automático lo contesta `launchd`, y hasta
-      entonces no hay nada marcado — mejor eso que marcar algo que quizá no es. */
-  value: T | null;
-  onPick: (value: T) => void;
-  /** Escribe debajo el nombre de lo elegido. Solo para las dos filas que dibujan en vez de
-      escribir; en las de texto repetiría palabra por palabra el botón que está al lado. */
-  caption?: boolean;
-}) {
-  const row = useRef<HTMLDivElement>(null);
-  const current = options.findIndex((option) => option.value === value);
-  /** Sin nada marcado —el arranque automático tarda en contestar— entra por la primera. */
-  const stop = current < 0 ? 0 : current;
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const step =
-      event.key === "ArrowRight" || event.key === "ArrowDown"
-        ? 1
-        : event.key === "ArrowLeft" || event.key === "ArrowUp"
-          ? -1
-          : 0;
-    if (!step) return;
-    // Se para aquí: el panel de detrás también escucha flechas para recorrer la lista, y sin
-    // esto una flecha en Ajustes movería además la fila enfocada debajo del popover.
-    event.preventDefault();
-    event.stopPropagation();
-    const next = (stop + step + options.length) % options.length;
-    onPick(options[next].value);
-    row.current?.querySelectorAll("button")[next]?.focus();
-  };
-
-  return (
-    <div className="settings__row">
-      <span className="settings__label">{label}</span>
-      <div className="settings__group">
-        <div
-          ref={row}
-          className="settings__choices"
-          role="radiogroup"
-          aria-label={label}
-          onKeyDown={onKeyDown}
-        >
-          {options.map((option, index) => (
-            <button
-              key={String(option.value)}
-              type="button"
-              className={`settings__choice${option.value === value ? " is-selected" : ""}`}
-              role="radio"
-              aria-checked={option.value === value}
-              tabIndex={index === stop ? 0 : -1}
-              /* Solo cuando dice algo que no esté ya a la vista: en «Una línea» el tooltip
-                 repetiría el botón, y un globo que no informa es ruido. En un glifo, o en el
-                 «7 d» que abrevia «7 días», sí es lo único que lo nombra. */
-              title={option.content === option.label ? undefined : option.label}
-              aria-label={option.label}
-              onClick={() => onPick(option.value)}
-            >
-              {option.content}
-            </button>
-          ))}
-        </div>
-        {/* Oculto a los lectores de pantalla: la opción marcada ya se anuncia por su
-            `aria-label`, y esto le sumaría el mismo nombre dos veces seguidas. */}
-        {caption && current >= 0 && (
-          <span className="settings__caption" aria-hidden>
-            {options[current].label}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * El renglón que graba el atajo global de la captura rápida (spec 18).
- *
- * No es un booleano ni una lista cerrada, así que no es ninguna de las dos formas de arriba:
- * lo que hay que enseñar es una combinación que solo se conoce pulsándola. Por eso el control
- * *es* el valor —el atajo escrito en la fuente de datos, sobre la misma pista que un
- * segmentado— y pulsarlo lo pone a escuchar en vez de abrir una lista de teclas que nadie
- * quiere recorrer.
- *
- * Grabando, el popover se queda con todas las teclas: sin eso, ⌘F escaparía a la búsqueda de
- * detrás y ⎋ cerraría el panel entero en vez de cancelar la grabación.
- *
- * Y debajo, solo mientras hace falta, lo que dice `useConflictos` (spec 18.7): si lo puesto ya
- * lo usa el sistema —que es lo que hace que el atajo no responda sin que nada lo explique— y
- * tres combinaciones libres para pulsar. Las sugerencias salen al grabar, que es cuando hay que
- * pensar una, y al haber choque, que es cuando hay que cambiarla.
- */
-function Atajo({
-  accel,
-  error,
-  onPick,
-}: {
-  accel: string | null;
-  error: string | null;
-  onPick: (accel: string | null) => void;
-}) {
-  const [grabando, setGrabando] = useState(false);
-  const { owner, free } = useConflictos(accel);
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (!grabando) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    // Arrepentirse sin cambiar nada, y quitarlo del todo. Las dos van antes de `fromEvent`
-    // porque las dos son teclas sueltas, que es justo lo que un atajo no puede ser.
-    if (event.key === "Escape") {
-      setGrabando(false);
-      return;
-    }
-    if (event.key === "Backspace" || event.key === "Delete") {
-      setGrabando(false);
-      onPick(null);
-      return;
-    }
-
-    // Un modificador suelto no es un atajo todavía: se está a media combinación, así que se
-    // sigue escuchando en vez de rechazarlo.
-    const next = fromEvent(event);
-    if (!next) return;
-
-    setGrabando(false);
-    onPick(next);
-  };
-
-  // Lo que se está grabando manda sobre todo lo demás: mientras se espera una tecla, un aviso
-  // de lo de antes es de algo que ya se está cambiando.
-  const choque = owner ? `${describe(accel)} ya lo usa ${owner}: macOS se queda con él.` : null;
-  const aviso = grabando ? null : (error ?? choque);
-
-  return (
-    <>
-      <div className="settings__row">
-        <span className="settings__label">Atajo de captura</span>
-        <button
-          type="button"
-          className={`settings__atajo${grabando ? " is-grabando" : ""}`}
-          aria-label={`Atajo de captura: ${describe(accel)}`}
-          onClick={() => setGrabando((antes) => !antes)}
-          onBlur={() => setGrabando(false)}
-          onKeyDown={onKeyDown}
-        >
-          {grabando ? "Pulsa el atajo…" : describe(accel)}
-        </button>
-      </div>
-
-      {/* Solo mientras hace falta. Un renglón de instrucciones permanente debajo de un control
-          que se usa una vez en la vida gasta el alto del popover en algo que ya se sabe. */}
-      {grabando && <p className="settings__note">⌫ lo quita · ⎋ lo deja como estaba.</p>}
-      {aviso && <p className="settings__note">{aviso}</p>}
-
-      {/* Las libres, y solo cuando hay que elegir. El `onMouseDown` es lo que las hace
-          pulsables mientras se graba: sin él, el botón pierde el foco antes del clic, la
-          grabación se cancela y la sugerencia no llega a ponerse. */}
-      {(grabando || aviso) && free.length > 0 && (
-        <p className="settings__note settings__libres">
-          <span className="settings__libres-label">Libres</span>
-          {free.map((uno) => (
-            <button
-              key={uno}
-              type="button"
-              className="settings__libre"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setGrabando(false);
-                onPick(uno);
-              }}
-            >
-              {describe(uno)}
-            </button>
-          ))}
-        </p>
-      )}
-    </>
-  );
-}
-
 /**
  * El popover del `⚙︎` (spec 8). Pequeño y colgado del icono, no una ventana aparte.
  */
 export function SettingsPopover({
   anchor,
-  retention,
-  onRetention,
-  startView,
-  onStartView,
-  rowText,
-  onRowText,
-  horizonte,
-  onHorizonte,
-  trayGlyph,
-  onTrayGlyph,
-  atajo,
-  editors,
-  editor,
-  onEditor,
+  onPrefs,
   agenda,
   onAgenda,
   calendar,
@@ -356,40 +90,6 @@ export function SettingsPopover({
   /** `null` mientras se consulta: sin saberlo, la nota de permiso denegado no se dibuja. */
   const [notify, setNotify] = useState<Permission | null>(null);
   const [busy, setBusy] = useState(false);
-  /**
-   * El plazo pulsado que todavía no se ha guardado, y lo que se llevaría por delante.
-   *
-   * `count` en nulo es «todavía no se sabe»: el plazo se acaba de pulsar y la cuenta aún no ha
-   * salido. Se dibuja marcado desde ese primer instante aunque no haya nada que confirmar —es
-   * lo que se está decidiendo, y dejar la marca en el plazo viejo mientras tanto haría parecer
-   * que el clic no llegó (spec 8).
-   */
-  const [pruning, setPruning] = useState<{ retention: Retention; count: number | null } | null>(
-    null,
-  );
-  /** El último plazo pulsado. Recorrer la fila con las flechas dispara una cuenta por tecla, y
-      sin esto la más lenta podría revivir la confirmación de un plazo ya abandonado. */
-  const wanted = useRef<Retention>(retention);
-  /** El temporizador de la cuenta, para poder cancelarla si sigue llegando otra tecla. */
-  const counting = useRef<number | null>(null);
-
-  /**
-   * El plazo que ya tiene cuenta, que es el único que pregunta. Mientras `count` sea nulo el
-   * plazo está marcado pero todavía no hay confirmación que dibujar.
-   */
-  const asking =
-    pruning && pruning.count !== null
-      ? { retention: pruning.retention, count: pruning.count }
-      : null;
-
-  // Un temporizador no puede sobrevivir al popover: cerrarlo mientras la cuenta espera dejaría
-  // un disparo tardío tocando un estado que ya no existe.
-  useEffect(
-    () => () => {
-      if (counting.current !== null) clearTimeout(counting.current);
-    },
-    [],
-  );
 
   useEffect(() => {
     getVersion().then(setVersion, (cause) => console.error(cause));
@@ -418,10 +118,6 @@ export function SettingsPopover({
     autostart,
     notify,
     updates.state,
-    // `pruning` y no `asking`: el segundo es un objeto nuevo en cada render, y con él aquí el
-    // popover se remediría a sí mismo sin parar mientras la confirmación esté delante.
-    pruning,
-    editors,
     agenda,
     calendar,
     reminders,
@@ -466,58 +162,6 @@ export function SettingsPopover({
   };
 
   /**
-   * Bajar el plazo de conservación borra completadas en el momento y eso no se deshace: el
-   * barrido no pasa por la pila de ⌘Z. Es la única preferencia del popover que destruye datos,
-   * así que es la única que pregunta — y solo cuando de verdad hay algo que perder. Subirlo,
-   * poner «siempre» o bajarlo sin que caiga nada se guardan de una: una confirmación que sale
-   * siempre se aprende a pulsar sin leerla, y entonces ya no protege de nada.
-   *
-   * Mientras espera el sí, la opción pulsada se dibuja marcada aunque no esté guardada. Es lo
-   * que se está decidiendo, y dejar la marca en la vieja haría parecer que el clic no llegó.
-   */
-  const pickRetention = (next: Retention) => {
-    wanted.current = next;
-    if (counting.current !== null) clearTimeout(counting.current);
-
-    if (next === null || (retention !== null && next >= retention)) {
-      setPruning(null);
-      onRetention(next);
-      return;
-    }
-
-    // La marca se mueve ya; la cuenta espera un respiro. Recorrer los cuatro plazos con las
-    // flechas son cuatro pulsaciones en menos de medio segundo, y sin esto cada una lanzaba su
-    // `COUNT` contra la base para que la siguiente lo descartara. Es el mismo respiro que el
-    // campo de búsqueda, y por lo mismo: quien recorre con flechas no está preguntando cuántas.
-    //
-    // Cerrar el popover dentro del respiro solo se traga una confirmación que aún no había
-    // salido. Nada se escribe hasta que se contesta, así que no hay nada que perder.
-    setPruning({ retention: next, count: null });
-    counting.current = window.setTimeout(() => {
-      counting.current = null;
-      void countSweepable(next).then(
-        (count) => {
-          if (wanted.current !== next) return;
-          if (count === 0) {
-            setPruning(null);
-            onRetention(next);
-          } else {
-            setPruning({ retention: next, count });
-          }
-        },
-        (cause) => {
-          // Sin poder contar no hay nada que enseñar, así que se guarda igual. Si además falla
-          // la escritura, lo dice `changeRetention`: no hacen falta dos avisos para un fallo.
-          console.error(cause);
-          if (wanted.current !== next) return;
-          setPruning(null);
-          onRetention(next);
-        },
-      );
-    }, COUNT_MS);
-  };
-
-  /**
    * El panel de guardar es una ventana del sistema: se lleva el foco, y sin levantar la
    * bandera el panel se cerraría por debajo mientras se elige la carpeta (spec 4).
    */
@@ -548,18 +192,19 @@ export function SettingsPopover({
       aria-label="Ajustes"
       style={at ?? { top: -9999, left: -9999 }}
     >
-      {/* Las cinco preferencias van seguidas y sin separadores entre ellas: cada una se lee
-          entera en su renglón. Los grupos de después —notificaciones, datos, la app— se separan
-          con su rótulo y no con una hairline: tres reglas en un popover de doscientos píxeles lo
-          convertían en una reja, y una regla dice que hay un corte pero no de qué. El bloque de
-          preferencias es el único sin rótulo porque es para lo que existe el popover; ponerle
-          «PREFERENCIAS» encima sería rotular la caja entera desde dentro.
+      {/* Lo que queda aquí es lo que se pulsa de paso: encender algo, sacar los datos, salir.
+          Lo que se viene a decidir mirando —las siete de lista cerrada— vive en su hoja, y de
+          ellas sale un renglón más abajo. Es la misma partición que ya tenían la importación y
+          las listas de Recordatorios: del `⚙︎` sale la pregunta y el resto ocupa el área de
+          contenido (spec 8).
 
           Los tres booleanos van primero y juntos, con interruptor y no con un segmentado de
           «Sí / No»: es el control con el que el sistema dice esto, y un estado que el control
-          puede *tener* no hace falta además escribirlo. Juntos, además, dejan las de lista
-          cerrada en un bloque seguido; intercalado, un interruptor entre dos segmentados parte
-          en dos la columna de opciones que estos alinean contra el borde derecho. */}
+          puede *tener* no hace falta además escribirlo. Los grupos de después —notificaciones,
+          datos, la app— se separan con su rótulo y no con una hairline: una regla dice que hay
+          un corte pero no de qué. El bloque de arriba es el único sin rótulo porque es para lo
+          que existe el popover; ponerle «PREFERENCIAS» encima sería rotular la caja desde
+          dentro, y además ya no es lo que es. */}
       <Switch
         label="Abrir al iniciar sesión"
         value={autostart ? autostart.puesto : null}
@@ -633,11 +278,10 @@ export function SettingsPopover({
               ? "Elegir listas…"
               : `${reminderLists} ${reminderLists === 1 ? "lista vinculada" : "listas vinculadas"}…`}
           </span>
-          {/* Lo que lo devuelve a la tabla de preferencias. Es el único renglón del bloque sin
-              nada en la columna de la derecha —los otros cinco llevan ahí su interruptor o su
-              segmentado— y sin eso se leía como un renglón de menú suelto entre ellas y no como
-              lo que cuelga del interruptor de arriba. El `›` es además lo que dice que no decide
-              nada aquí: lleva a la hoja, que es donde se elige (spec 16.6). */}
+          {/* Lo que lo devuelve a la columna de la derecha, donde los tres de arriba llevan su
+              interruptor: sin él se leía como un renglón de menú suelto entre ellos y no como lo
+              que cuelga del interruptor de justo encima. El `›` es además lo que dice que no
+              decide nada aquí: lleva a la hoja, que es donde se elige (spec 16.6). */}
           <ChevronRight size={12} className="menu__lleva" aria-hidden />
         </button>
       )}
@@ -653,134 +297,25 @@ export function SettingsPopover({
         </>
       )}
 
-      {/* El atajo global (spec 18), entre los interruptores y los segmentados porque no es
-          ninguna de las dos cosas: no tiene dos estados ni una lista de opciones que quepa a la
-          derecha. Va aquí y no al final del bloque para no partir en dos las cuatro de lista
-          cerrada, que se leen como una tabla. */}
-      <Atajo accel={atajo.accel} error={atajo.error} onPick={atajo.set} />
+      {/* Lo que se viene a decidir con calma vive en la hoja, no aquí (spec 8): del `⚙︎` sale
+          solo la pregunta, como con la importación y las listas de Recordatorios. Las siete
+          preferencias de lista cerrada estiraban el popover hasta los 545px dentro de un panel
+          de 580, y eso ya no es algo pequeño colgado de un botón sino un segundo panel tapando
+          el primero. Lo que se queda arriba es lo que se pulsa de paso.
 
-      {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
-          quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que
-          decidir a dónde caer cuando se borre, y eso sería un ajuste que cambia solo. */}
-      <Choices
-        label="Vista al abrir"
-        options={SYSTEM_VIEWS.map(({ kind, label }) => {
-          const Icon = SYSTEM_ICONS[kind];
-          return { value: kind, label, content: <Icon size={15} aria-hidden /> };
-        })}
-        value={startView}
-        onPick={onStartView}
-        caption
-      />
-
-      {/* Un título largo cortado a la mitad obliga a abrir el detalle para saber de qué tarea
-          se trata; uno entero gasta dos o tres renglones por fila y hace que quepan menos.
-          Ninguna de las dos es la respuesta correcta para todo el mundo, así que se elige una
-          vez y vale para toda la app. */}
-      <Choices
-        label="Texto de las tareas"
-        options={ROW_TEXTS.map((option) => ({ ...option, content: option.label }))}
-        value={rowText}
-        onPick={onRowText}
-      />
-
-      {/* Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). Fin de mes de
-          fábrica: es la frontera que ya se tiene en la cabeza, y a diferencia de «30 días» no se
-          va corriendo hacia el mes siguiente conforme avanza este.
-
-          Los cuatro en la fuente de datos y abreviados, como la retención de abajo: son plazos,
-          y dos filas de plazos escritos igual se leen como una tabla. */}
-      <Choices
-        label="Ver por delante"
-        options={HORIZONTES.map((option) => ({ ...option, content: option.short }))}
-        value={horizonte}
-        onPick={onHorizonte}
-      />
-
-      {/* Los glifos y no sus nombres: «Cuadro» no dice qué va a salir en la barra, y lo que se
-          está eligiendo es precisamente cómo se ve. El que importa no es el más bonito sino el
-          que no se confunda con los vecinos que ya haya arriba, y eso solo se decide
-          mirándolos.
-
-          Máscara y no `img`: el PNG es una imagen *template* —negro y alfa— y en modo oscuro
-          un negro sobre el vidrio oscuro no se vería. Pintar el alfa con la tinta de la app es
-          lo mismo que hace macOS con la barra. */}
-      <Choices
-        label="Icono de la barra"
-        options={TRAY_GLYPHS.map((option) => ({
-          ...option,
-          content: (
-            <span
-              className="settings__glifo"
-              style={{
-                maskImage: `url(/tray/${option.value}.png)`,
-                WebkitMaskImage: `url(/tray/${option.value}.png)`,
-              }}
-            />
-          ),
-        }))}
-        value={trayGlyph}
-        onPick={onTrayGlyph}
-        caption
-      />
-
-      {/* Con qué editor se abre la carpeta de un proyecto (spec 13). Solo con dos o más
-          instalados: con uno, un segmentado de una opción no es una elección, es un rótulo, y
-          con ninguno la preferencia decidiría sobre algo que no puede pasar. Es la única fila
-          del popover que puede no estar, y por eso va la última de las preferencias: así las
-          cinco de siempre no cambian de sitio según la máquina. */}
-      {editors.length > 1 && (
-        <Choices
-          label="Abrir carpetas en"
-          options={editors.map((each) => ({ value: each.id, label: each.name, content: each.name }))}
-          value={editor?.id ?? null}
-          onPick={onEditor}
-        />
-      )}
-
-      <Choices
-        label="Conservar completadas"
-        options={RETENTIONS.map((option) => ({ ...option, content: option.short }))}
-        /* Ternario y no `??`: «siempre» es `null` como valor legítimo, y aunque hoy nunca llegue
-           a `pruning` —alargar el plazo no pregunta— con `??` una futura confirmación de
-           «siempre» se dibujaría marcando el plazo viejo. */
-        value={pruning ? pruning.retention : retention}
-        onPick={pickRetention}
-      />
-
-      {/* La misma forma que eliminar una tarea desde el `⋯`: primero qué se va a perder, luego
-          el sí en rojo y la salida. Sin `autoFocus`, al revés que allí — allí la confirmación
-          nace de un clic en «Eliminar», y aquí de recorrer una fila de opciones, donde robar
-          el foco dejaría a quien navega con flechas fuera del grupo a media vuelta. */}
-      {asking && (
-        <>
-          <p className="settings__note">
-            Conservar {RETENTIONS.find((option) => option.value === asking.retention)?.label} borra
-            ahora {asking.count} {asking.count === 1 ? "tarea completada" : "tareas completadas"},
-            y eso no se deshace.
-          </p>
-          <button
-            type="button"
-            className="menu__item menu__item--danger"
-            onClick={() => {
-              onRetention(asking.retention);
-              setPruning(null);
-            }}
-          >
-            Sí, borrar {asking.count === 1 ? "1 tarea" : `${asking.count} tareas`}
-          </button>
-          <button
-            type="button"
-            className="menu__item"
-            onClick={() => {
-              setPruning(null);
-              wanted.current = retention;
-            }}
-          >
-            Cancelar
-          </button>
-        </>
-      )}
+          Debajo de las listas de Recordatorios y no encima: aquel cuelga del interruptor que
+          tiene justo arriba, y meterse en medio los separaría. */}
+      <button
+        type="button"
+        className="menu__item menu__item--lleva"
+        onClick={() => {
+          onPrefs();
+          onClose();
+        }}
+      >
+        <span>Preferencias…</span>
+        <ChevronRight size={12} className="menu__lleva" aria-hidden />
+      </button>
 
       {/* Solo cuando se sabe que está denegado. Mientras se consulta no hay nota, porque una
           advertencia que parpadea en cada apertura del popover es peor que ninguna. Y solo

@@ -488,15 +488,32 @@ hace que las notificaciones funcionen de verdad.
 
 Un popover pequeño desde el `⚙︎`, no una ventana aparte:
 
-- Abrir al iniciar sesión (`tauri-plugin-autostart`).
-- El atajo global que abre la captura rápida (§18).
-- Vista al abrir, texto de las tareas, hasta dónde llega la lista (§19), icono de la barra y
-  retención de completadas.
+- Los tres de sí o no: abrir al iniciar sesión (`tauri-plugin-autostart`), los eventos del
+  Calendario (§15) y el vínculo con Recordatorios (§16).
+- Dos renglones que llevan a su hoja: las listas que se vinculan (§16.6) y las preferencias.
 - Exportar e importar JSON, y un enlace a los datos en Finder.
 - La versión, el renglón de la actualización cuando hay una (§11) y salir de Riel (§4).
 
+Y en la hoja de preferencias, que ocupa el área de contenido: el atajo global que abre la
+captura rápida (§18), vista al abrir, texto de las tareas, hasta dónde llega la lista (§19),
+icono de la barra, con qué editor se abre una carpeta (§13) y retención de completadas.
+
 «Pequeño» es una restricción y no un adjetivo: el popover cuelga de un panel de 440 × 580 y no
-tiene dónde desbordarse, así que se sujeta contra los dos bordes y no solo contra el derecho.
+tiene dónde desbordarse, así que se sujeta contra los dos bordes y no solo contra el derecho. Y
+es la restricción que decide qué se queda dentro. Las siete de lista cerrada, con su nombre, su
+control y la leyenda de las dos que dibujan, lo estiraban hasta los 545 píxeles: dentro de un
+panel de 580 eso ya no es algo pequeño colgado de un botón, es un segundo panel tapando el
+primero. Así que salen al área de contenido, que es donde ya vivían la importación y las listas
+de Recordatorios y por la misma razón — del `⚙︎` sale solo la pregunta.
+
+El corte no es por temas sino por gesto: **en el popover se queda lo que se pulsa de paso**
+—encender algo, sacar los datos, salir— **y en la hoja lo que se viene a decidir mirando**.
+Encender el calendario es un clic que ya se traía decidido; elegir el glifo de la barra es
+compararlos, y el que importa no es el más bonito sino el que no se confunda con los vecinos que
+ya haya arriba. Lo segundo pide sitio, y de paso lo gana: el área de contenido da cuarenta
+píxeles más de ancho, justo los que les faltaban a los segmentados de cinco opciones. El precio
+es un clic más para cambiar la vista al abrir, y es el correcto — de las dos, esa es la que no
+se toca dos veces en la misma semana.
 
 Una preferencia es una línea: su nombre a la izquierda y sus opciones a la derecha, alineadas
 todas al mismo borde. Ni un renglón con palomita por opción —las seis costaban dieciocho líneas y
@@ -504,18 +521,17 @@ tapaban la lista entera— ni el nombre encima de sus opciones, que gasta una l�
 píxeles de texto y deja medio popover en blanco al lado: apretaba a lo alto justo donde sobraba
 a lo ancho.
 
-La del atajo (§18) no es ninguna de las dos formas de abajo, y por eso va entre ellas y no en
-un extremo: no tiene dos estados ni una lista de opciones que quepa a la derecha, porque lo que
-enseña es una combinación que solo se conoce pulsándola. Así que el control **es** el valor —el
-atajo escrito en la fuente de datos, sobre la misma pista que un segmentado, contra el mismo
-borde derecho— y pulsarlo lo pone a escuchar. Grabando se queda con todas las teclas, o ⌘F se
+La del atajo (§18) no es ninguna de las dos formas de abajo: no tiene dos estados ni una lista
+de opciones que quepa a la derecha, porque lo que enseña es una combinación que solo se conoce
+pulsándola. Así que el control **es** el valor —el atajo escrito en la fuente de datos, sobre la
+misma pista que un segmentado, contra el mismo borde derecho— y pulsarlo lo pone a escuchar. Grabando se queda con todas las teclas, o ⌘F se
 escaparía a la búsqueda de detrás y ⎋ cerraría el panel en vez de cancelar; ⌫ lo quita y ⎋ lo
-deja como estaba, dicho en una nota que solo sale mientras hace falta. Va entre los
-interruptores y los segmentados para no partir en dos las cinco de lista cerrada, que se leen
-como una tabla.
+deja como estaba, dicho en una nota que solo sale mientras hace falta. Va la primera de la hoja
+y no en medio, para no partir en dos las seis de lista cerrada: alineadas todas contra el mismo
+borde derecho se leen como una tabla, y una fila de otra forma metida entre ellas la parte.
 
-Cinco de las otras son la misma forma, un segmentado; las de sí o no van con
-interruptor. Lo que no vale para ella es la palomita a la izquierda —la gramática de un menú
+Seis de las otras son la misma forma, un segmentado; las tres de sí o no van con
+interruptor, y son las que se quedan en el popover. Lo que no vale para ella es la palomita a la izquierda —la gramática de un menú
 metida entre cuatro filas que ya eran tabla— pero un segmentado de «Sí / No» tampoco: pide leer
 dos palabras para saber un estado que un interruptor puede simplemente *tener*, y es el control
 con el que el sistema dice esto. Medidas del sistema y no aproximadas: 38 × 22 con pulgar de 18
@@ -528,16 +544,16 @@ sabe», y dejarlo pulsable antes de conocer el estado convierte el primer clic e
 Tres niveles de tinta y no dos: el nombre y el valor puesto en `--ink-primary`, las opciones sin
 elegir en `--ink-secondary`. Un rótulo que no se pulsa no puede pesar lo mismo que algo que sí.
 El elegido de un segmentado lleva fondo y nunca un anillo de color, y el interruptor encendido
-lleva el acento **del sistema** y no el del proyecto: el popover se dibuja dentro del panel, así
-que dentro de un proyecto heredaría su color, y ninguna de las preferencias es de un
-proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el proyecto no sobreescribe. La vista al abrir se elige con los iconos del riel, que es donde ya se aprendieron, y el
+lleva el acento **del sistema** y no el del proyecto: el popover y la hoja se dibujan los dos
+dentro del panel, así que dentro de un proyecto heredarían su color, y ninguna de las
+preferencias es de un proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el proyecto no sobreescribe. La vista al abrir se elige con los iconos del riel, que es donde ya se aprendieron, y el
 icono de la barra con los glifos mismos a 18px, que es el tamaño al que macOS los dibuja: la
 previsualización no es una versión del glifo, es el glifo.
 
 Las opciones de cada preferencia van sobre una pista, como un segmentado del sistema, y el
 elegido se levanta de ella en vez de hundirse. Un fondo suelto al 9% basta para distinguir dos
 palabras, pero en una fila de cinco glifos no se lee como «este»; con la pista, además, los
-cinco dejan de ser botones sueltos flotando sobre el menú. Sigue siendo una veladura sobre el
+cinco dejan de ser botones sueltos flotando sobre la hoja. Sigue siendo una veladura sobre el
 vidrio y no un panel opaco (§3.2), y sigue sin haber color de por medio.
 
 Y donde las opciones son dibujos —la vista al abrir, el icono de la barra— debajo va el nombre

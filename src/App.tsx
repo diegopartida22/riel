@@ -18,6 +18,7 @@ import { Composer } from "./ui/Composer";
 import { useFocoDeTeclado } from "./ui/foco";
 import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
 import { ImportSheet } from "./ui/ImportSheet";
+import { PrefsSheet } from "./ui/PrefsSheet";
 import { ProjectEditor } from "./ui/ProjectEditor";
 import { Rail } from "./ui/Rail";
 import { RemindersSheet } from "./ui/RemindersSheet";
@@ -53,6 +54,8 @@ export default function App() {
   const [settings, setSettings] = useState<DOMRect | null>(null);
   const [importing, setImporting] = useState(false);
   const [picking, setPicking] = useState(false);
+  /** Si lo que ocupa el área de contenido es la hoja de preferencias (spec 8). */
+  const [tuning, setTuning] = useState(false);
   /** Si lo que ocupa el área de contenido es el apartado de Claude (spec 17). */
   const [sessions, setSessions] = useState(false);
   // Solo lee mientras el apartado está a la vista: contar `~/.claude` cuesta más que el
@@ -91,6 +94,7 @@ export default function App() {
       setEditing(null);
       setImporting(false);
       setPicking(false);
+      setTuning(false);
       setSessions(false);
       select({ kind: startView });
     });
@@ -134,9 +138,9 @@ export default function App() {
    * Un `keydown` se atiende siempre después de que los efectos se hayan vaciado, así que lo que
    * lee el oyente es lo del render que se acaba de pintar.
    */
-  const teclado = useRef({ riel, editing, importing, picking });
+  const teclado = useRef({ riel, editing, importing, picking, tuning });
   useEffect(() => {
-    teclado.current = { riel, editing, importing, picking };
+    teclado.current = { riel, editing, importing, picking, tuning };
   });
 
   /**
@@ -151,7 +155,7 @@ export default function App() {
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const { riel, editing, importing, picking } = teclado.current;
+      const { riel, editing, importing, picking, tuning } = teclado.current;
 
       if (event.key === "Escape") {
         event.preventDefault();
@@ -161,6 +165,8 @@ export default function App() {
           setImporting(false);
         } else if (picking) {
           setPicking(false);
+        } else if (tuning) {
+          setTuning(false);
         } else if (editing) {
           setEditing(null);
         } else if (riel.detail) {
@@ -265,20 +271,14 @@ export default function App() {
       {settings && (
         <SettingsPopover
           anchor={settings}
-          retention={riel.retention}
-          onRetention={riel.setRetention}
-          startView={prefs.startView}
-          onStartView={prefs.setStartView}
-          rowText={prefs.rowText}
-          onRowText={prefs.setRowText}
-          horizonte={prefs.horizonte}
-          onHorizonte={prefs.setHorizonte}
-          trayGlyph={prefs.trayGlyph}
-          onTrayGlyph={prefs.setTrayGlyph}
-          atajo={atajo}
-          editors={dev.editors}
-          editor={dev.editor}
-          onEditor={dev.setEditor}
+          onPrefs={() => {
+            // Igual que la importación y las listas: la hoja se lleva el área de contenido
+            // entera, así que lo que hubiera puesto ahí se cierra antes.
+            setEditing(null);
+            setSessions(false);
+            riel.closeDetail();
+            setTuning(true);
+          }}
           agenda={agenda.enabled}
           onAgenda={agenda.setEnabled}
           calendar={agenda.permission}
@@ -338,6 +338,24 @@ export default function App() {
             <ImportSheet
               onImported={() => void riel.reloadAll()}
               onClose={() => setImporting(false)}
+            />
+          ) : tuning ? (
+            <PrefsSheet
+              retention={riel.retention}
+              onRetention={riel.setRetention}
+              startView={prefs.startView}
+              onStartView={prefs.setStartView}
+              rowText={prefs.rowText}
+              onRowText={prefs.setRowText}
+              horizonte={prefs.horizonte}
+              onHorizonte={prefs.setHorizonte}
+              trayGlyph={prefs.trayGlyph}
+              onTrayGlyph={prefs.setTrayGlyph}
+              atajo={atajo}
+              editors={dev.editors}
+              editor={dev.editor}
+              onEditor={dev.setEditor}
+              onClose={() => setTuning(false)}
             />
           ) : picking ? (
             <RemindersSheet
@@ -453,8 +471,9 @@ export default function App() {
         </div>
 
         {/* El pie no captura mientras hay una hoja delante —editar un proyecto, importar, elegir
-            listas— ni leyendo el detalle de una tarea: en ninguno hay lista a la que agregar. */}
-        {!editing && !importing && !picking && !sessions && !riel.detail && acceptsNew(riel.view) && (
+            listas, las preferencias— ni leyendo el detalle de una tarea: en ninguno hay lista a
+            la que agregar. */}
+        {!editing && !importing && !picking && !tuning && !sessions && !riel.detail && acceptsNew(riel.view) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}
