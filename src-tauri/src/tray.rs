@@ -12,7 +12,6 @@ use std::sync::Mutex;
 
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
 };
@@ -108,22 +107,25 @@ fn remember(event: &TrayIconEvent) {
 }
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let quit = MenuItem::with_id(app, "quit", "Salir de Riel", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&quit])?;
-
     TrayIconBuilder::with_id(TRAY_ID)
         // El de omisión. El elegido lo pone el frontend al arrancar, que es donde vive la
         // preferencia — igual que el peso, que también depende de datos que Rust no lee.
         .icon(Image::from_bytes(GLYPHS[0].1)?)
         .icon_as_template(true)
-        // El clic izquierdo abre el panel; el menú queda en el derecho.
-        .show_menu_on_left_click(false)
-        .menu(&menu)
-        .on_menu_event(|app, event| {
-            if event.id() == "quit" {
-                app.exit(0);
-            }
-        })
+        // Y sin menú, que no es una simplificación sino la única forma de que el clic llegue.
+        //
+        // `tray-icon` no escucha el botón del `NSStatusItem`: le encima una vista propia y lee
+        // los clics de ahí. Desde macOS 27, un status item con un `NSMenu` puesto deja de
+        // entregarle los eventos a esa vista, así que el clic izquierdo abría el menú y el
+        // panel se volvía inalcanzable — que es toda la app. `show_menu_on_left_click(false)`
+        // no lo evita, porque lo que se apaga con eso vive en la vista que ya no se entera.
+        // Arreglado aguas arriba en `tray-icon` 0.25.1, que engancha el menú solo mientras lo
+        // está enseñando, pero Tauri 2 todavía pide la 0.24: cuando la suba, esto se puede
+        // volver a mirar.
+        //
+        // Quitarlo no se lleva nada por delante: «Salir de Riel» vive en Ajustes desde antes
+        // (spec 4), y está ahí precisamente porque sin Dock ni ⌘Q no hay otro sitio donde
+        // ponerlo. El menú del icono era una segunda copia de ese único renglón.
         .on_tray_icon_event(|tray, event| {
             // Ambos tienen que correr antes de mover la ventana: los eventos son lo único
             // que dice dónde está el icono, y el panel se coloca respecto a él.
