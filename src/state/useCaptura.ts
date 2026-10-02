@@ -23,13 +23,14 @@ import {
 import { commandsFor, filterCommands, type Command, type CommandGroup } from "./comandos";
 
 /**
- * El aviso que la ventana de captura le manda al panel cuando ha escrito una tarea (spec 18).
+ * El aviso que la ventana de captura le manda al panel cuando ha tocado la lista: escrito una
+ * tarea, completado una o deshecho ese completado (spec 18).
  *
  * Vive aquí, en lo que las dos ventanas ya comparten, y no en el componente de la ventana: el
  * panel solo necesita el nombre del evento, y sacárselo de ahí le metía en su bundle el markup
  * entero de una ventana que nunca dibuja.
  */
-export const CREATED_EVENT = "riel://tarea-creada";
+export const CHANGED_EVENT = "riel://tareas-cambiaron";
 
 export interface MenuItem {
   id: string;

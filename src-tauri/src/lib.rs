@@ -7,6 +7,7 @@ mod claude;
 mod db;
 mod deeplink;
 mod editor;
+mod fundido;
 mod eventkit;
 mod glass;
 mod notify;
@@ -286,6 +287,12 @@ fn close_capture(app: tauri::AppHandle) {
     captura::hide(&app);
 }
 
+/// Cierra la captura rápida y abre el panel en esa vista: el «ver todo» de su lista.
+#[tauri::command]
+fn capture_to_panel(app: tauri::AppHandle, vista: String) {
+    captura::to_panel(&app, &vista);
+}
+
 /// Ajusta el alto de la captura rápida al de su contenido.
 #[tauri::command]
 fn resize_capture(app: tauri::AppHandle, height: f64) {
@@ -465,6 +472,7 @@ pub fn run() {
             system_shortcuts,
             free_shortcuts,
             close_capture,
+            capture_to_panel,
             resize_capture,
             quit,
             restart,

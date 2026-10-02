@@ -241,6 +241,17 @@ pub fn give_focus_back() {
     }
 }
 
+/// Olvida a quién había que devolverle el teclado. Para cuando la captura se cierra porque se
+/// pidió el panel: el teclado se lo queda él, y devolverlo después sería quitárselo a quien sea
+/// que esté usando la Mac para entonces.
+#[cfg(target_os = "macos")]
+pub fn forget_frontmost() {
+    ANTERIOR.store(0, Ordering::SeqCst);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn forget_frontmost() {}
+
 #[cfg(not(target_os = "macos"))]
 pub fn remember_frontmost() {}
 
@@ -256,7 +267,7 @@ pub fn show<R: Runtime>(window: &WebviewWindow<R>) {
         window,
         crate::glass::material(window.app_handle()).corner_radius(),
     );
-    let _ = window.show();
+    crate::fundido::mostrar(window);
     let _ = window.set_focus();
     // Abierto de nuevo: lo que se hubiera apuntado del cierre anterior ya no describe nada.
     olvidar_autohide();
@@ -274,7 +285,7 @@ pub fn hide<R: Runtime>(window: &WebviewWindow<R>) {
     // bandera sobreviviera al cierre, la siguiente apertura no volvería a ocultarse al perder
     // el foco. Un panel clavado en pantalla es peor que uno que se cierra de más.
     set_keep_open(false);
-    let _ = window.hide();
+    crate::fundido::ocultar(window);
 }
 
 /// Empieza la pulsación sobre el icono de la barra: apunta si el panel estaba abierto.
@@ -284,7 +295,7 @@ pub fn hide<R: Runtime>(window: &WebviewWindow<R>) {
 /// ve, estaba abierto; si acaba de esconderse solo, también lo estaba — y fue esta misma
 /// pulsación la que lo escondió.
 pub fn tray_pressed<R: Runtime>(window: &WebviewWindow<R>) {
-    let abierto = window.is_visible().unwrap_or(false) || recien_autohide();
+    let abierto = crate::fundido::abierta(window) || recien_autohide();
     PULSADO_ABIERTO.store(abierto, Ordering::SeqCst);
 }
 
@@ -296,7 +307,7 @@ pub fn tray_pressed<R: Runtime>(window: &WebviewWindow<R>) {
 /// leería el cierre de la primera y se tragaría la segunda.
 pub fn tray_toggle<R: Runtime>(window: &WebviewWindow<R>) {
     let abierto = PULSADO_ABIERTO.swap(false, Ordering::SeqCst)
-        || window.is_visible().unwrap_or(false)
+        || crate::fundido::abierta(window)
         || recien_autohide();
     olvidar_autohide();
 
@@ -329,7 +340,9 @@ pub fn on_focus_lost<R: Runtime>(window: &Window<R>) {
         // Solo si de verdad había algo que esconder. Cuando el clic en el icono se adelanta al
         // aviso de foco, el panel ya está cerrado por su propia mano y apuntar el cierre aquí
         // haría que la pulsación siguiente lo leyera como suyo y no abriera nada.
-        if !panel.is_visible().unwrap_or(false) {
+        // Abierto de intención y no visible: a media salida el panel todavía se ve, y ya está
+        // cerrado.
+        if !crate::fundido::abierta(&panel) {
             return;
         }
         apuntar_autohide();

@@ -21,6 +21,8 @@ export interface TaskRowProps {
   today?: string;
   /** Ids en sus 200ms de colapso (spec 3.6). Vale para la fila y para sus subtareas. */
   leaving?: ReadonlySet<string>;
+  /** Si la fila acaba de aparecer en una lista que ya estaba pintada: entra con un fundido. */
+  entering?: boolean;
   /** Px que la fila lleva desplazados por un arrastre en curso. */
   offset?: number;
   /** Verdadero para la fila que va en vuelo: se levanta sobre las demás y no transiciona. */
@@ -69,6 +71,7 @@ export function TaskRow({
   subtasks = [],
   today,
   leaving,
+  entering = false,
   offset = 0,
   flying = false,
   onGrab,
@@ -91,6 +94,7 @@ export function TaskRow({
         "task-row collapse tinted",
         completed && "is-completed",
         leaving?.has(task.id) && "is-leaving",
+        entering && "is-entering",
         flying && "is-flying",
       ]
         .filter(Boolean)

@@ -3,7 +3,7 @@
 Tareas en la barra de menú de macOS. Un clic en el icono abre un panel de vidrio para
 capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 
-> **Estado: v0.5.0.** Solo para Apple Silicon. Lo que hay funciona; lo que
+> **Estado: v0.9.0.** Solo para Apple Silicon. Lo que hay funciona; lo que
 > falta está anotado abajo sin adornos.
 
 ## Qué hace
@@ -15,7 +15,8 @@ capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
   fecha, la hora, el proyecto y la prioridad ya puestas, y el título limpio. Una `/` abre el
   menú de comandos, que enseña esa gramática mientras la escribe por ti.
 - **Captura rápida con ⌥Espacio**: una ventana en medio de la pantalla, sobre lo que sea que
-  haya delante, para apuntar algo sin dejar de estar donde estabas.
+  haya delante, para apuntar algo sin dejar de estar donde estabas. Debajo del campo está
+  lo pendiente —Hoy, Próximas y Todas, con ⇥ entre las tres— y se completa desde ahí mismo.
 - Tareas que se repiten: `cada mes`, `cada 3 días`, `cada martes`.
 - La agenda del día del Calendario encima de la lista de Hoy, y el vínculo con los
   Recordatorios de Apple para las listas que elijas.
@@ -52,7 +53,7 @@ vibrancy heredado.
 
 ## Instalar
 
-Baja `Riel_0.5.0_aarch64.dmg` de la
+Baja `Riel_0.9.0_aarch64.dmg` de la
 [última release](https://github.com/diegopartida22/riel/releases/latest). Es solo para Apple
 Silicon: en una Mac Intel no abre.
 

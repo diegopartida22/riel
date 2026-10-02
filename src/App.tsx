@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Project } from "./data";
 import { tint } from "./design/palette";
 import { useAtajo } from "./state/atajo";
-import { CREATED_EVENT } from "./state/useCaptura";
+import { CHANGED_EVENT } from "./state/useCaptura";
 import { useAgenda } from "./state/agenda";
 import { useClaude } from "./state/claude";
 import { useDevMode } from "./state/editors";
@@ -13,7 +13,7 @@ import { usePreferencias } from "./state/preferencias";
 import { useReminders } from "./state/reminders";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
-import { acceptsNew } from "./state/views";
+import { acceptsNew, viewKey } from "./state/views";
 import { Composer } from "./ui/Composer";
 import { useFocoDeTeclado } from "./ui/foco";
 import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
@@ -101,6 +101,45 @@ export default function App() {
   const despejado =
     !editing && !importing && !picking && !tuning && !removing && !sessions && !riel.detail;
 
+  /**
+   * Qué ocupa el área de contenido, dicho como una cadena: cuando cambia, la capa nueva entra con
+   * un fundido corto en vez de sustituir a la vieja de un fotograma al siguiente. Es lo que hace
+   * el sistema al cambiar de pestaña en Ajustes o de carpeta en el Finder, y sin él pasar de Hoy
+   * a un proyecto se leía como un parpadeo y no como un cambio de sitio.
+   *
+   * Opacidad y no movimiento, así que se queda también con «Reducir movimiento» (criterio 7):
+   * un fundido es justo lo que el sistema deja cuando esa casilla está puesta. Y por la API de
+   * animaciones sobre el contenedor, no remontando lo de dentro con una `key`: la lista tiene
+   * foco, desplazamiento y filas a medio salir, y nada de eso debería perderse por un efecto.
+   */
+  const capa = importing
+    ? "importar"
+    : tuning
+      ? "preferencias"
+      : removing
+        ? "desinstalar"
+        : picking
+          ? "recordatorios"
+          : sessions
+            ? "sesiones"
+            : editing
+              ? `proyecto:${editing.project?.id ?? "nuevo"}`
+              : riel.detail
+                ? `tarea:${riel.detail.id}`
+                : riel.searching
+                  ? "buscar"
+                  : `vista:${viewKey(riel.view)}`;
+  const body = useRef<HTMLElement>(null);
+  const capaAnterior = useRef(capa);
+  useEffect(() => {
+    if (capaAnterior.current === capa) return;
+    capaAnterior.current = capa;
+    body.current?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 140,
+      easing: "ease-out",
+    });
+  }, [capa]);
+
   // El foco del primer arranque (spec 3.7) no puede ser `autoFocus`: cuando el componente se
   // monta todavía no se sabe si la base está vacía, y para cuando se sabe ya es tarde.
   useEffect(() => {
@@ -141,13 +180,14 @@ export default function App() {
   }, [select, startView]);
 
   /**
-   * Una tarea escrita desde la captura rápida (spec 18). El panel está escondido pero vivo, así
-   * que se entera ahora y no cuando alguien lo abra: es lo que hace que la tarea ya esté en la
-   * lista al abrirlo, y programada si traía hora — el plan de avisos cuelga de `tasks` (spec 7).
+   * Lo que se hizo desde la captura rápida (spec 18): una tarea escrita, una completada o un
+   * completado deshecho. El panel está escondido pero vivo, así que se entera ahora y no cuando
+   * alguien lo abra: es lo que hace que la lista ya esté al día al abrirlo, y los avisos
+   * programados o quitados — el plan cuelga de `tasks` (spec 7).
    */
   const { reloadAll } = riel;
   useEffect(() => {
-    const unlisten = listen(CREATED_EVENT, () => void reloadAll());
+    const unlisten = listen(CHANGED_EVENT, () => void reloadAll());
     return () => {
       void unlisten.then((off) => off());
     };
@@ -371,7 +411,7 @@ export default function App() {
           onReorder={riel.reorderProject}
         />
 
-        <main className="panel__body">
+        <main ref={body} className="panel__body">
           {importing ? (
             <ImportSheet
               onImported={() => void riel.reloadAll()}

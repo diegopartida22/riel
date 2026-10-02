@@ -169,20 +169,27 @@ mod mac {
     /// La captura rápida: centrada a lo ancho de la pantalla donde está el puntero y anclada
     /// por arriba a `top_fraction` de lo que sobra (spec 18.2).
     ///
-    /// El alto llega por parámetro y no se lee de la ventana a propósito: quien llama acaba de
-    /// pedir el alto de arranque, y `set_size` no promete que la `NSWindow` ya lo tenga cuando
-    /// esto corre. Leer `frame()` aquí colocaría la ventana según el alto al que la dejó
-    /// crecer la apertura anterior, que es justo lo que la spec dice que no puede pasar.
-    pub fn centered<R: Runtime>(window: &WebviewWindow<R>, size: (f64, f64), top_fraction: f64) {
+    /// El techo sale de `anchor` y no del alto de la ventana: la captura lleva la lista dentro y
+    /// mide lo que haya pendiente, y si el techo dependiera de eso el campo se abriría cada vez
+    /// en una fila distinta de la pantalla. El alto de verdad sí se lee de `frame()`, porque es
+    /// el que hay que restarle al techo para dar con el origen — y aquí nadie acaba de pedir un
+    /// `set_size` que la ventana todavía no tenga.
+    pub fn centered<R: Runtime>(
+        window: &WebviewWindow<R>,
+        width: f64,
+        anchor: f64,
+        top_fraction: f64,
+    ) {
         place(window, |ns_window, screen, _| {
             let visible = screen.visibleFrame();
-            let (width, height) = size;
+            let height = ns_window.frame().size.height;
 
             let x = visible.origin.x + (visible.size.width - width) / 2.0;
-            // El borde de arriba baja una fracción del hueco; el origen de Cocoa está abajo,
-            // así que a ese techo hay que restarle el alto.
+            // El borde de arriba baja una fracción del hueco que deja el alto de referencia, no
+            // el de la ventana: así cae siempre en la misma fila mida lo que mida. El origen de
+            // Cocoa está abajo, así que a ese techo hay que restarle el alto de verdad.
             let top = visible.origin.y + visible.size.height
-                - (visible.size.height - height).max(0.0) * top_fraction;
+                - (visible.size.height - anchor).max(0.0) * top_fraction;
 
             ns_window.setFrameOrigin(NSPoint::new(x.round(), (top - height).round()));
         });
@@ -214,11 +221,12 @@ pub fn panel<R: tauri::Runtime>(
 #[cfg(not(target_os = "macos"))]
 pub fn centered<R: tauri::Runtime>(
     window: &tauri::WebviewWindow<R>,
-    size: (f64, f64),
+    width: f64,
+    anchor: f64,
     top_fraction: f64,
 ) {
     use tauri_plugin_positioner::{Position, WindowExt};
 
-    let _ = (size, top_fraction);
+    let _ = (width, anchor, top_fraction);
     let _ = window.move_window_constrained(Position::Center);
 }

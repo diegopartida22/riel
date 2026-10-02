@@ -120,49 +120,155 @@
   font-size: var(--text-title);
 }
 
-/* Hoy, cuando se pide con el espacio (spec 18.5). Se separa del campo con la misma hairline y la
-   misma sangría negativa que el menú de comandos, porque es lo mismo: no es una superficie
+/* La lista, debajo del campo y siempre a la vista (spec 18.5). Se separa con la misma hairline
+   y la misma sangría negativa que el menú de comandos, porque es lo mismo: no es una superficie
    nueva flotando encima —eso sería el segundo nivel de blur que la sección 4 prohíbe— sino la
    misma que crece. */
 .quick__lista {
   margin: 14px -8px 0;
-  padding: 11px 8px 0;
+  padding: 10px 8px 0;
   border-top: 1px solid var(--hairline);
 }
 
-.quick__tareas {
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* La fila de una tarea sin lo que aquí no se puede hacer: sin casilla, sin manija y sin `⋯`.
-   Una tarea no se completa ni se reordena desde esta ventana, y darle los gestos de la lista
-   sería prometer tres cosas que ninguna funciona — lo mismo que dice la sección 15 de un
-   evento de la agenda. Lo único que hace es estar. */
-.quick__tarea {
+.quick__cabeza {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  font-size: var(--text-title);
-  line-height: 1.35;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+/* Un segmentado de Ajustes, con el nombre y la cuenta en vez de un glifo. */
+.quick__pestana {
+  gap: 6px;
+  padding: 0 10px;
+}
+
+/* La cuenta, en la fuente de datos y un tono por debajo del nombre: es lo que se compara entre
+   las tres, y por eso va en mono. Sin pendientes no dice cero — el mismo criterio que los
+   conteos del riel expandido (spec 3.4). */
+.quick__cuenta {
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-tertiary);
+}
+
+.quick__cuenta:empty {
+  display: none;
+}
+
+.quick__pestana.is-selected .quick__cuenta {
+  color: var(--ink-secondary);
+}
+
+/* Un botón de texto y no un botón con caja: es la salida a otra ventana, no una acción sobre lo
+   que se está mirando, y con caja competiría con el segmentado de al lado. */
+.quick__abrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--row-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-subtitle);
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.quick__abrir:hover {
+  background: var(--layer-hover);
   color: var(--ink-primary);
 }
 
-.quick__tarea-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+/* Ocho filas y luego desplazamiento. La sangría negativa es la de las filas del panel: el fondo
+   del hover llega hasta la hairline y el texto se queda en su columna. */
+.quick__tareas {
+  max-height: calc(8 * var(--quick-row));
+  margin: 0 -8px;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  --quick-row: 28px;
 }
 
-.quick__vacio,
-.quick__mas {
-  margin: 6px 0 0;
-  padding: 0 8px;
-  font-size: var(--text-meta);
+/* La fila del panel sin lo que aquí no se hace —ni detalle, ni arrastre, ni `⋯`— y alineada con
+   el campo de arriba: el centro de la casilla cae bajo el de la marca del campo y el título
+   arranca en la misma columna que lo que se escribe. Leídas así, la lista y el campo son la
+   misma cosa en dos tiempos. */
+.quick__tarea {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--quick-row);
+  padding: 0 10px 0 10px;
+  border-radius: var(--row-radius);
+}
+
+.quick__tarea:hover {
+  background: var(--layer-hover);
+}
+
+.quick__tarea.is-active {
+  background: var(--layer-selected);
+}
+
+.quick__tarea .checkbox {
+  margin-top: 0;
+}
+
+.quick__tarea-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 0;
+}
+
+.quick__tarea-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Completar, igual que en el panel (spec 3.6): se tacha, baja al 45% y a los tres segundos se
+   va. La fecha deja de estar vencida, porque ya no hay nada que hacer con ella. */
+.quick__tarea.is-completed {
+  opacity: 0.45;
+}
+
+.quick__tarea.is-completed .task-row__title::after {
+  clip-path: inset(0 0 0 0);
+}
+
+.quick__tarea.is-completed .due-chip {
+  color: var(--ink-tertiary);
+}
+
+/* La que se acaba de escribir con ⌘⏎ entra abriendo su hueco, que es el mismo gesto que el de
+   salir al revés. Sin esto aparecía de golpe y empujaba las de abajo un renglón. */
+@keyframes quick-row-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.quick__item.is-new {
+  animation: quick-row-in 200ms ease-out;
+}
+
+.quick__item.is-new > * {
+  overflow: hidden;
+}
+
+.quick__vacio {
+  margin: 0;
+  padding: 6px 2px 2px;
+  font-size: var(--text-title);
   color: var(--ink-tertiary);
 }
 
@@ -216,22 +322,31 @@
   color: var(--ink-primary);
 }
 
-/* La entrada. Solo el contenido: el vidrio lo pinta el sistema al mostrar la ventana y no hay
-   forma de acompañarlo desde CSS, así que lo que se anima es lo que se puede — y 110 ms es
-   corto de sobra para que no se lea como que el texto llega tarde. */
-@keyframes quick-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
+/* Sin animación de entrada propia: la ventana entera aparece con el fundido de AppKit
+   (`fundido.rs`), vidrio incluido, y un segundo movimiento del contenido encima de ese se leía
+   como que el texto llegaba tarde a su propia ventana. */
+
+@media (prefers-reduced-motion: reduce) {
+  .quick__item.is-new {
+    animation: none;
   }
 }
 
-.quick {
-  animation: quick-in 110ms ease-out;
+/* Una veladura sobre el vidrio, solo en esta ventana. El panel cuelga de la barra y tiene casi
+   siempre el escritorio detrás; esta se abre en medio de la pantalla, encima de lo que se esté
+   haciendo —un editor, una página llena de texto— y el vidrio de Tahoe, que es casi claro,
+   dejaba leer lo de detrás a través de la lista. Es lo mismo que hace Spotlight: más materia
+   donde hay que leer renglones. Sigue siendo una capa con alfa y no un panel opaco (spec 3.2),
+   y con transparencia reducida manda el sólido de `base.css`. */
+@media (prefers-reduced-transparency: no-preference) {
+  :root[data-glass="liquid"] #root {
+    background: rgb(255 255 255 / 20%);
+    border-radius: var(--panel-radius, 26px);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .quick {
-    animation: none;
+@media (prefers-reduced-transparency: no-preference) and (prefers-color-scheme: dark) {
+  :root[data-glass="liquid"] #root {
+    background: rgb(22 22 24 / 26%);
   }
 }

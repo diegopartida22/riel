@@ -136,6 +136,7 @@ en `:root` y sobreescríbelos en `@media (prefers-color-scheme: dark)`.
 --ink-accent             #3A3A3C              #E8E8EA
 --layer-hover            #000000 ／ 5%        #FFFFFF ／ 7%
 --layer-selected         #000000 ／ 9%        #FFFFFF ／ 12%
+--layer-pressed          #000000 ／ 13%       #FFFFFF ／ 17%
 --hairline               #000000 ／ 10%       #FFFFFF ／ 12%
 --field-bg               #FFFFFF ／ 55%       #000000 ／ 22%
 --danger                 #C4483C              #E8695C
@@ -380,6 +381,38 @@ La regla, entera, para que esto no crezca hacia un panel de gráficas:
   qué archivo importar— el panel no se oculta aunque pierda el foco. Una ventana del sistema se
   lo lleva por definición, y sin la excepción el panel se cerraría por debajo justo mientras se
   contesta lo que él mismo preguntó.
+
+### Cómo entra y cómo sale
+
+Un panel que aparece de un fotograma al siguiente se lee como uno que se enciende, y uno que se
+apaga de golpe como uno que se ha caído. Ningún popover de la barra hace eso. Las reglas:
+
+- **Las ventanas entran y salen con un fundido de AppKit**, 120 ms de entrada y 160 de salida
+  —aparecer es inmediato porque alguien lo espera; desaparecer puede tomarse su tiempo—, sobre
+  el `alphaValue` de la ventana entera. No en CSS: el vidrio lo pinta el sistema por debajo de
+  la página, y un fundido del webview dejaría el material entero en pantalla con el texto
+  llegando detrás. Lo lleva `fundido.rs`, y se puede interrumpir: volver a abrir a media salida
+  arranca la entrada desde la opacidad en la que iba, y la salida a medias ya no esconde nada.
+  Abierta «de intención» no es lo mismo que visible, y un clic en el icono a media salida es
+  una apertura, no un segundo cierre.
+- **Es opacidad y no movimiento**, así que «Reducir movimiento» no lo apaga: un fundido es lo
+  que macOS deja cuando esa casilla está puesta (criterio 7).
+- **El área de contenido funde al cambiar de capa** —de vista, a un proyecto, a una hoja—, 140
+  ms de opacidad. Sin desplazamiento: las vistas son hermanas y no hay un «adentro» hacia el
+  que deslizarse.
+- **Lo que llega a una lista entra con un fundido**, y solo lo que llega después de cargarla.
+  Pintar la lista entera entrando cada vez que se abre una vista es movimiento porque sí; una
+  fila nueva entrando dice qué cambió.
+- **Los menús y el popover de Ajustes llevan su material**: fondo con alfa y
+  `backdrop-filter` encima del vidrio, que es el único nivel de blur que se permite (arriba).
+  El popover crece desde el `⚙︎` —escala de 0.96 a 1 y opacidad, 150 ms, con el origen en la
+  esquina del botón— porque sale de ahí; los menús solo funden, porque salen del puntero. Con
+  «Reducir transparencia» los dos caen a `--menu-solid`, y con «Reducir movimiento» el popover
+  solo funde.
+- **Pulsar se ve al bajar el botón y no al soltarlo.** Lo que se pulsa toma `--layer-pressed`,
+  un tono más que el hover, mientras está abajo; la casilla además se encoge un 12%. Es la
+  respuesta que tiene cualquier control de AppKit, y sin ella un clic no se nota hasta que su
+  efecto llega.
 
 ### Icono de la barra
 
@@ -1345,7 +1378,9 @@ todavía no lleva.
 ## 18. La captura rápida
 
 Añadida después de la v1. Es la segunda ventana de la app y la única que se abre sin tocar la
-barra de menú: un atajo global la pone en medio de la pantalla, se escribe una tarea y se va.
+barra de menú: un atajo global la pone en medio de la pantalla, se escribe una tarea y se va. Y
+debajo del campo, siempre, lo que hay pendiente (§18.5): apuntar sin ver la lista era apuntar a
+ciegas.
 
 Existe por lo mismo que el esquema `riel://` (§14) y donde aquel no llega. El enlace resuelve
 el caso de la otra app que ya sabe qué apuntar —un atajo, un lanzador, la hoja de compartir—
@@ -1391,15 +1426,18 @@ Reglas:
 - El menú vive **dentro** de la superficie, que crece para hacerle sitio. No es un popover
   encima: lo que flota sobre el vidrio lleva su material, y un segundo material sobre el
   primero es el segundo nivel de blur que §4 prohíbe. Una hairline lo separa del campo y ya.
+- **Abierto, ocupa el sitio de la lista**, no se apila debajo de ella. Mientras se elige un
+  comando la pregunta es qué poner, no qué hay; y dos listas recorribles una encima de otra
+  dejarían sin saber a cuál van las flechas. Al cerrarse, la lista vuelve donde estaba.
 
 ### 18.2 La ventana
 
 620 × lo que mida su contenido, centrada a lo ancho de la pantalla donde está el puntero y
 anclada al 30% de lo que sobra a lo alto.
 
-- **620 y no los 440 del panel.** Aquí no hay riel ni lista: hay un renglón que se lee de una
-  pasada, y eso quiere ancho. Es también lo que hace que los chips del parser quepan en una
-  sola fila.
+- **620 y no los 440 del panel.** Aquí no hay riel: hay un renglón que se lee de una pasada y
+  una lista sin columna de proyectos al lado, y las dos cosas quieren ancho. Es también lo que
+  hace que los chips del parser quepan en una sola fila.
 - **El 30% y no la mitad.** Es lo que hacen Spotlight y cualquier alerta del sistema, y por lo
   mismo: una superficie centrada de verdad se lee como baja, porque el ojo pone el centro
   óptico por encima del geométrico. Deja además sitio por debajo para que los chips y el menú
@@ -1409,9 +1447,18 @@ anclada al 30% de lo que sobra a lo alto.
   mirando es donde está el ratón.
 - **El alto lo decide el contenido y la ventana lo sigue.** Sin eso habría que elegir entre un
   alto fijo con vidrio vacío debajo del campo o uno que recorta el menú, y las dos se ven mal
-  de la misma forma. Cada apertura vuelve al alto de arranque aunque la anterior hubiera
-  crecido, así que el borde de arriba cae siempre en la misma fila de la pantalla y lo que
-  crece, crece hacia abajo.
+  de la misma forma. **El techo no lo decide el alto**: se calcula contra un alto de referencia
+  fijo (`ANCLA`, 300) y no contra el de la ventana, que cambia con lo pendiente. Si dependiera
+  de él, una lista de dos tareas y una de ocho abrirían el campo en filas distintas de la
+  pantalla; así el borde de arriba cae siempre en el mismo sitio y lo que crece, crece hacia
+  abajo.
+- **Con el vidrio nuevo lleva una veladura**, un 20% de blanco en claro y un 26% de casi negro
+  en oscuro, de borde a borde y con el arco de la ventana. `NSGlassEffectView` es más claro que
+  el `Popover` heredado —deja pasar mucho más de lo que hay detrás— y en el panel eso no se nota
+  porque cuelga sobre la barra, pero en medio de la pantalla tiene debajo la ventana que se
+  estaba usando, con su texto, y una lista encima de otro texto no se lee. Sigue siendo una
+  capa con alfa sobre el material (§3.2) y no un fondo opaco; con «Reducir transparencia» la
+  tapa el sólido de §3.9 como a todo lo demás.
 - **Es el mismo `RielPanel` que el panel de la barra**, con su vidrio y su excepción de foco:
   se le pide lo mismo —aparecer sobre lo que haya delante, incluida una app en pantalla
   completa, y llevarse el teclado. Lo único que cambia es dónde se coloca y con qué arco: 26
@@ -1470,42 +1517,72 @@ Lo mismo que en el pie del panel, salvo lo que de verdad cambia:
 ⏎        agregar y cerrar
 ⌘⏎       agregar y seguir aquí
 ⇧⏎       renglón nuevo, dentro de las notas
-␣        con el campo vacío, ver Hoy — y ocultarlo
-Esc      cerrar lo abierto, luego limpiar, luego cerrar la ventana
+⇥  ⇧⇥    siguiente lista / la anterior
+⌘1..3    Hoy / Próximas / Todas
+↑ ↓      con el campo vacío, señalar una tarea
+␣        con el campo vacío, completar la señalada — o desmarcarla
+⌘O       abrir el panel en la lista que se está mirando
+Esc      cerrar el menú, soltar la señalada, limpiar, cerrar la ventana
 ```
 
 ⏎ cierra porque quien la abrió estaba escribiendo en otra app y quiere volver; ⌘⏎ es lo que
 deja apuntar tres cosas seguidas sin volver a pulsar el atajo. La escalera de Escape es la del
-panel (§4) con dos peldaños más arriba: el menú y la lista.
+panel (§4) con dos peldaños más arriba: el menú y la fila señalada.
 
-**El espacio, y solo con el campo vacío.** Ahí no escribe nada —un título se recorta antes de
-guardarse— así que la tecla está libre, y es la más grande del teclado. Con algo escrito vuelve
-a ser un espacio, que es lo que tiene que ser.
+**⇥ cambia de lista** y no mueve el foco. En un campo de una línea no hay a dónde más llevarlo
+—lo único que hay detrás son las pestañas— y llegar hasta ellas para pulsarlas es más viaje que
+cambiar de lista directamente. ⌘1..3 es la misma numeración que ⌘1..4 en el panel (§5), con las
+tres primeras.
 
-### 18.5 Hoy, sin salir de aquí
+**Las flechas y el espacio, y solo con el campo vacío.** Ahí el espacio no escribe nada —un
+título se recorta antes de guardarse— así que la tecla está libre, y es la de la casilla en
+todas las listas del sistema. Con algo escrito las flechas vuelven a ser del campo y el espacio
+vuelve a ser un espacio, que es lo que tiene que ser: lo que se está haciendo es escribir.
 
-El espacio con el campo vacío abre debajo lo que enseña la vista Hoy del panel: lo vencido y lo
-de hoy, pendiente y sin subtareas, hasta seis filas y el resto contado.
+### 18.5 Lo pendiente, siempre debajo
 
-Existe porque la ventana se abre para escribir lo que se acaba de recordar, y lo primero que se
-quiere saber antes de apuntarlo es si ya estaba. Ir a mirarlo cuesta subir a la barra, abrir el
-panel y volver — que es exactamente el viaje que esta ventana existe para ahorrar.
+Debajo del campo está la lista, sin pedirla: tres pestañas —Hoy, Próximas, Todas— con su conteo,
+y las tareas de la elegida. Hoy es lo vencido y lo de hoy; Próximas, lo que tiene fecha más
+adelante, por fecha; Todas, todo lo pendiente. Siempre raíces, nunca subtareas.
+
+Lo que había antes era Hoy detrás del espacio, seis filas de solo lectura que escribir cerraba.
+Era la respuesta correcta a una pregunta demasiado pequeña. La ventana se abre para apuntar lo
+que se acaba de recordar, y lo primero que se quiere saber antes de apuntarlo es si ya estaba,
+y dónde: «¿ya lo tenía para el viernes?» es una pregunta de Próximas, y «¿lo apunté alguna vez?»
+una de Todas. Escondida detrás de una tecla que nadie sabía que existía, la lista no la
+encontraba nadie; y sin poder completar desde ahí, verla era ver trabajo hecho que seguía
+pendiente sin poder quitarlo — que es justo lo que hace que se deje de mirar una lista.
 
 Reglas:
 
-- **No es una fila de tarea y no lo finge**, por lo mismo que un evento de la agenda (§15): sin
-  casilla, sin manija de arrastre y sin `⋯`. Desde aquí una tarea no se completa ni se reordena.
-  Lo único que hace es estar.
-- **Seis, y lo que sobre se dice contado.** Lo que se contesta aquí es «¿qué tengo hoy?», que se
-  lee de un vistazo; la lista entera sería el panel abierto en medio de la pantalla, que es lo
-  que el icono de la barra ya hace.
-- **Se lee al pedirla, no al abrirse la ventana.** El alto de arranque es el del campo con su
-  renglón de pistas, y traer la lista siempre pondría medio panel delante de quien solo venía a
-  apuntar una cosa.
-- **Escribir la cierra.** Escribir es lo contrario de mirar, y los chips del parser necesitan el
-  sitio.
-- Sin nada para hoy dice «Nada para hoy.», sin el botón que lleva el mismo estado en el panel
-  (§3.7): el campo donde se agrega está justo encima.
+- **Se ve sin pedirla, y mientras se escribe también.** Escribir no es lo contrario de mirar:
+  es mirando cuando se descubre que lo que se iba a apuntar ya estaba. Los chips del parser
+  caben encima, y la ventana crece para ellos.
+- **Las pestañas son un segmentado**, la misma pista con el elegido levantado de Ajustes (§8).
+  El conteo va al lado del nombre en la fuente de datos, y una pestaña vacía no enseña un cero.
+  Al cerrarse la ventana vuelve a Hoy: es lo que se mira casi siempre, y una ventana que abre
+  donde quedó hace tres días abre en un azar.
+- **Es una fila de tarea, en pequeño**: casilla, título, punto de proyecto, `↻`, prioridad y
+  fecha, con los mismos colores y la misma gramática que en el panel (§3.5). Sin manija ni `⋯`:
+  desde aquí no se reordena ni se edita, y una fila que promete gestos que no tiene engaña.
+- **Completar es completar**, con todo lo de §3.6: la casilla se llena, el título se tacha, la
+  fila espera sus 3 segundos —en los que otro clic lo deshace todo, regla recurrente incluida
+  (§12)— y luego se va. Con el ratón o con ␣ sobre la señalada. Es el gesto que justifica tener
+  la lista aquí: ver lo que ya se hizo y no poder quitarlo es ruido.
+- **Ocho filas, y luego se desplaza.** Ocho es lo que cabe sin que la ventana llegue a la mitad
+  de la pantalla; el resto se alcanza con la rueda o con las flechas, que llevan la señalada a
+  la vista.
+- **La señalada es del teclado, no del ratón.** El hover pinta su veladura como en cualquier
+  lista, pero solo ↑↓ deciden a qué fila va el espacio. Si el puntero también señalara, el
+  espacio completaría lo que quedó debajo del ratón por casualidad.
+- **«Abrir en el panel» y ⌘O** llevan a la misma lista en el panel, para todo lo que aquí no se
+  hace: editar, mover, arrastrar. Cierran esta ventana: son dos sitios para la misma lista y
+  verlos a la vez no sirve de nada.
+- **⌘⏎ enseña dónde cayó la que se acaba de escribir.** Si la tarea nueva es de mañana, la lista
+  se va a Próximas y la fila entra con un fundido. Sin eso, escribir tres seguidas y no verlas
+  aparecer en ninguna parte es preguntarse si se guardaron.
+- **Los estados vacíos son los de §3.7**, sin el botón: el campo donde se agrega está justo
+  encima.
 
 ### 18.6 Lo que no hereda, y lo que no pide
 
@@ -1516,9 +1593,11 @@ Reglas:
 - **El permiso de avisos no se pide desde aquí**, aunque la tarea traiga hora, exactamente por
   lo que dice §14: el diálogo del sistema saldría sin panel delante y sin que nadie lo haya
   provocado. Se pedirá la próxima vez que se ponga una hora a mano.
-- **La tarea creada se le dice al panel por un evento**, no se espera a que alguien lo abra. El
-  panel sigue vivo con la ventana escondida, así que se entera en el momento: es lo que hace
-  que la tarea ya esté ahí y ya programada si trae hora.
+- **Lo que cambia aquí se le dice al panel por un evento**, no se espera a que alguien lo abra:
+  la tarea creada, y también la completada y la desmarcada. El panel sigue vivo con la ventana
+  escondida, así que se entera en el momento: es lo que hace que la tarea ya esté ahí y ya
+  programada si trae hora, y que una completada aquí no siga sonando a su hora. Completar
+  además empuja la casilla a Recordatorios (§16), igual que en el panel.
 - **Y el texto que no se pudo guardar no se borra.** Vaciar el campo antes de que conteste la
   base se siente más rápido, pero si la escritura falla se lleva por delante lo que la persona
   escribió.

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { Between, Priority, Project, Task, TaskPatch, TaskTree } from "../data";
 import { tint } from "../design/palette";
@@ -113,6 +113,12 @@ export function TaskList({
             },
       ),
     [tasks, undoing],
+  );
+
+  const entering = useEntradas(
+    visible.map((task) => task.id),
+    loading,
+    viewKey(view),
   );
 
   /**
@@ -275,6 +281,7 @@ export function TaskList({
         subtasks={task.subtasks}
         today={today}
         leaving={leaving}
+        entering={entering.has(task.id)}
         offset={drag.offsetOf(task.id)}
         flying={drag.dragging === task.id}
         onGrab={sortable ? (event) => drag.grab(event, task.id) : undefined}
@@ -401,4 +408,48 @@ export function TaskList({
       )}
     </div>
   );
+}
+
+/**
+ * Las filas que acaban de aparecer en una lista que ya estaba pintada: la que se escribe en el
+ * pie, la que vuelve con ⌘Z, la vuelta siguiente de una recurrente. Entran con un fundido en vez
+ * de estar de golpe, que es lo que hace una tabla del sistema al insertar un renglón.
+ *
+ * Solo lo que llega **después** de la primera lectura de la vista: al abrirla la lista entera
+ * es nueva, y que entrara fila a fila sería una animación de carga, no de inserción. Por eso se
+ * olvida todo mientras se lee y se vuelve a sembrar con lo que haya al terminar.
+ *
+ * En `useLayoutEffect` para que la clase esté puesta antes del primer fotograma de la fila: con
+ * un efecto normal se vería entera un instante y luego desaparecería para entrar.
+ */
+function useEntradas(ids: string[], loading: boolean, clave: string): ReadonlySet<string> {
+  const vistas = useRef<{ clave: string; ids: Set<string> } | null>(null);
+  const [nuevas, setNuevas] = useState<ReadonlySet<string>>(() => new Set());
+  const firma = ids.join("|");
+
+  useLayoutEffect(() => {
+    if (loading) {
+      vistas.current = null;
+      return;
+    }
+    const antes = vistas.current;
+    const actuales = firma ? firma.split("|") : [];
+    if (!antes || antes.clave !== clave) {
+      vistas.current = { clave, ids: new Set(actuales) };
+      return;
+    }
+    const llegadas = actuales.filter((id) => !antes.ids.has(id));
+    for (const id of actuales) antes.ids.add(id);
+    if (llegadas.length) setNuevas(new Set(llegadas));
+  }, [firma, loading, clave]);
+
+  // La clase se quita en cuanto termina el fundido: si se quedara puesta, una fila que sale y
+  // vuelve a entrar con el mismo id no lo repetiría.
+  useEffect(() => {
+    if (!nuevas.size) return;
+    const timer = window.setTimeout(() => setNuevas(new Set()), 240);
+    return () => window.clearTimeout(timer);
+  }, [nuevas]);
+
+  return nuevas;
 }

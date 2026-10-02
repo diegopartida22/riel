@@ -26,20 +26,30 @@ pub const LABEL: &str = "captura";
 /// chips más largos del parser sin doblar a una segunda fila.
 pub const WIDTH: f64 = 620.0;
 
-/// Alto de arranque, en puntos: el campo y su renglón de pistas, sin chips y sin menú.
-///
-/// Cada apertura vuelve a este alto aunque la anterior hubiera crecido, y por eso el borde de
-/// arriba cae siempre en la misma fila de la pantalla. Lo que crece, crece hacia abajo.
-///
-/// Es también el suelo del ajuste de abajo, así que tiene que ser el alto **medido** del
-/// contenido en reposo y no uno holgado: de más, la ventana se abre con una banda de vidrio
-/// vacío bajo el renglón de pistas y no hay forma de que encoja; de menos, se abre corta y da
-/// un salto en el primer pintado. Medido con el `ResizeObserver` de `QuickCapture`.
-const HEIGHT: f64 = 108.0;
+/// Alto de la primera apertura, en puntos: el campo, la lista de Hoy con tres o cuatro filas y
+/// el renglón de pistas. Solo vale una vez —la ventana se construye la primera vez que se pide y
+/// a partir de ahí se queda—, así que no tiene que acertar: tiene que caer cerca para que el
+/// primer pintado no dé un salto largo.
+const HEIGHT: f64 = 300.0;
 
-/// Tope de crecimiento, en puntos. Es lo que mide el menú de comandos con sus grupos abiertos
-/// más el campo y las pistas; de ahí en adelante la lista hace su propio scroll.
-const MAX_HEIGHT: f64 = 505.0;
+/// El suelo del ajuste de abajo: el campo, una lista vacía con su «Nada para hoy.» y las pistas.
+/// Por debajo de esto no hay contenido que medir, así que un alto menor solo puede venir de un
+/// pintado a medias.
+const MIN_HEIGHT: f64 = 150.0;
+
+/// Tope de crecimiento, en puntos. El campo con notas y chips, la lista con sus ocho filas y las
+/// pistas; de ahí en adelante la lista hace su propio scroll.
+const MAX_HEIGHT: f64 = 560.0;
+
+/// El alto con el que se calcula dónde cae el borde de arriba, sea cual sea el que tenga la
+/// ventana al abrirse.
+///
+/// La ventana ya no vuelve a un alto fijo en cada apertura: lleva la lista dentro, y la lista
+/// mide lo que haya pendiente. Si el borde de arriba se calculara con el alto de cada vez, una
+/// semana con seis tareas y otra con dos abrirían el campo en dos filas distintas de la pantalla,
+/// y el campo es lo único que el ojo va a buscar al pulsar el atajo. Así que el techo se calcula
+/// siempre con este, y lo que mida de más o de menos crece o encoge hacia abajo.
+const ANCLA: f64 = 300.0;
 
 /// Dónde cae el borde superior dentro del área de trabajo, como fracción del hueco que sobra.
 ///
@@ -79,16 +89,16 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     // teclado cuando esta ventana se vaya (spec 18.2).
     crate::panel::remember_frontmost();
 
-    // Antes de colocar: el alto decide dónde cae el borde de arriba, y una apertura no puede
-    // heredar el alto al que la dejó crecer la anterior.
-    let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
+    // Sin tocar el alto: es el que dejó la apertura anterior, y la página ya se volvió a medir
+    // al cerrarse (ver `hide`), así que con la lista de siempre es el bueno. El borde de arriba
+    // no depende de él (ver `ANCLA`).
     position(&window);
 
     // Entre colocar y mostrar, por lo mismo que en el panel: el vidrio nuevo necesita saber
     // sobre qué pantalla va a dibujar.
     crate::glass::ensure(&window, crate::glass::material(app).capture_radius());
 
-    let _ = window.show();
+    crate::fundido::mostrar(&window);
     // Y esto activa la app, que es lo que hace que las teclas lleguen aquí y no a lo que
     // hubiera delante. De ahí que el apunte de arriba tenga que ir antes.
     let _ = window.set_focus();
@@ -102,12 +112,50 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 pub fn hide<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window(LABEL) {
-        let _ = window.hide();
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    // Dos veces seguidas pasa —cerrar con Escape le devuelve el teclado a la app de antes, y
+    // eso le quita el foco a esta, que es el otro camino por el que se cierra— y la segunda no
+    // tiene nada que hacer.
+    if !crate::fundido::abierta(&window) {
+        return;
     }
+    crate::fundido::ocultar(&window);
     // El teclado vuelve donde estaba. No hace nada si la ventana se cerró justamente porque el
     // usuario se fue a otra app: ahí el foco ya está donde tiene que estar.
     crate::panel::give_focus_back();
+    // Que se cerró, para que la página vuelva a empezar ya y no al abrirse otra vez: así se
+    // vuelve a medir con la ventana escondida, y la próxima apertura sale con su alto bueno en
+    // vez de dar el salto en el primer fotograma.
+    let _ = window.emit("riel://captura-cerrada", ());
+}
+
+/// Cierra la captura y abre el panel en una vista. Es el «ver todo» de la lista de la captura:
+/// ahí se ven seis u ocho filas, y lo que no cabe está en el panel.
+///
+/// La vista llega del webview y se comprueba contra una lista cerrada antes de convertirla en
+/// enlace, por lo mismo que los editores de la spec 13: lo que no está en la lista no existe.
+pub fn to_panel<R: Runtime>(app: &AppHandle<R>, vista: &str) {
+    if !matches!(vista, "hoy" | "proximas" | "todas") {
+        return;
+    }
+    let Some(window) = app.get_webview_window(LABEL) else {
+        return;
+    };
+
+    // Sin devolver el teclado: se lo queda el panel, que es lo que se acaba de pedir. Lo que
+    // quedara apuntado de la apertura se olvida, o al cerrar el panel más tarde no habría quién
+    // lo reclamara y la próxima captura lo devolvería a una app que ya nadie estaba usando.
+    crate::panel::forget_frontmost();
+    crate::fundido::ocultar(&window);
+    let _ = window.emit("riel://captura-cerrada", ());
+
+    // Por el mismo camino que un `riel://` llegado de fuera (spec 14): es el que ya sabe abrir el
+    // panel y llevarlo a una vista, y un segundo camino para lo mismo sería otro que mantener.
+    if let Ok(url) = url::Url::parse(&format!("riel://{vista}")) {
+        crate::deeplink::received(app, vec![url]);
+    }
 }
 
 /// Ajusta el alto al del contenido. Lo pide el webview cuando aparecen o se van los chips y
@@ -117,7 +165,7 @@ pub fn set_height<R: Runtime>(app: &AppHandle<R>, height: f64) {
         return;
     };
 
-    let height = height.clamp(HEIGHT, MAX_HEIGHT).round();
+    let height = height.clamp(MIN_HEIGHT, MAX_HEIGHT).round();
     let _ = window.set_size(tauri::LogicalSize::new(WIDTH, height));
     // El alfa del contenido cambió de forma, y macOS cachea la sombra que derivó del anterior.
     crate::glass::refresh_shadow(&window);
@@ -152,9 +200,9 @@ fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<R>> {
 /// que tirar — el atajo puede pulsarse mirando cualquiera de las dos pantallas, y la que se
 /// está mirando es donde está el ratón.
 ///
-/// El alto va por parámetro porque `set_size` acaba de pedirse: ver [`crate::pantalla::centered`].
+/// El techo se calcula con [`ANCLA`] y no con el alto de la ventana, que cambia con la lista.
 fn position<R: Runtime>(window: &WebviewWindow<R>) {
-    crate::pantalla::centered(window, (WIDTH, HEIGHT), TOP_FRACTION);
+    crate::pantalla::centered(window, WIDTH, ANCLA, TOP_FRACTION);
 }
 
 /// El atajo que está registrado ahora mismo, que es el único que no cuenta como ocupado al

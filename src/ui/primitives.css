@@ -115,6 +115,19 @@
   overflow: hidden;
 }
 
+/* La fila que llega a una lista ya pintada (ver `useEntradas`). Opacidad y no alto: abrir su
+   hueco empujaría las de abajo, y en el ⌘⏎ el hueco ya lo tenía el campo de la fila fantasma
+   que esta sustituye — crecer desde cero ahí era un salto hacia atrás y otro hacia delante. */
+@keyframes row-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.task-row.is-entering > .task-row__clip {
+  animation: row-in 200ms ease-out;
+}
+
 /* La opacidad va sobre `__main` y no sobre la fila entera: una padre completada arrastra a
    sus subtareas en los datos, pero cada renglón tiene que reflejar su propio estado — si no,
    una subtarea sin completar se vería tachada solo por colgar de una que sí lo está. */
@@ -697,6 +710,46 @@
   border-radius: 3px;
 }
 
+/* ── Pulsar ──────────────────────────────────────────────────────────────────────────── */
+
+/* Todo lo que se pulsa se oscurece al bajar el botón, no al soltarlo. Es la diferencia entre un
+   control que responde y uno que se entera después: en macOS un botón ya está hundido mientras
+   el dedo sigue en el trackpad, y una app que solo cambia en el `click` se siente medio
+   segundo por detrás de la mano. Va junto y no repartido por cada hoja porque es una sola
+   regla —«un paso más que el hover»— y repartida acabaría con un control que se la salta.
+
+   El `:root` delante es solo peso: cada hoja declara su `:hover` después de esta, y sin él el
+   hover le ganaría al pulsado por orden de aparición. */
+:root .chip:active,
+:root .due-editor__trigger:active,
+:root .due-editor__day:active,
+:root .repeat-editor__day:active:not(:disabled),
+:root .menu__item:active,
+:root .settings__atajo:active,
+:root .settings__libre:active,
+:root .settings__choice:active:not(.is-selected),
+:root .editor__link:active,
+:root .editor__unlink:active,
+:root .editor__button:active,
+:root .rail__item:active,
+:root .foot__toggle:active,
+:root .group-header__tool:active,
+:root .task-row__tool:active,
+:root .topbar__gear:active,
+:root .quick__abrir:active {
+  background: var(--layer-pressed);
+}
+
+/* La casilla se hunde un poco al pulsarla, como un botón redondo del sistema. Es la respuesta
+   en el instante del gesto; el relleno y la palomita llegan después, con el cambio guardado. */
+.checkbox svg {
+  transition: transform 100ms ease-out;
+}
+
+.checkbox:active svg {
+  transform: scale(0.88);
+}
+
 /* ── Movimiento reducido ─────────────────────────────────────────────────────────────── */
 
 /* Sin trazado, sin colapso: la casilla se llena y la fila desaparece. Criterio de
@@ -709,6 +762,7 @@
   .task-row__tools,
   .checkbox__ring,
   .checkbox__tick,
+  .checkbox svg,
   /* El arrastre en sí es manipulación directa —la fila va donde va la mano— y eso se queda.
      Lo que se apaga es lo único que aquí era animación: el deslizamiento con el que las demás
      filas le hacen sitio, que pasa a ser un salto (criterio 7). */

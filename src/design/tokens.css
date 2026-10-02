@@ -27,11 +27,22 @@
   --danger: #c4483c;
 
   /* La superficie del menú de la fila. No está en el spec y es la única excepción a la regla
-     de «todo son veladuras»: un menú flota sobre la lista, y con alfa se leerían los dos
-     textos superpuestos. macOS hace lo mismo — sus menús son un material propio, no una
-     veladura de la ventana que los abre. */
-  --menu-bg: #f7f7f8;
+     de «todo son veladuras»: un menú flota sobre la lista, y con una veladura sola se leerían
+     los dos textos superpuestos. macOS hace lo mismo — sus menús son un material propio, no
+     una veladura de la ventana que los abre.
+
+     Material y no sólido: un fondo casi opaco con su propio desenfoque (`menu.css`), que es lo
+     que lleva un menú del sistema. Lo de debajo se adivina como color y no se lee como texto,
+     y el menú deja de ser una tarjeta gris pegada encima del vidrio. Es el único nivel de blur
+     que hay (spec 4): los renglones de dentro van sin el suyo. */
+  --menu-bg: rgb(246 246 247 / 80%);
+  --menu-solid: #f7f7f8;
   --menu-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+
+  /* Lo que se pulsa, mientras se pulsa: un paso más que el elegido. La respuesta tiene que
+     llegar al bajar el botón y no al soltarlo, que es cuando un control del sistema ya se ha
+     oscurecido. */
+  --layer-pressed: rgb(0 0 0 / 13%);
 
   /* El sólido que sustituye al vidrio cuando Accesibilidad pide menos transparencia. El
      material lo pinta el sistema por debajo del webview y desde CSS no hay forma de apagarlo,
@@ -150,7 +161,9 @@
 
     --danger: #e8695c;
 
-    --menu-bg: #2c2c2e;
+    --menu-bg: rgb(42 42 44 / 78%);
+    --menu-solid: #2c2c2e;
+    --layer-pressed: rgb(255 255 255 / 17%);
     --menu-shadow: 0 8px 24px rgb(0 0 0 / 44%);
     --shadow-lift: 0 6px 16px rgb(0 0 0 / 42%);
 

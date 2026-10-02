@@ -15,7 +15,54 @@
   border: 0.5px solid var(--hairline);
   border-radius: var(--menu-radius);
   background: var(--menu-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  backdrop-filter: blur(24px) saturate(1.8);
   box-shadow: var(--menu-shadow);
+}
+
+/* Con transparencia reducida, el sólido de siempre y ni rastro del desenfoque (criterio 10). */
+@media (prefers-reduced-transparency: reduce) {
+  .menu,
+  .hashes {
+    background: var(--menu-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Cómo aparece. Un menú del sistema no se desliza ni crece: está, con un fundido tan corto que
+   solo se nota cuando falta. El popover de Ajustes sí sale de su botón, como un `NSPopover`,
+   y por eso crece desde la esquina del `⚙︎` y no desde su centro: lo que aparece tiene que
+   salir de donde se pidió. */
+@keyframes surface-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.menu,
+.hashes {
+  animation: surface-in 90ms ease-out;
+}
+
+.menu.settings {
+  transform-origin: top right;
+  animation: popover-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Sin movimiento, el popover también se queda en el fundido: aparecer sigue pidiendo algo que
+   no sea un corte, y la opacidad no mueve nada (criterio 7). */
+@media (prefers-reduced-motion: reduce) {
+  .menu.settings {
+    animation: surface-in 90ms ease-out;
+  }
 }
 
 .menu {
