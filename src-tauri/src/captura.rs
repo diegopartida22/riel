@@ -65,12 +65,14 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
     // Construir una ventana y tocar `NSWindow` es cosa del hilo principal, y el atajo global
     // no promete llegar por él.
     let _ = app.run_on_main_thread(move || {
-        let visible = handle
+        // Abierta de intención y no `is_visible`: durante el fundido de salida la ventana sigue
+        // en pantalla, y preguntarle a ella convertiría el atajo a media salida en un segundo
+        // cierre en vez de en una apertura (ver `fundido`).
+        let abierta = handle
             .get_webview_window(LABEL)
-            .and_then(|window| window.is_visible().ok())
-            .unwrap_or(false);
+            .is_some_and(|window| crate::fundido::abierta(&window));
 
-        if visible {
+        if abierta {
             hide(&handle);
         } else if let Err(error) = show(&handle) {
             eprintln!("[riel] no se pudo abrir la captura rápida: {error}");
@@ -239,10 +241,9 @@ pub fn set_shortcut<R: Runtime>(app: &AppHandle<R>, accel: Option<&str>) -> Resu
         return Ok(());
     }
 
-    if let Some(anterior) = puesto.take() {
-        let _ = manager.unregister(anterior);
-    }
-
+    // El nuevo primero y el anterior después: si el nuevo ya lo tiene otra app, el anterior
+    // tiene que seguir puesto (spec 18.7). Soltarlo antes dejaba la máquina sin atajo y el
+    // panel diciendo que seguía el de antes.
     if let Some(atajo) = pedido {
         let handle = app.clone();
         manager
@@ -257,7 +258,10 @@ pub fn set_shortcut<R: Runtime>(app: &AppHandle<R>, accel: Option<&str>) -> Resu
         if cfg!(debug_assertions) {
             eprintln!("[riel] atajo de captura: {}", accel.unwrap_or_default());
         }
-        *puesto = Some(atajo);
+    }
+
+    if let Some(anterior) = std::mem::replace(&mut *puesto, pedido) {
+        let _ = manager.unregister(anterior);
     }
 
     Ok(())

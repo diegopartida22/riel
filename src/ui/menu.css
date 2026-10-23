@@ -140,6 +140,20 @@
   background: var(--hairline);
 }
 
+/* «Para cuándo» en el menú de la fila: el segmentado de Ajustes estirado al ancho del menú, con
+   las cuatro opciones repartidas a partes iguales. A la medida de la meta y no del renglón: son
+   cuatro palabras en el ancho de uno, y a 13px «Sin fecha» no cabía sin ensanchar el menú. */
+.menu__fechas {
+  margin: 2px 2px;
+}
+
+.menu__fechas .settings__choice {
+  flex: 1 1 auto;
+  padding: 0 6px;
+  font-size: var(--text-meta);
+  white-space: nowrap;
+}
+
 /* El título de la tarea que se va a eliminar, para que la confirmación diga cuál. */
 .menu__note {
   margin: 2px 8px 4px var(--indent);

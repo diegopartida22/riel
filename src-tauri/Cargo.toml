@@ -139,3 +139,20 @@ objc2-event-kit = { version = "0.3", default-features = false, features = [
   "EKTypes",
 ] }
 block2 = "0.6"
+
+# Un binario más pequeño es menos que cargar al arrancar con la sesión y menos memoria residente
+# con el panel cerrado (criterio 12). Lo que cuesta es compilar más despacio la release, que se
+# corta de vez en cuando; el modo de desarrollo no lo paga.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+# Sin `panic = "abort"` a propósito: los comandos corren en hilos del runtime asíncrono, y un
+# pánico en uno de ellos hoy se lleva esa llamada y nada más. Con abort se llevaría la app.
+
+# Las macros procedurales se compilan con este perfil y se cargan como bibliotecas dinámicas
+# dentro de `rustc`. Despojadas de símbolos dejan de encontrarse —«can't find crate for
+# `time_macros`»—, así que el `strip` es solo para lo que se empaqueta.
+[profile.release.build-override]
+strip = false

@@ -35,9 +35,36 @@ const ENTRADA: f64 = 0.12;
 /// puede tomarse su tiempo porque nadie espera nada de ello.
 const SALIDA: f64 = 0.16;
 
-/// El número del último gesto. Una salida solo esconde la ventana si al terminar sigue siendo
-/// el último: si en medio se volvió a abrir, ese número ya cambió.
+/// De dónde sale el número de cada gesto. Uno solo para toda la app, así que dos gestos nunca
+/// comparten número.
 static GESTO: AtomicU64 = AtomicU64::new(0);
+
+/// El número del último gesto **de cada ventana**. Una salida solo esconde la ventana si al
+/// terminar sigue siendo el último de esa ventana: si en medio se volvió a abrir, ya cambió.
+///
+/// Por ventana y no uno global, que es lo que había y lo que dejaba la captura colgada: cerrarla
+/// con ⌘O abre el panel en el acto, el gesto del panel cambiaba el número a media salida, la
+/// salida de la captura creía que la habían vuelto a abrir y no la escondía. Se quedaba en
+/// pantalla con opacidad cero —invisible pero «visible» para AppKit— y el atajo, que preguntaba
+/// eso, la «cerraba» en cada pulsación sin abrirla nunca.
+static ULTIMOS: Mutex<Vec<(String, u64)>> = Mutex::new(Vec::new());
+
+/// Un gesto nuevo para la ventana, que pasa a ser su último.
+fn gesto_nuevo(label: &str) -> u64 {
+    let gesto = GESTO.fetch_add(1, Ordering::SeqCst) + 1;
+    if let Ok(mut ultimos) = ULTIMOS.lock() {
+        ultimos.retain(|(each, _)| each != label);
+        ultimos.push((label.to_string(), gesto));
+    }
+    gesto
+}
+
+fn es_el_ultimo(label: &str, gesto: u64) -> bool {
+    ULTIMOS
+        .lock()
+        .map(|ultimos| ultimos.iter().any(|(each, ultimo)| each == label && *ultimo == gesto))
+        .unwrap_or(true)
+}
 
 /// Qué ventanas están abiertas **de intención**, que no es lo mismo que visibles.
 ///
@@ -70,7 +97,7 @@ pub fn abierta<R: Runtime>(window: &WebviewWindow<R>) -> bool {
 pub fn mostrar<R: Runtime>(window: &WebviewWindow<R>) {
     apuntar(window.label(), true);
     // Que cualquier salida que esté a medias se entere de que ya no es la última orden.
-    GESTO.fetch_add(1, Ordering::SeqCst);
+    gesto_nuevo(window.label());
 
     #[cfg(target_os = "macos")]
     if let Some(ns_window) = mac::ns_window(window) {
@@ -91,7 +118,7 @@ pub fn mostrar<R: Runtime>(window: &WebviewWindow<R>) {
 /// aunque siga viéndose unos milisegundos más.
 pub fn ocultar<R: Runtime>(window: &WebviewWindow<R>) {
     apuntar(window.label(), false);
-    let gesto = GESTO.fetch_add(1, Ordering::SeqCst) + 1;
+    let gesto = gesto_nuevo(window.label());
 
     #[cfg(target_os = "macos")]
     if let Some(ns_window) = mac::ns_window(window) {
@@ -101,7 +128,7 @@ pub fn ocultar<R: Runtime>(window: &WebviewWindow<R>) {
         let ventana = window.clone();
         mac::animar(&ns_window, 0.0, SALIDA, move || {
             // Otra orden llegó durante el fundido —volver a abrir— y es la que manda.
-            if GESTO.load(Ordering::SeqCst) != gesto {
+            if !es_el_ultimo(ventana.label(), gesto) {
                 return;
             }
             let _ = ventana.hide();

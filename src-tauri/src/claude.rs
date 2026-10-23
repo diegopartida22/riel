@@ -206,7 +206,7 @@ fn modified(path: &Path) -> Option<f64> {
     )
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Counts {
     context: u64,
     input: u64,
@@ -242,6 +242,18 @@ struct Usage {
     cache_read_input_tokens: u64,
 }
 
+/// Hasta dónde se leyó cada transcripción y lo que se llevaba sumado ahí.
+///
+/// Una transcripción solo crece por el final, y las largas pasan de ciento cincuenta megas: leerla
+/// entera cada vez que se entra al apartado o se pulsa ↻ era lo que más CPU gastaba la app entera
+/// —minutos acumulados en un par de días, por releer lo que ya se había sumado. Con esto, la
+/// segunda lectura empieza donde acabó la primera y cuesta lo que se haya escrito desde entonces.
+///
+/// Vive en memoria y no en disco: dentro de `~/.claude` no se escribe nada, y fuera de ahí sería
+/// un segundo original de algo que no es de Riel. Al salir de la app se pierde, y la primera
+/// lectura de la siguiente vuelve a pagar el barrido entero, una vez.
+static LEIDO: std::sync::Mutex<Vec<(PathBuf, u64, Counts)>> = std::sync::Mutex::new(Vec::new());
+
 /// Los tokens de una transcripción: la suma de todo lo gastado, y el contexto del último mensaje.
 ///
 /// Se lee línea a línea y no de golpe: una transcripción larga son ciento cuarenta megas, y la
@@ -252,40 +264,81 @@ struct Usage {
 /// Es también donde se decide no fiarse de `iterations`, que dentro del mismo `usage` repite los
 /// cuatro contadores: sumarlos también de ahí contaría cada mensaje dos veces.
 fn usage(path: &Path) -> Counts {
-    let Ok(file) = fs::File::open(path) else {
+    use std::io::{Seek, SeekFrom};
+
+    let Ok(mut file) = fs::File::open(path) else {
         return Counts::default();
     };
+    let len = file.metadata().map(|meta| meta.len()).unwrap_or(0);
 
-    let mut out = Counts::default();
-    for line in BufReader::new(file).lines().map_while(Result::ok) {
-        if !line.contains("\"usage\"") {
-            continue;
-        }
-        let Ok(Line {
-            message: Some(message),
-        }) = serde_json::from_str::<Line>(&line)
-        else {
-            continue;
-        };
-        let Some(usage) = message.usage else {
-            continue;
-        };
+    // Lo que ya se sabía, si el archivo no encogió. Si encogió es que es otro con el mismo nombre
+    // y se vuelve a empezar.
+    let (mut offset, mut out) = LEIDO
+        .lock()
+        .ok()
+        .and_then(|leido| {
+            leido
+                .iter()
+                .find(|(each, offset, _)| each == path && *offset <= len)
+                .map(|(_, offset, counts)| (*offset, counts.clone()))
+        })
+        .unwrap_or_default();
 
-        out.input += usage.input_tokens;
-        out.output += usage.output_tokens;
-        out.cache_write += usage.cache_creation_input_tokens;
-        out.cache_read += usage.cache_read_input_tokens;
-
-        // El contexto se pisa en cada vuelta en vez de acumularse: lo que ocupa la conversación
-        // ahora mismo es lo que entró en el último mensaje, no la suma de lo que entró en todos.
-        out.context = usage.input_tokens
-            + usage.cache_creation_input_tokens
-            + usage.cache_read_input_tokens;
-        if message.model.is_some() {
-            out.model = message.model;
+    if offset < len && file.seek(SeekFrom::Start(offset)).is_ok() {
+        let mut reader = BufReader::new(file);
+        let mut line: Vec<u8> = Vec::new();
+        loop {
+            line.clear();
+            let Ok(read) = reader.read_until(b'\n', &mut line) else {
+                break;
+            };
+            // Una línea sin su salto es una que Claude Code está escribiendo ahora mismo: no se
+            // cuenta ni se avanza, y la próxima lectura la recoge entera.
+            if read == 0 || line.last() != Some(&b'\n') {
+                break;
+            }
+            offset += read as u64;
+            add(&mut out, &line);
         }
     }
+
+    if let Ok(mut leido) = LEIDO.lock() {
+        leido.retain(|(each, _, _)| each != path);
+        leido.push((path.to_path_buf(), offset, out.clone()));
+    }
     out
+}
+
+/// Suma una línea de la transcripción a las cuentas, si es un mensaje con `usage`.
+fn add(out: &mut Counts, line: &[u8]) {
+    let Ok(line) = std::str::from_utf8(line) else {
+        return;
+    };
+    if !line.contains("\"usage\"") {
+        return;
+    }
+    let Ok(Line {
+        message: Some(message),
+    }) = serde_json::from_str::<Line>(line)
+    else {
+        return;
+    };
+    let Some(usage) = message.usage else {
+        return;
+    };
+
+    out.input += usage.input_tokens;
+    out.output += usage.output_tokens;
+    out.cache_write += usage.cache_creation_input_tokens;
+    out.cache_read += usage.cache_read_input_tokens;
+
+    // El contexto se pisa en cada vuelta en vez de acumularse: lo que ocupa la conversación ahora
+    // mismo es lo que entró en el último mensaje, no la suma de lo que entró en todos.
+    out.context =
+        usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens;
+    if message.model.is_some() {
+        out.model = message.model;
+    }
 }
 
 /// El último tramo de una ruta, para nombrar una sesión que no traía nombre.

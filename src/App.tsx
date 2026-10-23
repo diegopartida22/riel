@@ -519,6 +519,8 @@ export default function App() {
               undoing={riel.undoing}
               toggle={riel.toggle}
               patch={riel.patch}
+              reschedule={riel.reschedule}
+              searching={riel.searching}
               remove={riel.remove}
               reorder={riel.reorder}
               addAfter={riel.addAfter}

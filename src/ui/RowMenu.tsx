@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { Priority, Task } from "../data";
+import { dayOf, nextDay, type Priority, type Task } from "../data";
+import { formatDueLong } from "./dueDate";
 import { Check } from "./icons";
 
 export interface RowMenuProps {
@@ -16,6 +17,10 @@ export interface RowMenuProps {
   editorName?: string | null;
   onOpenFolder?: () => void;
   onPriority: (priority: Priority) => void;
+  /** Día local de la lista, para calcular los destinos de «Para cuándo». */
+  today: string;
+  /** Lleva la tarea a ese día, o la deja sin fecha con `null`. */
+  onReschedule: (day: string | null) => void;
   onDelete: () => void;
   onClose: () => void;
 }
@@ -25,6 +30,27 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: 1, label: "Prioridad media" },
   { value: 0, label: "Prioridad baja" },
 ];
+
+/**
+ * Los cuatro destinos de «Para cuándo», que son los que se eligen sin pensar: hoy, mañana, la
+ * semana que viene y ninguno. Cualquier otro día pide mirar un calendario, y para eso está el
+ * detalle.
+ *
+ * El lunes es el siguiente que no sea mañana. Un domingo, «Lunes» y «Mañana» serían el mismo
+ * botón dos veces; lo que se quiere decir con él es «la semana que viene», y eso es el de
+ * después.
+ */
+function targets(today: string): { label: string; day: string | null }[] {
+  const tomorrow = nextDay(today);
+  let monday = nextDay(tomorrow);
+  while (new Date(`${monday}T00:00:00`).getDay() !== 1) monday = nextDay(monday);
+  return [
+    { label: "Hoy", day: today },
+    { label: "Mañana", day: tomorrow },
+    { label: "Lunes", day: monday },
+    { label: "Sin fecha", day: null },
+  ];
+}
 
 /** Margen mínimo contra los bordes del panel. */
 const EDGE = 8;
@@ -36,9 +62,9 @@ const EDGE = 8;
  * un menú absoluto dentro de ella se cortaría contra el borde en cuanto la fila estuviera
  * abajo del todo. Fijo mide el panel entero y se voltea hacia arriba cuando no cabe.
  *
- * Lo justo y nada más: abrir el detalle, cambiar la prioridad —que es el único campo que se
- * toca lo bastante seguido como para no querer entrar al detalle— y eliminar. Todo lo demás
- * vive en el detalle, que es donde hay sitio para explicarlo.
+ * Lo justo y nada más: abrir el detalle, moverla de día, cambiar la prioridad —los dos campos
+ * que se tocan lo bastante seguido como para no querer entrar al detalle— y eliminar. Todo lo
+ * demás vive en el detalle, que es donde hay sitio para explicarlo.
  */
 export function RowMenu({
   task,
@@ -47,6 +73,8 @@ export function RowMenu({
   editorName,
   onOpenFolder,
   onPriority,
+  today,
+  onReschedule,
   onDelete,
   onClose,
 }: RowMenuProps) {
@@ -129,6 +157,36 @@ export function RowMenu({
           Abrir en {editorName}
         </button>
       )}
+
+      <div className="menu__rule" role="separator" />
+
+      {/* Para cuándo. Un segmentado y no cuatro renglones: son cuatro palabras cortas, y en
+          renglones el menú doblaba de alto por una pregunta que se contesta de un vistazo. La
+          misma pista que las preferencias de Ajustes (spec 8), con el día puesto levantado. */}
+      <div className="settings__choices menu__fechas" role="group" aria-label="Para cuándo">
+        {targets(today).map(({ label, day }) => {
+          const current = day === null ? task.dueAt === null : task.dueAt !== null && dayOf(task.dueAt) === day;
+          return (
+            <button
+              key={label}
+              type="button"
+              className={`settings__choice${current ? " is-selected" : ""}`}
+              role="menuitemradio"
+              aria-checked={current}
+              title={
+                day
+                  ? formatDueLong(`${day}T00:00:00`, false, today)
+                  : task.repeat
+                    ? "Quitar la fecha y la repetición"
+                    : "Quitar la fecha"
+              }
+              onClick={() => (current ? onClose() : onReschedule(day))}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="menu__rule" role="separator" />
 

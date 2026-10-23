@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { Between, Priority, Project, Task, TaskPatch, TaskTree } from "../data";
+import { dayOf, type Between, type Priority, type Project, type Task, type TaskPatch, type TaskTree } from "../data";
 import { tint } from "../design/palette";
 import type { CalendarEvent } from "../state/agenda";
 import { beyond, horizonEnd, usesHorizon, type Horizonte } from "../state/horizonte";
@@ -27,6 +27,10 @@ export interface TaskListProps {
   undoing: ReadonlySet<string>;
   toggle: (task: Task, checked: boolean) => void;
   patch: (id: string, patch: TaskPatch) => void;
+  /** Lleva tareas a otro día, o las deja sin fecha. Una sola entrada en la pila de ⌘Z. */
+  reschedule: (ids: string[], day: string | null) => void;
+  /** Falso mientras se busca: lo que se ve es la consulta, no la vista, y no hay vencidas de Hoy. */
+  searching?: boolean;
   remove: (id: string) => void;
   reorder: (id: string, between: Between) => void;
   /** ⌘⏎: guardar y crear otra debajo. */
@@ -68,6 +72,8 @@ export function TaskList({
   undoing,
   toggle,
   patch,
+  reschedule,
+  searching = false,
   remove,
   reorder,
   addAfter,
@@ -254,6 +260,30 @@ export function TaskList({
    */
   const agenda = view.kind === "hoy" && events?.length ? <Agenda events={events} /> : null;
 
+  /**
+   * Las vencidas de días anteriores, en Hoy. Son las que se quedan en rojo arriba de la lista día
+   * tras día, y moverlas de una en una es el trabajo que nadie hace: una lista que amanece con
+   * nueve rojas deja de leerse. «Pasar a hoy» las trae todas de un clic, y ⌘Z las devuelve.
+   *
+   * Solo las de días que ya pasaron. Una de hoy a las 10:00 también está en rojo a las 11, pero
+   * pasarla a hoy no le cambiaría nada.
+   */
+  const stale =
+    view.kind === "hoy" && !searching
+      ? visible.filter((task) => !task.completedAt && task.dueAt && dayOf(task.dueAt) < today)
+      : [];
+  const catchUp =
+    stale.length > 0 ? (
+      <button
+        type="button"
+        className="group-header__action"
+        title={`Mover ${stale.length === 1 ? "la vencida" : `las ${stale.length} vencidas`} a hoy`}
+        onClick={() => reschedule(stale.map((task) => task.id), today)}
+      >
+        Pasar a hoy
+      </button>
+    ) : undefined;
+
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
   if (loading) return <div className="view" />;
 
@@ -357,7 +387,7 @@ export function TaskList({
       ) : (
         <>
           {agenda}
-          <GroupHeader action={openFolder}>{title}</GroupHeader>
+          <GroupHeader action={openFolder ?? catchUp}>{title}</GroupHeader>
           <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
             {(folding ? near : visible).map(renderRow)}
 
@@ -398,6 +428,11 @@ export function TaskList({
           onPriority={(priority: Priority) => {
             setMenu(null);
             patch(open.id, { priority });
+          }}
+          today={today}
+          onReschedule={(day) => {
+            setMenu(null);
+            reschedule([open.id], day);
           }}
           onDelete={() => {
             setMenu(null);

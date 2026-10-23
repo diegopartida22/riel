@@ -34,6 +34,7 @@ Dentro:
   lista de Hoy (§18).
 - El horizonte de la lista: lo que cae muy adelante se pliega al final en vez de estorbar (§19).
 - Desinstalar: quitar lo que la papelera no se lleva, empezando por el arranque (§20).
+- Mover de día sin abrir el detalle, y traer de golpe lo vencido a hoy (§21).
 
 Fuera de la v1, no lo construyas:
 
@@ -394,7 +395,10 @@ apaga de golpe como uno que se ha caído. Ningún popover de la barra hace eso. 
   llegando detrás. Lo lleva `fundido.rs`, y se puede interrumpir: volver a abrir a media salida
   arranca la entrada desde la opacidad en la que iba, y la salida a medias ya no esconde nada.
   Abierta «de intención» no es lo mismo que visible, y un clic en el icono a media salida es
-  una apertura, no un segundo cierre.
+  una apertura, no un segundo cierre. Y cada ventana lleva su propio último gesto: con uno solo para las dos,
+  cerrar la captura con ⌘O abría el panel a media salida, la salida de la captura creía que la
+  habían vuelto a abrir y la dejaba en pantalla con opacidad cero — invisible, «visible» para
+  AppKit, y el atajo cerrándola en cada pulsación sin abrirla nunca.
 - **Es opacidad y no movimiento**, así que «Reducir movimiento» no lo apaga: un fundido es lo
   que macOS deja cuando esa casilla está puesta (criterio 7).
 - **El área de contenido funde al cambiar de capa** —de vista, a un proyecto, a una hoja—, 140
@@ -1759,3 +1763,42 @@ Reglas:
 - Y **nada de una lista de rastros con sus tamaños.** Todo junto no llega al medio mega; enseñar
   un desglose de eso sería dibujar un dato que no cambia ninguna decisión (§3.11). Lo que sí se
   dice es cuántas tareas hay, que es de lo que va la única pregunta que se hace aquí.
+
+---
+
+## 21. Mover de día
+
+Añadido después de la v1. Lo que más se le hace a una tarea después de escribirla no es
+completarla: es decir que hoy no. Y eso pedía abrir el detalle, desplegar el selector de fecha,
+elegir y volver — cuatro gestos para la decisión más repetida del día, que es justo la que se
+deja de tomar cuando cuesta. Lo que pasa entonces se ve en Hoy: una columna de fechas en rojo que
+ya nadie lee.
+
+Dos atajos, y ninguno es una gramática nueva:
+
+- **«Para cuándo» en el menú del `⋯`**, entre «Ver detalle» y la prioridad: Hoy, Mañana, Lunes y
+  Sin fecha, como un segmentado —la misma pista que las preferencias de Ajustes (§8)— con el día
+  puesto levantado. Cuatro y no más: son los que se eligen sin pensar, y cualquier otro día pide
+  mirar un calendario, que está en el detalle. El lunes es el siguiente que no sea mañana —un
+  domingo, «Lunes» y «Mañana» serían el mismo botón dos veces— y el día exacto va en el tooltip.
+- **«Pasar a hoy» en el encabezado de Hoy**, solo cuando hay vencidas de días anteriores. Un botón
+  de texto en la fuente de la interfaz, al otro extremo del rótulo, como el «Borrar» de un grupo
+  del Centro de notificaciones. Las de hoy con la hora ya pasada no cuentan: también están en
+  rojo, pero pasarlas a hoy no les cambiaría nada. Buscando no sale, porque lo que se ve es la
+  consulta y no Hoy.
+
+Reglas:
+
+- **La hora se conserva mientras siga por delante.** Pasar a hoy lo de ayer a las 9:00 cuando ya
+  son las 14:00 lo dejaría vencido otra vez, en rojo, en la lista que se quería limpiar. La hora
+  que ya pasó se cae y la tarea queda para el día.
+- **Va a la pila de ⌘Z, como una sola acción.** No borra nada, pero pisa algo que no está escrito
+  en ningún otro sitio —qué día tenía cada una— y de un clic pueden ser doce. Deshacer devuelve
+  fecha, hora y regla de cada una.
+- **«Sin fecha» se lleva la regla**, porque sin fecha no hay desde dónde contar (§12), y el
+  tooltip lo dice en una tarea que se repite. Mover de día una recurrente, en cambio, solo mueve
+  esta vuelta: la regla sigue, y la siguiente se cuenta desde la fecha nueva.
+- **Ni un renglón de «Mañana» en cada fila, ni un gesto de deslizar.** Lo primero rompe la fila en
+  reposo que es solo texto (§3.5); lo segundo es un gesto de pantalla táctil, y con un trackpad se
+  confunde con el desplazamiento de la lista.
+

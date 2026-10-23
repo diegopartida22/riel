@@ -41,6 +41,39 @@
   outline-offset: 1px;
 }
 
+/* «Pasar a hoy», en el encabezado de Hoy cuando hay vencidas de otros días. Un botón de texto y
+   no un icono: es una acción que se lee antes de pulsarla, y ningún glifo dice «trae lo de ayer».
+   En la fuente de la interfaz y sin versalitas, como el «Borrar» de un grupo del Centro de
+   notificaciones: lo que se pulsa no puede llevar el traje del rótulo que nombra el grupo. */
+.group-header__action {
+  margin: -4px -4px -4px auto;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.group-header__action:hover {
+  background: var(--layer-hover);
+  color: var(--ink-primary);
+}
+
+:root .group-header__action:active {
+  background: var(--layer-pressed);
+}
+
+.group-header__action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 /* El encabezado que pliega lo de más adelante (spec 19). Del mismo peso y la misma mono que
    los demás encabezados, porque nombra un grupo igual que ellos; lo único que lo separa es que
    se pulsa, y eso lo dice el triángulo. Va dentro de la lista, así que su `li` no dibuja nada. */

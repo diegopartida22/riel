@@ -93,10 +93,15 @@ const UNDO_DEPTH = 20;
 /**
  * Un borrado que se puede reponer. Completar no entra: tiene sus propios tres segundos con la
  * casilla, que es un deshacer más directo que un atajo (spec 3.6).
+ *
+ * Mover fechas sí entra, aunque no borre nada: «Pasar a hoy» le pisa la fecha a una docena de
+ * tareas de un clic, y lo que se pierde —qué día tenía cada una— no está escrito en ningún otro
+ * sitio. Es destructivo de la misma forma que un borrado, solo que con las filas todavía puestas.
  */
 type Undoable =
   | { kind: "tareas"; tasks: Task[] }
-  | { kind: "proyecto"; removed: RemovedProject };
+  | { kind: "proyecto"; removed: RemovedProject }
+  | { kind: "fechas"; before: Pick<Task, "id" | "dueAt" | "hasTime" | "repeat">[] };
 
 export interface RielState {
   view: View;
@@ -134,6 +139,11 @@ export interface RielState {
   toggle: (task: Task, checked: boolean) => Promise<void>;
   /** Edita campos sueltos de una tarea, desde el detalle o desde el menú de la fila. */
   patch: (id: string, patch: TaskPatch) => Promise<void>;
+  /**
+   * Lleva unas tareas a otro día, o las deja sin fecha con `null`. La hora se conserva si en ese
+   * día todavía no pasó. Va a la pila de ⌘Z como una sola acción, sean una o doce.
+   */
+  reschedule: (ids: string[], day: string | null) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reorder: (id: string, between: Between) => Promise<void>;
   /** ⌘Z: repone el último borrado. Sin nada que reponer no hace nada (spec 5). */
@@ -877,6 +887,44 @@ export function useRiel(): RielState {
     [detailId, refreshCounts, term, today, view],
   );
 
+  /**
+   * Mover fechas de un gesto: el «Para cuándo» del menú de la fila y el «Pasar a hoy» de las
+   * vencidas. Pasa por `patch` tarea a tarea, que es quien sabe desterrar de la vista lo que se
+   * fue a otro día; lo único que añade es recordar cómo estaban, para que ⌘Z las devuelva todas.
+   *
+   * La hora se conserva mientras siga por delante. Pasar a hoy algo de ayer a las 9:00 cuando ya
+   * son las 14:00 lo dejaría vencido otra vez, en rojo, en la misma lista que se quería limpiar:
+   * la hora que ya pasó se cae y la tarea queda para el día.
+   */
+  const reschedule = useCallback(
+    async (ids: string[], day: string | null) => {
+      const found = ids
+        .map((id) => tasks.find((task) => task.id === id))
+        .filter((task): task is TaskTree => task !== undefined);
+      if (!found.length) return;
+
+      const now = localIso();
+      for (const task of found) {
+        if (day === null) {
+          await patch(task.id, { dueAt: null, hasTime: false });
+          continue;
+        }
+        const timed = task.hasTime && task.dueAt ? `${day}T${task.dueAt.slice(11)}` : null;
+        await patch(
+          task.id,
+          timed && timed > now
+            ? { dueAt: timed, hasTime: true }
+            : { dueAt: `${day}T00:00:00`, hasTime: false },
+        );
+      }
+      remember({
+        kind: "fechas",
+        before: found.map(({ id, dueAt, hasTime, repeat }) => ({ id, dueAt, hasTime, repeat })),
+      });
+    },
+    [patch, remember, tasks],
+  );
+
   const remove = useCallback(
     async (id: string) => {
       setError(null);
@@ -1026,7 +1074,13 @@ export function useRiel(): RielState {
     setError(null);
     try {
       if (last.kind === "tareas") await restoreTasks(last.tasks);
-      else await restoreProject(last.removed);
+      else if (last.kind === "proyecto") await restoreProject(last.removed);
+      // La regla va explícita: quitar la fecha se la lleva (`updateTask`), y devolverle la fecha
+      // sin devolverle la regla dejaría de repetirse algo que nadie dijo que dejara de hacerlo.
+      else
+        for (const { id, dueAt, hasTime, repeat } of last.before) {
+          await updateTask(id, { dueAt, hasTime, repeat });
+        }
       await reloadProjects();
       setEpoch((current) => current + 1);
     } catch (cause) {
@@ -1099,6 +1153,7 @@ export function useRiel(): RielState {
     addSubtask,
     toggle,
     patch,
+    reschedule,
     remove,
     reorder,
     undo,
