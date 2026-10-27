@@ -5,7 +5,8 @@ import { estimate, isActive, type Claude, type Session } from "../state/claude";
 import { shortPath } from "../state/editors";
 import { EmptyState } from "../ui/EmptyState";
 import { GroupHeader } from "../ui/GroupHeader";
-import { Folder, Refresh } from "../ui/icons";
+import { Folder } from "../ui/icons";
+import { ListHeader } from "../ui/ListHeader";
 import { Meter } from "../ui/Meter";
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -79,7 +80,7 @@ const OWNERS: Record<string, string> = {
  * darle esos gestos sería prometer tres cosas que ninguna funciona. Lo que una fila de tarea gasta
  * a la izquierda en su casilla, esta lo gasta en la hora de arranque.
  */
-export function ClaudeSessions({ claude }: { claude: Claude }) {
+export function ClaudeSessions({ claude, onBack }: { claude: Claude; onBack: () => void }) {
   const { sessions, disk, loading, counting, error, now, reload, close } = claude;
   const [confirming, setConfirming] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -133,28 +134,31 @@ export function ClaudeSessions({ claude }: { claude: Claude }) {
 
   return (
     <div className="view" ref={box} onKeyDown={onKeyDown}>
-      {error && <p className="notice notice--error">{error}</p>}
-
-      <GroupHeader
-        action={
-          <button
-            type="button"
-            className="group-header__tool"
-            title="Volver a leer"
-            aria-label="Volver a leer"
-            onClick={reload}
-          >
-            <Refresh size={12} aria-hidden />
+      {/* Con el acento de la app y no con un color propio: no es un proyecto y no está dentro
+          de uno (spec 17.4). La cifra es cuántas hay abiertas y, debajo, lo que ocupan entre
+          todas, que es la respuesta corta a la pregunta del apartado. Mientras se lee por
+          primera vez no dice «0»: cero es una respuesta, y darla antes de saberla es mentir
+          durante medio segundo. */}
+      <ListHeader
+        title="Sesiones de Claude"
+        color={null}
+        count={sessions.length}
+        subtitle={
+          loading && !sessions.length
+            ? "Leyendo…"
+            : sessions.length
+              ? `${bytes(total)} de memoria`
+              : undefined
+        }
+        actions={
+          <button type="button" className="list-header__action" onClick={reload}>
+            Volver a leer
           </button>
         }
-      >
-        {/* El recuento y la memoria juntos, que es la respuesta corta a la pregunta del
-            apartado. Mientras se lee por primera vez no dice «0 sesiones»: cero es una
-            respuesta, y darla antes de saberla es mentir durante medio segundo. */}
-        {loading && !sessions.length
-          ? "Sesiones"
-          : `${sessions.length} ${sessions.length === 1 ? "sesión" : "sesiones"} · ${bytes(total)} de memoria`}
-      </GroupHeader>
+        onBack={onBack}
+      />
+
+      {error && <p className="notice notice--error">{error}</p>}
 
       {!loading && sessions.length === 0 ? (
         <EmptyState message="No hay ninguna sesión abierta." />
@@ -234,7 +238,7 @@ function Row({ session, now, scale, confirming, onAsk, onCancel, onClose }: RowP
         <span className="claude__time">{hour(session.started)}</span>
 
         <div className="claude__body">
-          {/* Renglones y no un solo bloque. En 440px menos el riel quedan menos de cuatro
+          {/* Renglones y no un solo bloque. En los 440px del panel quedan pocos
               centímetros de fila, y con el nombre, las cifras y el «hace» en el mismo renglón el
               nombre se quedaba sin ancho y se partía letra a letra. Arriba va lo que contesta la
               pregunta del apartado —cuál es y cuánto lleva quieta—; debajo, dónde vive; después

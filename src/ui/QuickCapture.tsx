@@ -27,7 +27,7 @@ import { ChevronRight, Repeat, X } from "./icons";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
 
-/** Las tres listas que se pueden mirar desde aquí, en el orden del riel y de ⌘1..3. */
+/** Las tres listas que se pueden mirar desde aquí, en el orden de los mosaicos y de ⌘1..3. */
 type Pestana = "hoy" | "proximas" | "todas";
 
 const PESTANAS: { kind: Pestana; label: string }[] = [
@@ -593,7 +593,10 @@ export function QuickCapture() {
                           onChange={() => void alternar(task)}
                         />
                         <span className="quick__tarea-text">
-                          <span className="task-row__title">{task.title}</span>
+                          <span className="task-row__title">
+                            <PriorityMark priority={task.priority} />
+                            {task.title}
+                          </span>
                         </span>
                         <span className="quick__tarea-meta">
                           {proyecto && <ProjectDot color={proyecto.color} title={proyecto.name} />}
@@ -607,7 +610,6 @@ export function QuickCapture() {
                               <Repeat size={11} aria-hidden />
                             </span>
                           )}
-                          <PriorityMark priority={task.priority} />
                           {task.dueAt && (
                             <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />
                           )}

@@ -145,8 +145,8 @@
 }
 
 /* La cuenta, en la fuente de datos y un tono por debajo del nombre: es lo que se compara entre
-   las tres, y por eso va en mono. Sin pendientes no dice cero — el mismo criterio que los
-   conteos del riel expandido (spec 3.4). */
+   las tres, y por eso va en cifras tabulares. Sin pendientes no dice cero — el mismo criterio que los
+   conteos de la pantalla de listas (spec 3.4). */
 .quick__cuenta {
   font-family: var(--font-data);
   font-size: var(--text-meta);
@@ -227,6 +227,18 @@
   line-height: 0;
 }
 
+/* Un renglón por tarea, y no partido como en el panel: aquí hay 620px de ancho y ocho filas de
+   alto fijo, que es lo que deja calcular cuánto mide la ventana antes de pintarla. Lo que no
+   quepa se corta y está entero un ⌘O más allá. */
+.quick__tarea .task-row__title {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
 .quick__tarea-meta {
   flex: 0 0 auto;
   display: flex;
@@ -240,8 +252,8 @@
   opacity: 0.45;
 }
 
-.quick__tarea.is-completed .task-row__title::after {
-  clip-path: inset(0 0 0 0);
+.quick__tarea.is-completed .task-row__title {
+  background-size: 100% 1px;
 }
 
 .quick__tarea.is-completed .due-chip {
@@ -329,24 +341,5 @@
 @media (prefers-reduced-motion: reduce) {
   .quick__item.is-new {
     animation: none;
-  }
-}
-
-/* Una veladura sobre el vidrio, solo en esta ventana. El panel cuelga de la barra y tiene casi
-   siempre el escritorio detrás; esta se abre en medio de la pantalla, encima de lo que se esté
-   haciendo —un editor, una página llena de texto— y el vidrio de Tahoe, que es casi claro,
-   dejaba leer lo de detrás a través de la lista. Es lo mismo que hace Spotlight: más materia
-   donde hay que leer renglones. Sigue siendo una capa con alfa y no un panel opaco (spec 3.2),
-   y con transparencia reducida manda el sólido de `base.css`. */
-@media (prefers-reduced-transparency: no-preference) {
-  :root[data-glass="liquid"] #root {
-    background: rgb(255 255 255 / 20%);
-    border-radius: var(--panel-radius, 26px);
-  }
-}
-
-@media (prefers-reduced-transparency: no-preference) and (prefers-color-scheme: dark) {
-  :root[data-glass="liquid"] #root {
-    background: rgb(22 22 24 / 26%);
   }
 }

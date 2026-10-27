@@ -1,5 +1,7 @@
 /* El alta y la edición de un proyecto, y el selector de color de la sección 3.2. */
 
+/* Las hojas que ocupan el área de contenido: este editor, y también preferencias, importar,
+   las listas de Recordatorios y desinstalar, que toman de aquí su columna y sus botones. */
 .editor {
   display: flex;
   flex-direction: column;
@@ -7,28 +9,55 @@
   padding: 14px 14px 16px;
 }
 
+/* El título de una hoja, centrado y en negrita como el de una hoja del sistema. Era un rótulo
+   en versalitas mono, que es como se nombra un grupo de datos y no una pantalla. */
 .editor__title {
   margin: 0;
-  font-family: var(--font-data);
-  font-size: var(--text-group);
+  align-self: center;
+  font-size: var(--text-title);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-primary);
+}
+
+/* El del proyecto, centrado entero, como la hoja de una lista nueva en Recordatorios: es un
+   formulario de una sola cosa, y lo que se mira es el disco de arriba. */
+.editor--project {
+  align-items: center;
+  gap: 14px;
+}
+
+/* El disco de la pantalla de listas a 56px. Sin nombre todavía no hay inicial, y el disco
+   vacío ya dice de qué color va a ser. */
+.editor__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--project);
+  box-shadow: 0 4px 14px -6px var(--project);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-project);
 }
 
 /* El único campo con caja de la app. Aquí sí: es un formulario, y sin borde no se sabría
-   dónde se escribe. `--field-bg` es una veladura, no un fondo opaco. */
+   dónde se escribe. `--field-bg` es una veladura, no un fondo opaco. El texto va en el color
+   del proyecto y centrado bajo su disco: es el nombre tal como va a salir. */
 .editor__name {
   width: 100%;
   box-sizing: border-box;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: 1px solid var(--hairline);
-  border-radius: var(--row-radius);
+  border-radius: 8px;
   background: var(--field-bg);
   font-family: inherit;
-  font-size: var(--text-title);
-  color: var(--ink-primary);
+  font-size: var(--text-headline);
+  font-weight: 600;
+  text-align: center;
+  color: var(--project);
   caret-color: var(--project);
 }
 
@@ -43,13 +72,13 @@
 
 /* ── Carpeta vinculada (spec 13) ─────────────────────────────────────────────────────── */
 
+/* Centrado bajo los discos como todo lo demás de la hoja, y con tope de ancho: una ruta larga
+   se recorta por delante (`shortPath`) en vez de empujar la `✕` fuera del panel. */
 .editor__folder {
   display: flex;
   align-items: center;
   gap: 2px;
-  /* Alineado con el campo de nombre y no con su relleno: es un renglón de texto, no un campo,
-     y sangrarlo 8px lo dejaría fuera de la columna que forman el título y el selector. */
-  margin-top: -2px;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -59,7 +88,6 @@
   gap: 6px;
   min-width: 0;
   padding: 3px 6px;
-  margin-left: -6px;
   border: 0;
   border-radius: var(--row-radius);
   background: none;
@@ -79,8 +107,8 @@
   outline-offset: 1px;
 }
 
-/* La ruta en mono, como las fechas y los contadores (spec 3.3): es un dato y no una etiqueta,
-   y con las barras a paso fijo se lee de un vistazo dónde acaba cada tramo. */
+/* La ruta en la fuente de datos, como las fechas y los contadores (spec 3.3): es un dato y no
+   una etiqueta. */
 .editor__path span {
   min-width: 0;
   overflow: hidden;
@@ -112,8 +140,11 @@
 
 .editor__actions {
   display: flex;
+  align-self: stretch;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+  margin-top: 4px;
 }
 
 .editor__button {
@@ -133,15 +164,17 @@
 }
 
 /* El primario lleva el color del proyecto en contexto (spec 3.1) y la palomita —aquí el
-   texto— la tinta que contrasta con él, la misma que calcula la casilla. */
+   texto— la tinta que contrasta con él, la misma que calcula la casilla. En una hoja que no es
+   de ningún proyecto —preferencias, importar— `--project` no está definido y cae al acento del
+   sistema, con el blanco que macOS pone sobre él; sin el respaldo «Listo» salía sin fondo. */
 .editor__button--primary {
   border-color: transparent;
-  background: var(--project);
-  color: var(--on-project);
+  background: var(--project, var(--accent-app));
+  color: var(--on-project, #fff);
 }
 
 .editor__button--primary:hover {
-  background: var(--project);
+  background: var(--project, var(--accent-app));
   opacity: 0.88;
 }
 
@@ -160,8 +193,7 @@
 
 /* «Eliminar proyecto» no compite con Guardar: es texto, y en rojo solo al tocarlo. */
 .editor__destroy {
-  align-self: flex-start;
-  margin-top: 4px;
+  margin-right: auto;
   padding: 2px 0;
   border: 0;
   background: none;
@@ -178,8 +210,8 @@
 .editor__confirm {
   display: flex;
   flex-direction: column;
+  align-self: stretch;
   gap: 8px;
-  margin-top: 4px;
   padding-top: 12px;
   border-top: 1px solid var(--hairline);
 }
@@ -196,13 +228,15 @@
 .picker {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
 }
 
 .picker__discs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
 }
 
 .picker__disc,

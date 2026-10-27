@@ -72,7 +72,7 @@ export function RepeatEditor({
 
   return (
     <div className="repeat-editor">
-      <div className="chips">
+      <div className="picks">
         <Chip selected={repeat === null} onClick={() => onChange(null)}>
           No se repite
         </Chip>
@@ -143,7 +143,7 @@ export function RepeatEditor({
 
           <div className="repeat-editor__row">
             <span className="repeat-editor__label">Desde</span>
-            <div className="chips">
+            <div className="picks">
               {FROMS.map(({ value, label }) => (
                 <Chip
                   key={value}
@@ -271,7 +271,7 @@ function Chip({
   return (
     <button
       type="button"
-      className={`chip${selected ? " is-selected" : ""}`}
+      className={`pick${selected ? " is-selected" : ""}`}
       aria-pressed={selected}
       onClick={onClick}
     >

@@ -21,7 +21,7 @@ export type View =
 
 export type SystemKind = Exclude<View["kind"], "proyecto">;
 
-/** En el orden en que aparecen arriba del riel, que es el de ⌘1..⌘4 (spec 5). */
+/** En el orden de los mosaicos de la pantalla de listas, que es el de ⌘1..⌘4 (spec 5). */
 export const SYSTEM_VIEWS: { kind: SystemKind; label: string }[] = [
   { kind: "hoy", label: "Hoy" },
   { kind: "proximas", label: "Próximas" },

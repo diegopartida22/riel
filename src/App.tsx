@@ -13,14 +13,13 @@ import { usePreferencias } from "./state/preferencias";
 import { useReminders } from "./state/reminders";
 import { useUpdates } from "./state/updates";
 import { useRiel } from "./state/useRiel";
-import { acceptsNew, viewKey } from "./state/views";
+import { acceptsNew, viewKey, type View } from "./state/views";
 import { Composer } from "./ui/Composer";
 import { useFocoDeTeclado } from "./ui/foco";
-import { PanelLeftClose, PanelLeftOpen } from "./ui/icons";
 import { ImportSheet } from "./ui/ImportSheet";
+import { Inicio } from "./ui/Inicio";
 import { PrefsSheet } from "./ui/PrefsSheet";
 import { ProjectEditor } from "./ui/ProjectEditor";
-import { Rail } from "./ui/Rail";
 import { RemindersSheet } from "./ui/RemindersSheet";
 import { SettingsPopover } from "./ui/SettingsPopover";
 import { TopBar } from "./ui/TopBar";
@@ -37,7 +36,8 @@ type Editing = { project: Project | null } | null;
 const NUMBERED = ["hoy", "proximas", "todas", "completadas"] as const;
 
 /**
- * Paso 6: la barra superior con la búsqueda y los ajustes, sobre el riel y las vistas.
+ * El panel: la búsqueda arriba, la captura abajo y en medio una pantalla a la vez — la de
+ * listas, una lista, o la capa que se haya abierto encima (spec 3.4).
  */
 export default function App() {
   const riel = useRiel();
@@ -66,6 +66,12 @@ export default function App() {
   // presupuesto entero del criterio 1, y al abrir Hoy no hay ahí nada que mirar (spec 17.6).
   const claude = useClaude(sessions);
   const [wantsCapture, setWantsCapture] = useState(false);
+  /**
+   * Si se está en la pantalla de listas y no dentro de una. Es un estado aparte de la vista y
+   * no una vista más, porque la pantalla de listas no lee tareas: la vista de `useRiel` sigue
+   * siendo la última en la que se entró, y es la que se vuelve a leer al entrar en otra.
+   */
+  const [inicio, setInicio] = useState(() => prefs.startView === "inicio");
 
   useFocoDeTeclado();
 
@@ -75,7 +81,7 @@ export default function App() {
    *
    * Existe porque las tres hojas —importar, elegir listas, preferencias— se dibujan antes que
    * todo lo demás ahí dentro, y ninguna de las formas de navegar las cerraba: pulsar un
-   * proyecto en el riel movía la selección y dejaba la hoja delante, así que el clic parecía
+   * proyecto en la pantalla de listas movía la selección y dejaba la hoja delante, así que el clic parecía
    * no hacer nada. Con ⌘N era peor y más callado — la petición de foco se guarda para
    * cobrarla cuando el campo aparece, y con una hoja delante el campo no aparece nunca, así
    * que la tecla se perdía sin dejar rastro.
@@ -100,6 +106,20 @@ export default function App() {
    */
   const despejado =
     !editing && !importing && !picking && !tuning && !removing && !sessions && !riel.detail;
+
+  /** Entrar en una lista desde la pantalla de listas, o saltar a ella con ⌘1..4. */
+  const irA = (view: View) => {
+    despejar();
+    riel.select(view);
+    setInicio(false);
+  };
+
+  /** La flecha de cada encabezado, ⌘[ y ⌘0: de vuelta a la pantalla de listas. */
+  const volver = () => {
+    despejar();
+    riel.setQuery("");
+    setInicio(true);
+  };
 
   /**
    * Qué ocupa el área de contenido, dicho como una cadena: cuando cambia, la capa nueva entra con
@@ -128,7 +148,9 @@ export default function App() {
                 ? `tarea:${riel.detail.id}`
                 : riel.searching
                   ? "buscar"
-                  : `vista:${viewKey(riel.view)}`;
+                  : inicio
+                    ? "inicio"
+                    : `vista:${viewKey(riel.view)}`;
   const body = useRef<HTMLElement>(null);
   const capaAnterior = useRef(capa);
   useEffect(() => {
@@ -147,8 +169,8 @@ export default function App() {
   }, [riel.firstRun]);
 
   /**
-   * Cada apertura del panel lo devuelve a la vista elegida en Ajustes, y limpia lo que hubiera
-   * encima: búsqueda, detalle, editor de proyecto.
+   * Cada apertura del panel lo devuelve a la vista elegida en Ajustes —la pantalla de listas, de
+   * fábrica— y limpia lo que hubiera encima: búsqueda, detalle, editor de proyecto.
    *
    * El panel no se cierra, se oculta, así que sin esto reabrirlo te devuelve exactamente donde
    * lo dejaste — que en una ventana normal sería lo correcto, pero esta se abre y se cierra
@@ -172,7 +194,15 @@ export default function App() {
       setTuning(false);
       setRemoving(false);
       setSessions(false);
-      select({ kind: startView });
+      if (startView === "inicio") {
+        // `select` por lo que limpia y no por la vista: con la pantalla de listas delante no
+        // se lee ninguna, así que dejar la última puesta no cuesta nada.
+        select({ kind: "hoy" });
+        setInicio(true);
+      } else {
+        select({ kind: startView });
+        setInicio(false);
+      }
     });
     return () => {
       void unlisten.then((off) => off());
@@ -203,7 +233,18 @@ export default function App() {
     if (!wantsCapture || !composer.current) return;
     composer.current.focus();
     setWantsCapture(false);
-  }, [wantsCapture, editing, importing, picking, tuning, removing, sessions, riel.detail, riel.view]);
+  }, [
+    wantsCapture,
+    editing,
+    importing,
+    picking,
+    tuning,
+    removing,
+    sessions,
+    inicio,
+    riel.detail,
+    riel.view,
+  ]);
 
   /**
    * Lo que el oyente de teclas necesita leer, siempre en su versión de este render.
@@ -218,9 +259,10 @@ export default function App() {
    * Un `keydown` se atiende siempre después de que los efectos se hayan vaciado, así que lo que
    * lee el oyente es lo del render que se acaba de pintar.
    */
-  const teclado = useRef({ riel, editing, importing, picking, tuning, removing, despejar });
+  const keyState = { riel, editing, importing, picking, tuning, removing, inicio, despejar, irA, volver };
+  const teclado = useRef(keyState);
   useEffect(() => {
-    teclado.current = { riel, editing, importing, picking, tuning, removing, despejar };
+    teclado.current = keyState;
   });
 
   /**
@@ -232,10 +274,15 @@ export default function App() {
    * los dos primeros tiempos; que el detalle y el editor de proyecto se cierren antes que el
    * panel es una extensión, pero al revés reabrir el panel te devolvería a una pantalla que
    * ya habías querido dejar. Los menús se lo comen antes de que llegue aquí.
+   *
+   * Lo que no hace Escape es volver a la pantalla de listas: es la tecla de cerrar el panel, y
+   * si antes pasara por ahí cerrar desde una lista costaría dos pulsaciones. Volver es ⌘[, que
+   * es la flecha de atrás en todo macOS, y ⌘0, que es el «ir al principio» de los números.
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const { riel, editing, importing, picking, tuning, removing, despejar } = teclado.current;
+      const { riel, editing, importing, picking, tuning, removing, inicio, despejar, irA, volver } =
+        teclado.current;
 
       if (event.key === "Escape") {
         event.preventDefault();
@@ -280,9 +327,16 @@ export default function App() {
         event.preventDefault();
         despejar();
         // En Completadas no hay campo de captura, y una tecla que no hace nada es peor que una
-        // que te mueve: ⌘N lleva a la vista donde siempre se puede agregar.
-        if (!acceptsNew(riel.view)) riel.select({ kind: "hoy" });
+        // que te mueve: ⌘N lleva a la vista donde siempre se puede agregar. En la pantalla de
+        // listas sí lo hay, y ahí se queda.
+        if (!inicio && !acceptsNew(riel.view)) irA({ kind: "hoy" });
         setWantsCapture(true);
+        return;
+      }
+
+      if (event.key === "[" || event.key === "0") {
+        event.preventDefault();
+        volver();
         return;
       }
 
@@ -299,8 +353,7 @@ export default function App() {
       const numbered = NUMBERED[Number(event.key) - 1];
       if (numbered) {
         event.preventDefault();
-        despejar();
-        riel.select({ kind: numbered });
+        irA({ kind: numbered });
       }
     };
 
@@ -309,24 +362,30 @@ export default function App() {
   }, []);
 
   // Dentro de un proyecto, el acento de todo el panel es el suyo (spec 3.1). Fuera, se queda
-  // el grafito neutro y el color solo aparece en el punto de cada fila.
-  const project = riel.view.kind === "proyecto" ? riel.projectsById.get(riel.view.id) : undefined;
+  // el del sistema y el color solo aparece en el punto de cada fila. La pantalla de listas no
+  // está dentro de ninguno aunque la última vista leída sea uno.
+  const project =
+    riel.view.kind === "proyecto" && !inicio ? riel.projectsById.get(riel.view.id) : undefined;
+  const tinted = project && !editing && !sessions;
+
+  /** Lo que dice el pie antes de escribir: a dónde va a caer la tarea si el texto no lo dice. */
+  const placeholder = inicio
+    ? "Nueva tarea"
+    : riel.view.kind === "hoy"
+      ? "Nueva tarea para hoy"
+      : project
+        ? `Nueva tarea en ${project.name}`
+        : "Nueva tarea";
 
   return (
     <div
-      className={[
-        "panel",
-        prefs.railExpanded && "is-rail-expanded",
-        // El apartado de Claude no es un proyecto y no está dentro de uno: su acento es el de
-        // la app (spec 17.4), así que el tinte del proyecto seleccionado no lo alcanza.
-        project && !editing && !sessions && "is-project tinted",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      // El apartado de Claude no es un proyecto y no está dentro de uno: su acento es el de la
+      // app (spec 17.4), así que el tinte del proyecto seleccionado no lo alcanza.
+      className={tinted ? "panel is-project tinted" : "panel"}
       /* Un atributo en la raíz y no una prop hasta cada fila: lo mira solo el CSS, y de aquí
          cuelgan por igual la lista, los resultados de búsqueda y las subtareas del detalle. */
       data-texto={prefs.rowText}
-      style={project && !editing && !sessions ? tint(project.color) : undefined}
+      style={tinted ? tint(project.color) : undefined}
     >
       <TopBar
         ref={field}
@@ -383,34 +442,6 @@ export default function App() {
       )}
 
       <div className="panel__middle">
-        <Rail
-          view={riel.view}
-          projects={riel.projects}
-          counts={riel.counts}
-          expanded={prefs.railExpanded}
-          sessions={sessions}
-          onSelect={(next) => {
-            despejar();
-            riel.select(next);
-          }}
-          onSessions={() => {
-            despejar();
-            // La búsqueda es de tareas y aquí no hay ninguna (spec 17.6). Dejarla puesta haría
-            // que volver al riel devolviera a unos resultados que nadie pidió otra vez.
-            riel.setQuery("");
-            setSessions(true);
-          }}
-          onNewProject={() => {
-            despejar();
-            setEditing({ project: null });
-          }}
-          onEditProject={(target) => {
-            despejar();
-            setEditing({ project: target });
-          }}
-          onReorder={riel.reorderProject}
-        />
-
         <main ref={body} className="panel__body">
           {importing ? (
             <ImportSheet
@@ -449,7 +480,7 @@ export default function App() {
               }}
             />
           ) : sessions ? (
-            <ClaudeSessions claude={claude} />
+            <ClaudeSessions claude={claude} onBack={volver} />
           ) : editing ? (
             <ProjectEditor
               key={editing.project?.id ?? "nuevo"}
@@ -457,13 +488,22 @@ export default function App() {
               pendingCount={
                 editing.project ? (riel.counts.get(editing.project.id) ?? 0) : 0
               }
-              onSave={(name, color, folder) =>
-                riel.saveProject(editing.project, name, color, folder)
-              }
+              onSave={async (name, color, folder) => {
+                const saved = await riel.saveProject(editing.project, name, color, folder);
+                // Uno nuevo se abre al guardarlo: se crea un proyecto para meterle tareas, y
+                // dejarlo en la pantalla de listas obligaría a buscarlo para entrar.
+                if (saved && !editing.project) setInicio(false);
+                return saved;
+              }}
               onPickFolder={dev.pickFolder}
               onDelete={async () => {
-                if (editing.project) await riel.removeProject(editing.project.id);
+                const gone = editing.project;
+                if (gone) await riel.removeProject(gone.id);
                 setEditing(null);
+                // Borrado desde dentro, no queda lista en la que estar.
+                if (gone && riel.view.kind === "proyecto" && riel.view.id === gone.id) {
+                  setInicio(true);
+                }
               }}
               onClose={() => setEditing(null)}
             />
@@ -501,6 +541,28 @@ export default function App() {
               toggle={riel.toggle}
               onOpen={riel.openDetail}
             />
+          ) : inicio ? (
+            <Inicio
+              projects={riel.projects}
+              counts={riel.counts}
+              viewCounts={riel.viewCounts}
+              onSelect={irA}
+              onSessions={() => {
+                despejar();
+                // La búsqueda es de tareas y aquí no hay ninguna (spec 17.6).
+                riel.setQuery("");
+                setSessions(true);
+              }}
+              onNewProject={() => {
+                despejar();
+                setEditing({ project: null });
+              }}
+              onEditProject={(target) => {
+                despejar();
+                setEditing({ project: target });
+              }}
+              onReorder={riel.reorderProject}
+            />
           ) : (
             <TaskList
               view={riel.view}
@@ -529,39 +591,30 @@ export default function App() {
               editorName={dev.editor?.name}
               onOpenFolder={dev.openFolder}
               events={agenda.events}
+              onBack={volver}
+              onEditProject={(target) => {
+                despejar();
+                setEditing({ project: target });
+              }}
             />
           )}
         </main>
       </div>
 
       <div className="panel__foot">
-        <div className="foot__rail">
-          <button
-            type="button"
-            className="foot__toggle"
-            title={prefs.railExpanded ? "Contraer el riel" : "Expandir el riel"}
-            aria-label={prefs.railExpanded ? "Contraer el riel" : "Expandir el riel"}
-            aria-expanded={prefs.railExpanded}
-            onClick={prefs.toggleRail}
-          >
-            {prefs.railExpanded ? (
-              <PanelLeftClose size={15} aria-hidden />
-            ) : (
-              <PanelLeftOpen size={15} aria-hidden />
-            )}
-          </button>
-        </div>
-
         {/* El pie no captura mientras hay una capa delante —editar un proyecto, importar, elegir
             listas, las preferencias, desinstalar— ni leyendo el detalle de una tarea: en ninguna
             hay lista a la que agregar. */}
-        {despejado && acceptsNew(riel.view) && (
+        {despejado && (inicio || acceptsNew(riel.view)) && (
           <Composer
             ref={composer}
             firstRun={riel.firstRun}
+            placeholder={placeholder}
             projects={riel.projects}
             today={riel.today}
-            onAdd={riel.add}
+            // Desde la pantalla de listas no hay vista de la que heredar, por lo mismo que un
+            // `riel://` (spec 14): lo que el texto no diga, no lo pone nadie.
+            onAdd={(draft) => riel.add(draft, !inicio)}
           />
         )}
       </div>

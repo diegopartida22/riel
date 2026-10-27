@@ -1,24 +1,135 @@
-/* Los primitivos de la lista: encabezado de grupo, fila, casilla, punto de proyecto, marca
-   de prioridad y chip de fecha. Todo sale de los tokens de `design/tokens.css`. */
+/* Los primitivos de la lista: encabezado de lista y de grupo, fila, casilla, punto de proyecto,
+   marca de prioridad y chip de fecha. Todo sale de los tokens de `design/tokens.css`. */
+
+/* ── Encabezado de lista ─────────────────────────────────────────────────────────────── */
+
+/* El nombre de la lista en grande y en su color, con la flecha que vuelve a las listas delante
+   y lo pendiente al otro extremo. El título arranca en la misma columna que el de las tareas:
+   la flecha ocupa exactamente lo que en una fila ocupan su relleno y su casilla. */
+.list-header {
+  padding: 8px 4px 6px;
+}
+
+/* Hoy va con el acento del sistema, como su mosaico (`home.css`). */
+.list-header--app {
+  --project: var(--accent-app);
+}
+
+.list-header__top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.list-header__back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-secondary);
+  cursor: default;
+}
+
+.list-header__back:hover {
+  background: var(--layer-hover);
+  color: var(--ink-primary);
+}
+
+.list-header__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--project);
+}
+
+.list-header__count {
+  flex: none;
+  padding-right: 4px;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-display);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--project);
+}
+
+/* El renglón de debajo arranca bajo el título y no bajo la flecha: es del título. */
+.list-header__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding-left: 31px;
+}
+
+.list-header__note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  color: var(--ink-secondary);
+}
+
+.list-header__actions {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  margin-right: -2px;
+}
+
+/* En el acento y sin caja, como el «Borrar» de un grupo del Centro de notificaciones: se lee
+   como algo que se pulsa sin tener que parecer un botón. `--accent` y no el color de la lista:
+   dentro de un proyecto son el mismo (spec 3.1), y en Próximas el rojo de su título diría
+   «vencido» sobre un botón que no lo es. */
+.list-header__action {
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--accent);
+  cursor: default;
+}
+
+.list-header__action:hover {
+  background: var(--layer-hover);
+}
 
 /* ── Encabezado de grupo ─────────────────────────────────────────────────────────────── */
 
+/* Lo que parte una lista por dentro: Agenda y Tareas en Hoy, el resultado de una búsqueda, el
+   disco de las sesiones. En la letra de la interfaz, en negrita y en minúsculas, como los grupos
+   de una barra lateral del sistema; las versalitas en mono de antes eran lo que más le daba a la
+   lista aire de terminal. Un tono por debajo del título de lista, que es quien manda. */
 .group-header {
   display: flex;
   align-items: center;
   margin: 0;
   padding: 12px 8px 4px;
-  font-family: var(--font-data);
+  font-family: var(--font-ui);
   font-size: var(--text-group);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
-/* El botón de la carpeta (spec 13), al otro extremo del encabezado. Pegado al borde derecho de
-   la lista y no al texto: es el único de su fila, y colgando del título parecería parte de él.
-   Del peso del encabezado que lo lleva, no del de una fila — nombra la vista, no una tarea. */
+/* Un glifo al otro extremo del encabezado: volver a leer las sesiones, el disco en el Finder. */
 .group-header__tool {
   display: flex;
   align-items: center;
@@ -41,49 +152,17 @@
   outline-offset: 1px;
 }
 
-/* «Pasar a hoy», en el encabezado de Hoy cuando hay vencidas de otros días. Un botón de texto y
-   no un icono: es una acción que se lee antes de pulsarla, y ningún glifo dice «trae lo de ayer».
-   En la fuente de la interfaz y sin versalitas, como el «Borrar» de un grupo del Centro de
-   notificaciones: lo que se pulsa no puede llevar el traje del rótulo que nombra el grupo. */
-.group-header__action {
-  margin: -4px -4px -4px auto;
-  padding: 3px 6px;
-  border: 0;
-  border-radius: 5px;
-  background: none;
-  font-family: var(--font-ui);
-  font-size: var(--text-meta);
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink-secondary);
-  cursor: default;
-}
-
-.group-header__action:hover {
-  background: var(--layer-hover);
-  color: var(--ink-primary);
-}
-
-:root .group-header__action:active {
-  background: var(--layer-pressed);
-}
-
-.group-header__action:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
-
-/* El encabezado que pliega lo de más adelante (spec 19). Del mismo peso y la misma mono que
-   los demás encabezados, porque nombra un grupo igual que ellos; lo único que lo separa es que
-   se pulsa, y eso lo dice el triángulo. Va dentro de la lista, así que su `li` no dibuja nada. */
+/* El encabezado que pliega lo de más adelante (spec 19). Del mismo peso que los demás, porque
+   nombra un grupo igual que ellos; lo único que lo separa es que se pulsa, y eso lo dice el
+   triángulo. Va dentro de la lista, así que su `li` no dibuja nada. */
 .group-fold {
   list-style: none;
 }
 
 .group-header--fold {
   width: 100%;
-  gap: 5px;
+  gap: 6px;
+  margin-top: 4px;
   border: 0;
   border-radius: 6px;
   background: none;
@@ -92,7 +171,7 @@
 }
 
 .group-header--fold:hover {
-  color: var(--ink-secondary);
+  color: var(--ink-primary);
 }
 
 .group-header--fold:focus-visible {
@@ -111,6 +190,13 @@
   transform: rotate(90deg);
 }
 
+.group-header__count {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+}
+
 /* ── Fila ────────────────────────────────────────────────────────────────────────────── */
 
 .task-list,
@@ -126,8 +212,7 @@
 .collapse {
   display: grid;
   /* `minmax(0, 1fr)` y no el `auto` implícito: una pista `auto` no baja de su contenido
-     mínimo, y un título largo con `nowrap` empujaría la fecha fuera del panel en vez de
-     cortarse con elipsis. */
+     mínimo, y una palabra larga sin espacios empujaría el `⋯` fuera del panel. */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr;
   transition:
@@ -161,6 +246,32 @@
   animation: row-in 200ms ease-out;
 }
 
+/* Entre dos tareas, una hairline que arranca donde arranca el título, como en Recordatorios.
+   Con los títulos enteros es lo que dice dónde acaba una y empieza la siguiente: sin ella, dos
+   tareas de tres renglones seguidas se leen como un párrafo. Absoluta, porque la fila es una
+   rejilla y un pseudoelemento en el flujo sería una pista más. */
+.task-row {
+  position: relative;
+}
+
+.task-row + .task-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 35px;
+  right: 8px;
+  height: 1px;
+  background: var(--hairline);
+  pointer-events: none;
+}
+
+/* Junto a la fila iluminada la línea sobra: el fondo ya separa, y la raya cortaría su arco. */
+.task-row:has(> .task-row__clip > .task-row__main:hover)::before,
+.task-row:has(> .task-row__clip > .task-row__main:hover) + .task-row::before,
+.task-list.is-sorting .task-row::before {
+  opacity: 0;
+}
+
 /* La opacidad va sobre `__main` y no sobre la fila entera: una padre completada arrastra a
    sus subtareas en los datos, pero cada renglón tiene que reflejar su propio estado — si no,
    una subtarea sin completar se vería tachada solo por colgar de una que sí lo está. */
@@ -171,8 +282,8 @@
 .task-row__main {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 5px 8px;
+  gap: 10px;
+  padding: 8px 6px 8px 8px;
   border-radius: var(--row-radius);
 }
 
@@ -180,242 +291,134 @@
   background: var(--layer-hover);
 }
 
-/* Bloque y no una columna flex: dentro de un contenedor flex el `max-width: 100%` del título
-   no llega a apretarlo y el título largo empuja la fecha fuera del panel. */
+/* Bloque y no una columna flex: el título es texto corrido —con la marca de prioridad metida
+   dentro— y las notas y los datos caen debajo, cada uno en su renglón. Es también la manija:
+   desde aquí se arrastra (`useReorder`), y un clic sin arrastre abre el detalle. */
 .task-row__text {
   flex: 1 1 auto;
   min-width: 0;
+  touch-action: none;
 }
 
-/* `inline-block` con ancho máximo: así la caja se ciñe al texto y el tachado no se pasa de
-   largo cuando el título es corto. */
+/* El título se enseña entero: en tantos renglones como haga falta, y una palabra sin espacios
+   —una URL pegada— se parte antes de salirse del panel. Es lo que pedía el rediseño: una tarea
+   que no se puede leer entera desde la lista obliga a abrirla para saber qué era.
+
+   El tachado se traza de izquierda a derecha en 220ms (spec 3.6). Un degradado de 1px que se
+   repite en cada trozo de renglón —eso es `box-decoration-break: clone`— sigue al texto
+   aunque ocupe tres líneas, y su ancho se anima igual que lo haría un `clip-path`. Un
+   `text-decoration` aparecería de golpe. */
 .task-row__title {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--text-title);
-  line-height: 1.35;
+  line-height: 1.38;
   font-weight: 400;
   color: var(--ink-primary);
-}
-
-.task-row__notes {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-meta);
-  line-height: 1.4;
-  color: var(--ink-secondary);
-}
-
-/* El tachado se traza de izquierda a derecha en 220ms. Es una línea propia recortada con
-   `clip-path` y no un `text-decoration`, que aparecería de golpe. */
-.task-row__title::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  top: calc(50% - 0.5px);
-  height: 1px;
-  background: currentcolor;
-  clip-path: inset(0 100% 0 0);
-  transition: clip-path 220ms ease-out;
-}
-
-.task-row.is-completed > .task-row__clip > .task-row__main .task-row__title::after,
-.subtask.is-completed .task-row__title::after {
-  clip-path: inset(0 0 0 0);
-}
-
-/* ── Texto completo ──────────────────────────────────────────────────────────────────── */
-
-/* La otra mitad del ajuste de Ajustes: el título deja de cortarse y se reparte en tantos
-   renglones como haga falta. `overflow-wrap: anywhere` es para el caso que no tiene espacios
-   —una URL pegada, un identificador largo— que si no se sale del panel por la derecha.
-
-   La fecha y las herramientas siguen alineadas con el primer renglón, y eso ya lo resuelve el
-   `align-items: flex-start` de la fila: si se centraran contra el bloque entero, la columna de
-   fechas —que es lo que el mono alinea— dejaría de ser una columna. */
-.panel[data-texto="completo"] .task-row__title,
-.panel[data-texto="completo"] .task-row__notes {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
   overflow-wrap: anywhere;
-}
-
-/* El aire de la fila se recalcula entero, porque con dos renglones el reparto de antes se
-   invierte y deja de funcionar.
-
-   Medido en el riel expandido, que es el caso apretado: entre dos renglones de un mismo título
-   había 17px y entre dos filas 12px. Con el hueco de dentro más grande que el de fuera, la
-   lista se lee como un párrafo corrido y hay que ir contando casillas para saber dónde acaba
-   cada tarea. Con un solo renglón el defecto no existe —nunca hay un «dentro»— y por eso el
-   modo de una línea se queda como estaba.
-
-   Así que la fila separa más de lo que junta: `1.45` da 19px dentro, y 9px de relleno arriba y
-   abajo dan 24px fuera. La proporción importa más que los números. */
-.panel[data-texto="completo"] .task-row__main {
-  padding-block: 9px;
-}
-
-.panel[data-texto="completo"] .subtask {
-  padding-block: 7px;
-}
-
-.panel[data-texto="completo"] .task-row__title {
-  line-height: 1.45;
-}
-
-/* La fecha y las herramientas siguen centradas contra el **primer** renglón, así que su alto
-   tiene que seguir al alto de línea del título. Si se quedaran en `1.35` mientras el título
-   sube a `1.45`, la columna de fechas quedaría 1px alta respecto del texto — poco para
-   nombrarlo y suficiente para verlo, que es justo lo que avisa la spec 10. */
-.panel[data-texto="completo"] .task-row__meta,
-.panel[data-texto="completo"] .task-row__tools {
-  height: calc(var(--text-title) * 1.45);
-}
-
-/* Con varias líneas el tachado no puede ser una raya absoluta sobre la caja: cruzaría el
-   bloque por el medio en vez de tachar cada renglón. Un degradado de 1px que se repite en cada
-   fragmento de línea —eso es `box-decoration-break: clone`— sí sigue al texto, y su
-   `background-size` se anima igual que el `clip-path`: los mismos 220ms, trazándose de
-   izquierda a derecha en todos los renglones a la vez. */
-.panel[data-texto="completo"] .task-row__title {
-  display: inline;
   background-image: linear-gradient(currentcolor, currentcolor);
   background-repeat: no-repeat;
-  background-position: 0 50%;
+  background-position: 0 55%;
   background-size: 0% 1px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
   transition: background-size 220ms ease-out;
 }
 
-.panel[data-texto="completo"] .task-row__title::after {
-  display: none;
-}
-
-.panel[data-texto="completo"]
-  .task-row.is-completed
-  > .task-row__clip
-  > .task-row__main
-  .task-row__title,
-.panel[data-texto="completo"] .subtask.is-completed .task-row__title {
+.task-row.is-completed > .task-row__clip > .task-row__main .task-row__title,
+.subtask.is-completed .task-row__title {
   background-size: 100% 1px;
 }
 
-/* La fecha y las herramientas comparten un alto de línea con el título — el mismo `1.35` de
-   `--text-title` — en vez de llevar cada una su propio empujón en px. Así los tres bloques se
-   centran contra la primera línea del título y no unos contra otros, que era de donde salía
-   el descuadre de la fecha respecto del `⋯`. */
-.task-row__meta,
-.task-row__tools {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  height: calc(var(--text-title) * 1.35);
+/* Las notas, debajo y en gris, hasta dos renglones: lo bastante para saber de qué van sin que
+   una nota larga se coma la lista. Enteras están en el detalle. */
+.task-row__notes {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 1px;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
 }
 
-/* El hueco de la derecha. La fecha y las herramientas van apiladas en la misma celda en vez
-   de una detrás de otra, así que mide lo que el más ancho de los dos y no la suma.
-
-   Puestas en fila, las herramientas se llevaban 34px del título de forma permanente aunque
-   solo se vean al pasar por encima. Quitarles el hueco y dejar que aparezcan encima sin más
-   tampoco vale: en una tarea sin fecha no hay nada debajo y taparían el final del título.
-   Apiladas se resuelven las dos cosas a la vez, y como el ancho no depende de cuál de los dos
-   se esté viendo, al cruzarse no se mueve nada. */
-.task-row__right {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-areas: "hueco";
-  justify-items: end;
-  margin-left: 6px;
-}
-
-.task-row__right > * {
-  grid-area: hueco;
-}
-
+/* Los datos de la tarea, en su propio renglón bajo el título: la fecha, si vuelve y de qué
+   proyecto es. A la derecha del título competían con él por el ancho —y perdía el título—;
+   debajo, el título tiene la fila entera y los datos se leen en el orden en que se preguntan. */
 .task-row__meta {
-  gap: 6px;
-  /* Nada de aquí dentro se pulsa, y bajo las herramientas no llegaría el puntero igual. */
-  pointer-events: none;
-  transition: opacity 120ms ease-out;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  margin-top: 2px;
+  font-size: var(--text-meta);
+  line-height: 1.4;
+  color: var(--ink-secondary);
 }
 
-.task-row__tools {
-  justify-content: flex-end;
-  gap: 2px;
-  width: 34px;
-  opacity: 0;
-  transition: opacity 120ms ease-out;
+.task-row__project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
-/* El cruce. La fecha se va justo cuando llegan las herramientas: si se quedara, las dos se
-   verían una encima de la otra y ninguna se leería. */
-.task-row__main:hover .task-row__meta,
-.task-row__right:focus-within .task-row__meta,
-.task-row.is-flying .task-row__meta {
-  opacity: 0;
+/* ── Una línea ───────────────────────────────────────────────────────────────────────── */
+
+/* La otra mitad del ajuste de Ajustes: para quien prefiere ver más tareas que tareas enteras.
+   Título y notas a un renglón con elipsis; los datos se quedan, que son cortos. `inline-block`
+   para que la caja se ciña al texto y el tachado no se pase de largo. */
+.panel[data-texto="una"] .task-row__title {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
 }
 
-.task-row__main:hover .task-row__tools,
-.subtask:hover .task-row__tools,
-.task-row__tools:focus-within,
-.task-row.is-flying .task-row__tools,
-.subtask-row.is-flying .task-row__tools {
-  opacity: 1;
+.panel[data-texto="una"] .task-row__notes {
+  -webkit-line-clamp: 1;
 }
 
-/* Una sola herramienta: la manija de la subtarea. No tiene fecha con la que compartir celda,
-   así que va suelta y sí reserva su ancho — son 16px, y sin ellos el título de la subtarea
-   daría un salto cada vez que el puntero la cruza. Alineada a la derecha como las de la raíz,
-   las manijas quedan en la misma columna. */
-.task-row__tools--one {
-  width: 16px;
-  margin-left: 6px;
+.panel[data-texto="una"] .task-row__main {
+  padding-block: 6px;
 }
 
-/* Los glifos `⋯` y `⠿` se veían torcidos porque su caja tipográfica no está centrada sobre su
-   tinta y cada fuente los coloca a su manera. Un icono es geometría, no tipografía: cae
-   centrado en su propio cuadro y ahí se queda. */
+/* ── El `⋯` ──────────────────────────────────────────────────────────────────────────── */
+
+/* Lo único que la fila esconde en reposo, y lo único que lleva hueco propio a la derecha. La
+   fecha ya no vive ahí —está debajo del título—, así que no hay nada con lo que cruzarse: el
+   hueco mide lo que mide el botón y el título nunca pasa por debajo de él. */
 .task-row__tool {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 18px;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: none;
-  color: var(--ink-tertiary);
-  cursor: default;
-}
-
-.task-row__tool:hover {
   color: var(--ink-secondary);
-  background: var(--layer-selected);
-}
-
-.task-row__grip {
-  cursor: grab;
-  /* Sin esto el gesto de arrastre se lo queda el desplazamiento de la lista. */
-  touch-action: none;
-}
-
-.task-row.is-flying .task-row__grip {
-  cursor: grabbing;
-}
-
-/* El título abre el detalle, así que se comporta como un objetivo: ocupa su renglón entero
-   para que no haya que apuntarle a las letras. */
-.task-row__text[role="button"] {
+  opacity: 0;
   cursor: default;
+  transition: opacity 120ms ease-out;
+}
+
+.task-row__main:hover .task-row__tool,
+.task-row__tool:focus-visible,
+.task-row__tool[aria-expanded="true"],
+.task-row.is-flying .task-row__tool {
+  opacity: 1;
+}
+
+.task-row__tool:hover,
+.task-row__tool[aria-expanded="true"] {
+  color: var(--ink-primary);
+  background: var(--layer-selected);
 }
 
 /* ── Edición en línea ────────────────────────────────────────────────────────────────── */
@@ -432,7 +435,7 @@
   background: none;
   font-family: inherit;
   font-size: var(--text-title);
-  line-height: 1.35;
+  line-height: 1.38;
   color: var(--ink-primary);
   caret-color: var(--accent);
 }
@@ -452,13 +455,13 @@
 }
 
 /* El anillo de la casilla sin la casilla, para la fila de ⌘⏎ que todavía no existe: no hay
-   nada que completar. Sin él la fila arranca 23px a la izquierda de las de arriba. */
+   nada que completar. Sin él la fila arranca 27px a la izquierda de las de arriba. */
 .task-row__ghost {
   flex: 0 0 auto;
   box-sizing: border-box;
   width: var(--checkbox-size);
   height: var(--checkbox-size);
-  margin-top: 2px;
+  margin-top: 1px;
   border: 1.5px dashed var(--ink-tertiary);
   border-radius: 50%;
 }
@@ -484,28 +487,29 @@
 
 .task-row.is-flying .task-row__main,
 .subtask-row.is-flying .subtask {
-  background: var(--layer-selected);
+  background: var(--menu-bg);
   box-shadow: var(--shadow-lift);
 }
 
-/* Mientras se arrastra, el texto no se selecciona ni cambia el cursor por toda la lista. */
+/* Mientras se arrastra, el cursor es la mano cerrada por toda la lista. */
 .task-list.is-sorting,
 .subtasks.is-sorting {
-  cursor: grabbing;
-  user-select: none;
-}
-
-.subtask-row.is-flying .task-row__grip {
   cursor: grabbing;
 }
 
 /* ── Subtareas ───────────────────────────────────────────────────────────────────────── */
 
+/* Colgando bajo el título de su madre y no bajo su casilla: la sangría dice de quién son. */
+.subtasks {
+  margin-top: -4px;
+  padding-bottom: 4px;
+}
+
 .subtask {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 3px 8px 3px calc(8px + var(--subtask-indent));
+  padding: 4px 8px 4px calc(8px + var(--subtask-indent));
   border-radius: var(--row-radius);
 }
 
@@ -515,6 +519,18 @@
 
 .subtask .task-row__title {
   font-size: var(--text-subtitle);
+}
+
+/* La casilla de una hija, un punto más pequeña que la de su madre: es lo que se lee primero de
+   una fila, y del mismo tamaño las dos competirían por ser la tarea. */
+.subtask .checkbox,
+.subtask .checkbox svg {
+  width: 15px;
+  height: 15px;
+}
+
+.subtask .checkbox {
+  margin-top: 1px;
 }
 
 .subtask.is-completed {
@@ -527,7 +543,7 @@
   flex: 0 0 auto;
   width: var(--checkbox-size);
   height: var(--checkbox-size);
-  margin-top: 2px;
+  margin-top: 1px;
   padding: 0;
   border: 0;
   background: none;
@@ -597,11 +613,12 @@
 
 /* ── Prioridad ───────────────────────────────────────────────────────────────────────── */
 
+/* Dentro del título, al tamaño del título: es una palabra más de la frase, como en la captura.
+   Un punto más de peso para que se lea como marca y no como puntuación. */
 .priority {
-  font-family: var(--font-data);
-  font-size: var(--text-meta);
-  font-weight: 600;
-  line-height: 1;
+  margin-right: 4px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .priority--alta {
@@ -656,8 +673,8 @@
   list-style: none;
 }
 
-/* Por la línea base y no por el centro: la hora es mono de 11 y el título es de 13, y
-   centrarlos uno contra otro dejaría la hora flotando medio píxel por encima de su renglón. */
+/* Por la línea base y no por el centro: la hora es de 11 y el título es de 13, y centrarlos
+   uno contra otro dejaría la hora flotando medio píxel por encima de su renglón. */
 .agenda__row {
   display: flex;
   align-items: baseline;
@@ -665,12 +682,12 @@
   padding: 4px 8px;
 }
 
-/* `5ch` es exactamente `14:30` en una fuente monoespaciada — no una medida aproximada en px
-   que haya que retocar si cambia la fuente de datos. Es un mínimo y no un ancho fijo porque
-   el `letter-spacing` del rol de datos empuja un pelo por fuera de esos cinco caracteres. */
+/* Con cifras tabulares todas las horas miden lo mismo, así que un ancho que quepa `23:59` es
+   una columna: los títulos arrancan en la misma vertical aunque uno empiece a las 9 y otro a
+   las 18. Es un mínimo y no un ancho fijo por el `letter-spacing` del rol de datos. */
 .agenda__time {
   flex: 0 0 auto;
-  min-width: 5ch;
+  min-width: 2.9em;
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-meta);
@@ -685,11 +702,9 @@
 .agenda__title {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-size: var(--text-title);
-  line-height: 1.35;
+  line-height: 1.38;
   color: var(--ink-secondary);
 }
 
@@ -708,13 +723,11 @@
 }
 
 /* El ajuste de «Texto de las tareas» vale también aquí: el título de un evento se corta por
-   el mismo sitio que el de una tarea, y quien pidió verlos enteros los pidió todos. */
-.panel[data-texto="completo"] .agenda__title {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.45;
+   el mismo sitio que el de una tarea, y quien pidió verlas a una línea las pidió todas. */
+.panel[data-texto="una"] .agenda__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Foco ────────────────────────────────────────────────────────────────────────────── */
@@ -764,8 +777,8 @@
 :root .editor__link:active,
 :root .editor__unlink:active,
 :root .editor__button:active,
-:root .rail__item:active,
-:root .foot__toggle:active,
+:root .list-header__back:active,
+:root .list-header__action:active,
 :root .group-header__tool:active,
 :root .task-row__tool:active,
 :root .topbar__gear:active,
@@ -790,9 +803,7 @@
 @media (prefers-reduced-motion: reduce) {
   .collapse,
   .task-row__title,
-  .task-row__title::after,
-  .task-row__meta,
-  .task-row__tools,
+  .task-row__tool,
   .checkbox__ring,
   .checkbox__tick,
   .checkbox svg,
@@ -969,8 +980,8 @@
   border-radius: 4px;
 }
 
-/* Dónde vive la sesión, y con qué modelo. En la fuente de interfaz: una ruta no es un dato
-   tabulado, y en mono pesaría más que el nombre que tiene encima. */
+/* Dónde vive la sesión, y con qué modelo. Sin cifras tabulares: una ruta no es un dato que se
+   compare en columna. */
 .claude__where {
   margin: 0;
   overflow: hidden;

@@ -114,7 +114,7 @@ export function TaskDetail({
       />
 
       <Field label="Proyecto">
-        <div className="chips">
+        <div className="picks">
           <Chip selected={!task.projectId} onClick={() => onPatch({ projectId: null })}>
             Sin proyecto
           </Chip>
@@ -132,7 +132,7 @@ export function TaskDetail({
       </Field>
 
       <Field label="Prioridad">
-        <div className="chips">
+        <div className="picks">
           {PRIORITIES.map(({ value, label }) => (
             <Chip
               key={value}
@@ -294,12 +294,12 @@ function Chip({
   return (
     <button
       type="button"
-      className={`chip${color ? " tinted" : ""}${selected ? " is-selected" : ""}`}
+      className={`pick${color ? " tinted" : ""}${selected ? " is-selected" : ""}`}
       style={color ? tint(color) : undefined}
       aria-pressed={selected}
       onClick={onClick}
     >
-      {color && <span className="chip__dot" />}
+      {color && <span className="pick__dot" />}
       {children}
     </button>
   );

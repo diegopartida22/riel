@@ -20,7 +20,7 @@ export interface SearchResultsProps {
 
 /**
  * Los resultados de la búsqueda. Sustituyen a la lista de la vista en curso mientras haya
- * algo escrito, y el riel se queda como estaba: la búsqueda no cambia dónde estás, solo tapa
+ * algo escrito, y la lista de debajo se queda como estaba: la búsqueda no cambia dónde estás, solo tapa
  * la lista un momento.
  *
  * Aquí no se arrastra ni se agrupa por vista. El orden lo manda la puntuación de la

@@ -4,11 +4,14 @@ import { dayOf, type Between, type Priority, type Project, type Task, type TaskP
 import { tint } from "../design/palette";
 import type { CalendarEvent } from "../state/agenda";
 import { beyond, horizonEnd, usesHorizon, type Horizonte } from "../state/horizonte";
+import { shortPath } from "../state/editors";
 import { emptyMessage, titleOf, viewKey, type View } from "../state/views";
 import { Agenda } from "../ui/Agenda";
+import { formatDueLong } from "../ui/dueDate";
 import { EmptyState } from "../ui/EmptyState";
 import { FoldHeader, GroupHeader } from "../ui/GroupHeader";
-import { Code } from "../ui/icons";
+import { SYSTEM_COLORS } from "../ui/listas";
+import { ListHeader } from "../ui/ListHeader";
 import { RowMenu } from "../ui/RowMenu";
 import { TaskRow } from "../ui/TaskRow";
 import { TitleEditor } from "../ui/TitleEditor";
@@ -46,6 +49,10 @@ export interface TaskListProps {
   events?: CalendarEvent[];
   /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
   horizonte: Horizonte;
+  /** La flecha del encabezado: vuelve a la pantalla de listas. */
+  onBack: () => void;
+  /** «Editar» en el encabezado de un proyecto: nombre, color y carpeta. */
+  onEditProject?: (project: Project) => void;
 }
 
 /** Qué fila tiene el menú abierto y dónde anclarlo. */
@@ -55,8 +62,8 @@ type OpenMenu = { id: string; anchor: DOMRect } | null;
  * La lista de cualquier vista. Lo único que cambia entre Hoy, Próximas, Todas, Completadas y
  * un proyecto es la consulta que la llenó y el encabezado; la fila es la misma en todas.
  *
- * Dentro de un proyecto se oculta el punto de color de cada fila: ahí sería decir en cada
- * renglón algo que ya dice el riel (spec 3.5).
+ * Dentro de un proyecto se oculta el proyecto de cada fila: ahí sería decir en cada renglón lo
+ * que ya dice el encabezado en grande (spec 3.5).
  *
  * En Completadas no se arrastra. El orden de esa vista lo da la fecha en que se terminó cada
  * tarea, no `position`, así que una manija ahí prometería algo que no se puede guardar.
@@ -83,6 +90,8 @@ export function TaskList({
   onOpenFolder,
   events,
   horizonte,
+  onBack,
+  onEditProject,
 }: TaskListProps) {
   const project = view.kind === "proyecto" ? projectsById.get(view.id) : undefined;
   const title = titleOf(view, project?.name);
@@ -228,35 +237,13 @@ export function TaskList({
   };
 
   /**
-   * El botón que abre la carpeta del proyecto en el editor (spec 13). Solo aparece con las dos
-   * condiciones puestas —hay carpeta vinculada y hay editor instalado— porque cualquiera de las
-   * dos sin la otra lo deja prometiendo algo que no puede hacer, que es lo mismo que ya decide
-   * si una fila dibuja su manija de arrastre.
-   *
-   * Lo nombra el editor y no la carpeta: lo que hace falta saber antes de pulsar es en qué se
-   * va a abrir, y la ruta ya está en el editor del proyecto, que es donde se puso.
-   */
-  const openFolder =
-    project?.folder && editorName && onOpenFolder ? (
-      <button
-        type="button"
-        className="group-header__tool"
-        title={`Abrir en ${editorName}`}
-        aria-label={`Abrir «${project.name}» en ${editorName}`}
-        onClick={() => onOpenFolder(project.folder as string)}
-      >
-        <Code size={13} aria-hidden />
-      </button>
-    ) : undefined;
-
-  /**
    * La agenda del día, y solo en Hoy (spec 15). En Próximas serían los eventos de otro día, y
    * en un proyecto no vienen a cuento: lo que este bloque contesta es qué le queda al día que
    * se está repartiendo, y ese día es hoy.
    *
-   * Va encima del encabezado y no dentro de la lista: son dos cosas distintas —lo que ya está
-   * comprometido y lo que hay que hacer— y meterlas bajo el mismo rótulo haría que HOY nombrara
-   * dos gramáticas de fila a la vez.
+   * Va entre el encabezado de la lista y las tareas, cada bloque con su rótulo: son dos cosas
+   * distintas —lo que ya está comprometido y lo que hay que hacer— y meterlas bajo el mismo
+   * haría que un solo nombre cubriera dos gramáticas de fila a la vez.
    */
   const agenda = view.kind === "hoy" && events?.length ? <Agenda events={events} /> : null;
 
@@ -272,20 +259,81 @@ export function TaskList({
     view.kind === "hoy" && !searching
       ? visible.filter((task) => !task.completedAt && task.dueAt && dayOf(task.dueAt) < today)
       : [];
-  const catchUp =
-    stale.length > 0 ? (
-      <button
-        type="button"
-        className="group-header__action"
-        title={`Mover ${stale.length === 1 ? "la vencida" : `las ${stale.length} vencidas`} a hoy`}
-        onClick={() => reschedule(stale.map((task) => task.id), today)}
-      >
-        Pasar a hoy
-      </button>
+  /**
+   * El encabezado de la lista (spec 3.4). Se pinta también mientras se lee, con el nombre y sin
+   * la cifra: es lo que dice a dónde se acaba de entrar, y que llegara tarde haría saltar la
+   * pantalla entera al terminar de leer en vez de solo la lista.
+   *
+   * La cifra son las raíces pendientes, plegadas incluidas: es lo que tiene la lista, no lo que
+   * cabe en este mes (spec 19). En Completadas no hay cifra, porque ahí nada está pendiente y el
+   * total de lo hecho en treinta días no contesta ninguna pregunta.
+   *
+   * Debajo, lo que es de la lista y no de una tarea. En Hoy, el día escrito entero, que es lo
+   * que la lista está contestando. En un proyecto, su carpeta (spec 13) y las acciones: abrirla
+   * en el editor —nombrado por el editor y no por la carpeta, porque lo que hay que saber antes
+   * de pulsar es en qué se va a abrir— y editar el proyecto, que antes era un clic
+   * derecho en un disco que nadie encontraba.
+   */
+  const pending = visible.filter((task) => !task.completedAt).length;
+  const color = project ? project.color : view.kind === "proyecto" ? null : SYSTEM_COLORS[view.kind];
+  const folder = project?.folder ?? null;
+
+  const subtitle =
+    view.kind === "hoy" ? (
+      capitalize(formatDueLong(today, false, today))
+    ) : folder ? (
+      <span title={folder}>{shortPath(folder, 30)}</span>
     ) : undefined;
 
+  const actions = (
+    <>
+      {stale.length > 0 && (
+        <button
+          type="button"
+          className="list-header__action"
+          title={`Mover ${stale.length === 1 ? "la vencida" : `las ${stale.length} vencidas`} a hoy`}
+          onClick={() => reschedule(stale.map((task) => task.id), today)}
+        >
+          Pasar a hoy
+        </button>
+      )}
+      {project && folder && editorName && onOpenFolder && (
+        <button
+          type="button"
+          className="list-header__action"
+          aria-label={`Abrir «${project.name}» en ${editorName}`}
+          onClick={() => onOpenFolder(folder)}
+        >
+          Abrir en {editorName}
+        </button>
+      )}
+      {project && onEditProject && (
+        <button
+          type="button"
+          className="list-header__action"
+          aria-label={`Editar el proyecto «${project.name}»`}
+          onClick={() => onEditProject(project)}
+        >
+          Editar
+        </button>
+      )}
+    </>
+  );
+  const hasActions = stale.length > 0 || (project && ((folder && editorName && onOpenFolder) || onEditProject));
+
+  const header = (
+    <ListHeader
+      title={title}
+      color={color}
+      count={loading || view.kind === "completadas" ? undefined : pending}
+      subtitle={subtitle}
+      actions={hasActions ? actions : undefined}
+      onBack={onBack}
+    />
+  );
+
   // Sin este hueco la lista parpadea con el estado vacío cada vez que se cambia de vista.
-  if (loading) return <div className="view" />;
+  if (loading) return <div className="view">{header}</div>;
 
   const open = menu && visible.find((task) => task.id === menu.id);
 
@@ -323,6 +371,7 @@ export function TaskList({
             current?.id === task.id ? null : { id: task.id, anchor },
           )
         }
+        menuOpen={menu?.id === task.id}
         focused={keys.focused}
         editing={editing}
         onEditSave={saveTitle}
@@ -363,49 +412,39 @@ export function TaskList({
 
   return (
     <div className="view" ref={keys.ref} onKeyDown={keys.onKeyDown} onFocusCapture={keys.onFocusCapture}>
+      {header}
       {error && <p className="notice notice--error">{error}</p>}
 
+      {/* Con la agenda delante, las tareas llevan su propio rótulo: sin él, la primera tarea
+          colgaría de «Agenda» y «Nada para hoy» se leería como que no hay más eventos. Sin
+          agenda sobra — el encabezado de la lista ya dice de qué es lo que hay debajo. */}
+      {agenda}
+      {agenda && <GroupHeader>Tareas</GroupHeader>}
+
       {visible.length === 0 ? (
-        <>
-          {agenda}
-          {/* Con la lista vacía el encabezado solo sale si trae el botón. Un proyecto recién
-              creado y vinculado a su carpeta es exactamente cuando hace falta abrirla, y sin
-              esto el botón desaparecía justo ahí; sin botón, en cambio, repetir el nombre que
-              ya está marcado en el riel sobre un «Este proyecto está vacío» son dos renglones
-              para no decir nada.
-
-              Con la agenda delante sí sale siempre: sin él, «Nada para hoy» colgaría del
-              rótulo AGENDA y se leería como que no hay más eventos, que es lo contrario de lo
-              que dice. */}
-          {(openFolder || agenda) && <GroupHeader action={openFolder}>{title}</GroupHeader>}
-          <EmptyState
-            message={emptyMessage(view)}
-            action={view.kind === "hoy" ? "Agregar tarea" : undefined}
-            onAction={onCapture}
-          />
-        </>
+        <EmptyState
+          message={emptyMessage(view)}
+          action={view.kind === "hoy" ? "Agregar tarea" : undefined}
+          onAction={onCapture}
+        />
       ) : (
-        <>
-          {agenda}
-          <GroupHeader action={openFolder ?? catchUp}>{title}</GroupHeader>
-          <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
-            {(folding ? near : visible).map(renderRow)}
+        <ul className={`task-list${drag.dragging ? " is-sorting" : ""}`}>
+          {(folding ? near : visible).map(renderRow)}
 
-            {/* El corte del horizonte (spec 19). Va dentro de la misma lista y no entre dos
-                `ul`: lo de más adelante se sigue pudiendo arrastrar contra lo de aquí, y dos
-                listas separadas por un encabezado harían que cruzar el corte fuera imposible. */}
-            {folding && (
-              <FoldHeader
-                label="Más adelante"
-                count={far.length}
-                open={unfolded}
-                onToggle={() => setUnfolded((current) => !current)}
-              />
-            )}
+          {/* El corte del horizonte (spec 19). Va dentro de la misma lista y no entre dos
+              `ul`: lo de más adelante se sigue pudiendo arrastrar contra lo de aquí, y dos
+              listas separadas por un encabezado harían que cruzar el corte fuera imposible. */}
+          {folding && (
+            <FoldHeader
+              label="Más adelante"
+              count={far.length}
+              open={unfolded}
+              onToggle={() => setUnfolded((current) => !current)}
+            />
+          )}
 
-            {folding && unfolded && far.map(renderRow)}
-          </ul>
-        </>
+          {folding && unfolded && far.map(renderRow)}
+        </ul>
       )}
 
       {open && menu && (
@@ -487,4 +526,9 @@ function useEntradas(ids: string[], loading: boolean, clave: string): ReadonlySe
   }, [nuevas]);
 
   return nuevas;
+}
+
+/** «lunes 26 de octubre» → «Lunes 26 de octubre»: es el renglón entero, y empieza en mayúscula. */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -141,7 +141,7 @@ export async function countTasks(): Promise<number> {
 }
 
 /**
- * Pendientes por proyecto, para el conteo del tooltip del riel (spec 3.4). Cuenta tareas
+ * Pendientes por proyecto, para el conteo de cada proyecto en la pantalla de listas (spec 3.4). Cuenta tareas
  * raíz: las subtareas ya están representadas por la suya.
  */
 export async function pendingCountByProject(): Promise<Map<string | null, number>> {
@@ -152,6 +152,43 @@ export async function pendingCountByProject(): Promise<Map<string | null, number
       GROUP BY project_id`,
   );
   return new Map(rows.map((row) => [row.project_id, row.total]));
+}
+
+/** Lo que cuenta cada una de las cuatro listas del sistema, más lo vencido de Hoy. */
+export interface ViewCounts {
+  hoy: number;
+  vencidas: number;
+  proximas: number;
+  todas: number;
+  completadas: number;
+}
+
+/**
+ * Los números de la pantalla de listas, de una sola pasada. Cuentan lo mismo que enseña cada
+ * lista al entrar —raíces, con las mismas fronteras de fecha que `tasksDueBy` y
+ * `tasksDueAfter`— porque un número que no cuadra con lo que se ve al pulsarlo es peor que no
+ * tener número. Vencidas son las de días anteriores, no las de hoy con la hora pasada: es lo
+ * que «Pasar a hoy» se llevaría (spec 21).
+ */
+export async function countByView(day: string): Promise<ViewCounts> {
+  const [row] = await select<Record<keyof ViewCounts, number | null>>(
+    `SELECT
+       SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL AND substr(due_at, 1, 10) <= $1 THEN 1 ELSE 0 END) AS hoy,
+       SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL AND substr(due_at, 1, 10) <  $1 THEN 1 ELSE 0 END) AS vencidas,
+       SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL AND substr(due_at, 1, 10) >  $1 THEN 1 ELSE 0 END) AS proximas,
+       SUM(CASE WHEN completed_at IS NULL THEN 1 ELSE 0 END) AS todas,
+       SUM(CASE WHEN completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completadas
+     FROM tasks
+     WHERE parent_id IS NULL`,
+    [day],
+  );
+  return {
+    hoy: row?.hoy ?? 0,
+    vencidas: row?.vencidas ?? 0,
+    proximas: row?.proximas ?? 0,
+    todas: row?.todas ?? 0,
+    completadas: row?.completadas ?? 0,
+  };
 }
 
 /**

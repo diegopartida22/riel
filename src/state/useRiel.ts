@@ -6,6 +6,7 @@ import {
   DEFAULT_RETENTION,
   allTasks,
   completeTask,
+  countByView,
   countTasks,
   createProject,
   createTask,
@@ -38,6 +39,7 @@ import {
   type Retention,
   type Task,
   type TaskPatch,
+  type ViewCounts,
   type TaskTree,
 } from "../data";
 import { parse as parseCapture } from "./capture";
@@ -90,6 +92,8 @@ const DAY_CHECK_MS = 60 * 1000;
  */
 const UNDO_DEPTH = 20;
 
+const NO_COUNTS: ViewCounts = { hoy: 0, vencidas: 0, proximas: 0, todas: 0, completadas: 0 };
+
 /**
  * Un borrado que se puede reponer. Completar no entra: tiene sus propios tres segundos con la
  * casilla, que es un deshacer más directo que un atajo (spec 3.6).
@@ -109,8 +113,10 @@ export interface RielState {
 
   projects: Project[];
   projectsById: Map<string, Project>;
-  /** Pendientes por proyecto, para el tooltip del riel colapsado. */
+  /** Pendientes por proyecto, para la pantalla de listas. */
   counts: Map<string | null, number>;
+  /** Lo que cuenta cada lista del sistema, para sus mosaicos. */
+  viewCounts: ViewCounts;
 
   tasks: TaskTree[];
   /** El día local con el que se compararon las fechas de esta lista. */
@@ -131,7 +137,12 @@ export interface RielState {
   undoing: ReadonlySet<string>;
 
   /** Lo que el parser de captura sacó del texto pisa lo que la vista pondría por omisión. */
-  add: (draft: NewTask) => Promise<boolean>;
+  /**
+   * Crea una tarea. Con `inherit` (lo normal) hereda de la vista en curso lo que el texto no
+   * diga; sin él nace solo con lo escrito — es lo que se quiere desde la pantalla de listas,
+   * donde la vista en curso es la última que se miró y no la que se está mirando.
+   */
+  add: (draft: NewTask, inherit?: boolean) => Promise<boolean>;
   /** Crea una tarea justo debajo de otra y devuelve su id. Es lo que hace ⌘⏎ (spec 5). */
   addAfter: (title: string, afterId: string) => Promise<string | null>;
   /** Cuelga una subtarea de una tarea. Solo desde el detalle: es donde se ven las hermanas. */
@@ -174,7 +185,7 @@ export interface RielState {
     folder: string | null,
   ) => Promise<boolean>;
   removeProject: (id: string) => Promise<void>;
-  /** Mueve un proyecto en el riel, entre los dos que se le indiquen. */
+  /** Mueve un proyecto en la pantalla de listas, entre los dos que se le indiquen. */
   reorderProject: (id: string, between: Between) => Promise<void>;
 
   /** Cuánto se conservan las completadas antes del barrido (spec 8). `null` es «siempre». */
@@ -233,9 +244,15 @@ export function useRiel(): RielState {
   const [today, setToday] = useState(localDay);
   // La preferencia se lee una vez, para el primer estado. Con cuál abrir es de `usePreferencias`;
   // cuál se está viendo ahora es de aquí.
-  const [view, setView] = useState<View>(() => ({ kind: startView() }));
+  // Con la pantalla de listas como arranque, la lista que queda debajo es Hoy: es a la que
+  // lleva el primer clic casi siempre, y tenerla ya leída es lo que hace que ese clic no espere.
+  const [view, setView] = useState<View>(() => {
+    const start = startView();
+    return { kind: start === "inicio" ? "hoy" : start };
+  });
   const [projects, setProjects] = useState<Project[]>([]);
   const [counts, setCounts] = useState<Map<string | null, number>>(new Map());
+  const [viewCounts, setViewCounts] = useState<ViewCounts>(NO_COUNTS);
   const [tasks, setTasks] = useState<TaskTree[]>([]);
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
   const [undoing, setUndoing] = useState<ReadonlySet<string>>(new Set());
@@ -559,6 +576,19 @@ export function useRiel(): RielState {
     }
   }, []);
 
+  // Los mosaicos de la pantalla de listas. Se recuentan detrás de cualquier cosa que mueva la
+  // lista en curso o los conteos por proyecto: es una sola consulta de agregados, y llevar la
+  // cuenta a mano en cada operación sería repetir aquí las fronteras de fecha de cada vista.
+  useEffect(() => {
+    let alive = true;
+    countByView(today)
+      .then((next) => alive && setViewCounts(next))
+      .catch((cause) => console.error(cause));
+    return () => {
+      alive = false;
+    };
+  }, [counts, tasks, today]);
+
   /**
    * El botón «Completar» del banner (spec 7), de vuelta en la base.
    *
@@ -729,7 +759,7 @@ export function useRiel(): RielState {
   );
 
   const add = useCallback(
-    async (draft: NewTask) => {
+    async (draft: NewTask, inherit = true) => {
       const clean = draft.title.trim();
       if (!clean) return false;
 
@@ -737,7 +767,8 @@ export function useRiel(): RielState {
       try {
         // La vista pone el fondo —Hoy da la fecha de hoy, un proyecto da el suyo— y lo que se
         // escribió lo pisa. Escribir `#casa` dentro de Infra manda la tarea a Casa.
-        const created = await createTask({ ...draftFor(view, today), ...draft, title: clean });
+        const base = inherit ? draftFor(view, today) : {};
+        const created = await createTask({ ...base, ...draft, title: clean });
         // El permiso se pide la primera vez que alguien le pone hora a algo, no en el primer
         // arranque (spec 7): así la pregunta llega cuando ya se ve para qué sirve.
         if (created.hasTime) void ensurePermission(keepOpen);
@@ -981,8 +1012,8 @@ export function useRiel(): RielState {
     setDetailId(null);
   }, [detailId, drop]);
 
-  // Elegir en el riel manda sobre la búsqueda: si la consulta siguiera puesta, el clic no
-  // cambiaría nada de lo que se ve y el riel parecería roto.
+  // Elegir una lista manda sobre la búsqueda: si la consulta siguiera puesta, el clic no
+  // cambiaría nada de lo que se ve y la navegación parecería rota.
   const select = useCallback(
     (next: View) => {
       closeDetail();
@@ -1040,7 +1071,7 @@ export function useRiel(): RielState {
   );
 
   /**
-   * Mueve un proyecto en el riel. Es la misma escritura que la de una tarea —`position` es una
+   * Mueve un proyecto en la pantalla de listas. Es la misma escritura que la de una tarea —`position` es una
    * escala de floats y solo se miran los dos vecinos— sobre la otra tabla.
    *
    * El orden local se cambia antes de esperar a la base, por lo mismo que en las tareas: el
@@ -1114,7 +1145,7 @@ export function useRiel(): RielState {
    *
    * Además comprueba que el proyecto que se está mirando siga existiendo. Reemplazando se
    * borran los dos tablas enteras, y quedarse dentro de la vista de un proyecto que ya no está
-   * deja una lista vacía sin nada en el riel que explique por qué.
+   * deja una lista vacía sin nada en pantalla que explique por qué.
    */
   const reloadAll = useCallback(async () => {
     try {
@@ -1141,6 +1172,7 @@ export function useRiel(): RielState {
     projects,
     projectsById,
     counts,
+    viewCounts,
     tasks,
     today,
     loading,

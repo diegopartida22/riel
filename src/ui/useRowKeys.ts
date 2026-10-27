@@ -61,7 +61,7 @@ export function useRowKeys({ order, onToggle, onEdit }: RowKeysOptions) {
    * ocupó su sitio.
    *
    * Solo cuando el foco cayó al `body`, que es la firma exacta de «se lo llevó el nodo que se
-   * fue». Si estaba en cualquier otro sitio —la búsqueda, el riel— es que el usuario lo movió
+   * fue». Si estaba en cualquier otro sitio —la búsqueda, el encabezado— es que el usuario lo movió
    * a propósito y no hay que robárselo. Con el ratón tampoco se ve nada: `:focus-visible` no
    * pinta un anillo por un foco puesto a mano después de un clic.
    */
@@ -129,10 +129,10 @@ export function useRowKeys({ order, onToggle, onEdit }: RowKeysOptions) {
    * La entrada a la lista. El manejador de arriba cuelga del contenedor, así que solo se entera
    * de una flecha cuando el foco ya está dentro. Al abrir el panel el foco está en el `body`, y
    * en cuanto se busca algo está en el campo de arriba: en los dos casos ↓ no hacía nada y la
-   * única forma de llegar a la lista era tabular once veces por la barra y el riel enteros, que
+   * única forma de llegar a la lista era tabular once veces por la barra y la columna de listas enteras, que
    * es tanto como decir que las flechas de la sección 5 no existían.
    *
-   * Solo se toman esos dos sitios. Si el foco está en un botón del riel, la flecha es suya.
+   * Solo se toman esos dos sitios. Si el foco está en un botón del encabezado, la flecha es suya.
    */
   useEffect(() => {
     const enter = (event: globalThis.KeyboardEvent) => {

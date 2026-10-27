@@ -6,7 +6,7 @@ export interface ProjectMenuProps {
   project: Project;
   /** Rectángulo del `⋯` que lo abrió, en coordenadas de ventana. */
   anchor: DOMRect;
-  /** Falso en los extremos del riel: no hay hueco al que subir o bajar. */
+  /** Falso en los extremos de la lista de proyectos: no hay hueco al que subir o bajar. */
   canRaise: boolean;
   canLower: boolean;
   onEdit: () => void;
@@ -19,12 +19,11 @@ export interface ProjectMenuProps {
 const EDGE = 8;
 
 /**
- * El menú del `⋯` de un proyecto en el riel expandido.
+ * El menú del `⋯` de un proyecto en la pantalla de listas.
  *
  * Existe por una razón concreta: editar un proyecto se hacía solo con clic derecho o doble
- * clic, que son gestos que nadie encuentra si no se los cuentan. El riel colapsado no tiene
- * dónde ponerlo —44px son el disco y nada más, que es su gracia—, pero expandido sobra sitio
- * a la derecha del nombre.
+ * clic, que son gestos que nadie encuentra si no se los cuentan. El `⋯` aparece al pasar por el
+ * renglón, en el hueco de la cuenta, y el clic derecho sigue abriendo lo mismo desde el puntero.
  *
  * Subir y bajar acompañan a arrastrar en vez de sustituirlo. Arrastrar es el gesto y es el
  * que persiste igual; esto es lo que hace que se sepa que se puede, y de paso lo deja al

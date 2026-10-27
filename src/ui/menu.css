@@ -189,7 +189,8 @@
 }
 
 /* El encabezado de un grupo del popover, con el mismo tratamiento que los de la lista
-   (spec 3.3): mono a 10px, versalitas, tinta terciaria. Sustituye a las hairlines que había
+   (spec 3.3): la letra del sistema en negrita, en sentence case y un tono por debajo, como los
+   rótulos de sección de un menú de macOS. Sustituye a las hairlines que había
    entre grupos — una regla dice que hay un corte pero no de qué, y tres reglas en un popover
    de doscientos píxeles lo convertían en una reja. Un rótulo separa igual y además nombra.
 
@@ -197,13 +198,10 @@
    empiezan ahí, no de la caja. */
 .settings__section {
   margin: 14px 8px 4px var(--indent);
-  font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 /* Una preferencia: su nombre a la izquierda, sus opciones a la derecha. Apilados, el nombre
@@ -290,7 +288,7 @@
 }
 
 /* El conteo junto al nombre de una lista de Recordatorios (spec 16). Es un dato y no un rótulo,
-   así que va en mono y tabular como todos los números de la app (§3.3): las cifras de las filas
+   así que va en cifras tabulares como todos los números de la app (§3.3): las cifras de las filas
    quedan en columna y la hoja no baila al cambiar de dos a tres dígitos. */
 .settings__hint {
   margin-left: 6px;
@@ -593,7 +591,7 @@
 }
 
 /* El porcentaje de la descarga cambia varias veces por segundo. En la fuente de interfaz cada
-   dígito mide distinto y el renglón entero bailaría, así que va en mono con cifras de ancho
+   dígito mide distinto y el renglón entero bailaría, así que va con cifras de ancho
    fijo — el mismo tratamiento que las fechas de la lista (spec 3.3). */
 .settings__pct {
   font-family: var(--font-data);
@@ -659,12 +657,9 @@
    la convierten en una reja. */
 .menu__grupo {
   padding: 9px var(--indent, 6px) 3px;
-  font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 .menu__grupo:first-child {

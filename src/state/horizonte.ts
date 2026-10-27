@@ -7,7 +7,7 @@
  * el 10 de septiembre pone «17 de octubre» en Todas ese mismo día, y Todas es justo donde hay
  * que mirar porque es la única vista donde vive lo que no tiene fecha.
  *
- * No es un dato, es una preferencia de esta máquina: va a `localStorage` con el riel y la
+ * No es un dato, es una preferencia de esta máquina: va a `localStorage` con la
  * vista de arranque, y no a SQLite con la retención.
  */
 

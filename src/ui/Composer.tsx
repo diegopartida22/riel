@@ -5,11 +5,16 @@ import { tint } from "../design/palette";
 import type { CaptureToken } from "../state/capture";
 import { useCaptura } from "../state/useCaptura";
 import { CaptureMenu } from "./CaptureMenu";
-import { X } from "./icons";
+import { Plus, X } from "./icons";
 
 export interface ComposerProps {
   /** Base vacía: cambia el texto de invitación (spec 3.7). */
   firstRun?: boolean;
+  /**
+   * Dónde va a caer lo que se escriba, dicho en el propio campo: «Nueva tarea en Infra». Lo que
+   * hereda una tarea de la vista (spec 6) no se veía en ninguna parte hasta después de escribirla.
+   */
+  placeholder?: string;
   /** Para resolver `#proyecto` y para el autocompletado. */
   projects: Project[];
   /** El día local con el que se resuelven `hoy`, `mañana` y los días de la semana. */
@@ -34,7 +39,14 @@ export interface ComposerProps {
  * El estado y las teclas los lleva `useCaptura`, que es lo mismo que usa la ventana de captura
  * rápida (spec 18): la gramática se aprende una vez y vale en los dos sitios.
  */
-export function Composer({ firstRun = false, projects, today, ref, onAdd }: ComposerProps) {
+export function Composer({
+  firstRun = false,
+  placeholder = "Nueva tarea",
+  projects,
+  today,
+  ref,
+  onAdd,
+}: ComposerProps) {
   // El pie no ofrece notas: un comando que abre un campo que aquí no cabe sería un renglón
   // prometiendo algo que no está.
   const captura = useCaptura({ projects, today });
@@ -89,14 +101,16 @@ export function Composer({ firstRun = false, projects, today, ref, onAdd }: Comp
       )}
 
       <div className="composer__row">
+        {/* El botón de Recordatorios: un disco del acento con la cruz calada. Es la única
+            mancha de color del pie, y dice dónde se agrega sin tener que leerlo. */}
         <span className="composer__plus" aria-hidden="true">
-          +
+          <Plus size={11} />
         </span>
         <input
           ref={attach}
           type="text"
           className="composer__field"
-          placeholder={firstRun ? "¿Qué hay que hacer?" : "Nueva tarea"}
+          placeholder={firstRun ? "¿Qué hay que hacer?" : placeholder}
           aria-label="Nueva tarea"
           value={captura.text}
           spellCheck={false}

@@ -109,6 +109,16 @@ sigue mandando el proyecto — sus casillas, anillos de foco, selección y botó
 color — y en Hoy, Próximas, Todas y Completadas el acento es el del sistema, con el color de
 proyecto solo en el punto de cada fila.
 
+Las cuatro listas del sistema llevan además un color de nombre —el disco de su mosaico y el
+título de su encabezado (§3.4)— y ninguno es un hex nuevo. Hoy lleva el acento del sistema: es
+la lista que se mira casi siempre, y la que tiene que verse primero es la del color que la
+persona eligió para su Mac. Las otras tres salen de la paleta de proyectos, elegidas por lo que
+dicen y no por adorno: Ladrillo para Próximas, como el calendario; Grafito para Todas, que es
+el montón entero; Jade para Completadas, que es lo hecho. Es color de rótulo y no de control:
+las casillas, el anillo y los botones de esas vistas siguen con el acento del sistema, y los
+botones de texto del encabezado también — en Próximas, el rojo de su título diría «vencido»
+sobre un botón que no lo es.
+
 El azul de `#007AFF` ya no está prohibido, pero tampoco se escribe: si el acento sale azul es
 porque el usuario lo puso azul. **Ningún hex de acento va escrito en el código.** Lo lee Rust de
 `NSColor.controlAccentColor` y lo publica como `--system-accent-light` / `--system-accent-dark`;
@@ -140,8 +150,24 @@ en `:root` y sobreescríbelos en `@media (prefers-color-scheme: dark)`.
 --layer-pressed          #000000 ／ 13%       #FFFFFF ／ 17%
 --hairline               #000000 ／ 10%       #FFFFFF ／ 12%
 --field-bg               #FFFFFF ／ 55%       #000000 ／ 22%
+--card-bg                #FFFFFF ／ 52%       #FFFFFF ／ 7%
+--card-hover             #FFFFFF ／ 72%       #FFFFFF ／ 11%
+--veil                   #F6F6F8 ／ 34%       #141416 ／ 42%
 --danger                 #C4483C              #E8695C
 ```
+
+`--card-bg` es lo que agrupa sobre el vidrio: los mosaicos y la lista de proyectos de la
+pantalla de listas (§3.4), con el arco de 10px de un grupo de Ajustes del Sistema. Una veladura
+más clara que el vidrio en claro y un velo blanco en oscuro, que es como el sistema dibuja sus
+grupos — no un panel opaco.
+
+`--veil` es la veladura de lectura, de borde a borde y en las dos ventanas, y solo con el vidrio
+nuevo. `NSGlassEffectView` es casi claro: deja leer lo que haya detrás —el escritorio en el
+panel, la ventana que se estaba usando en la captura— a través de la lista, y con un fondo de
+pantalla con algo de textura los renglones costaban de leer. Fue la primera queja que abrió el
+rediseño de la 1.0. Es lo que hace Spotlight: más materia donde hay renglones. Sigue siendo una
+capa con alfa, así que el vidrio se sigue viendo como vidrio; el `Popover` heredado ya trae la
+suya y no la necesita, y con «Reducir transparencia» manda el sólido de §3.9.
 
 Los 8 colores curados de proyecto. Cada uno lleva par claro/dark; sobre vidrio oscuro las
 versiones claras se apagan, así que se aclaran ligeramente.
@@ -165,105 +191,208 @@ oscuro." No lo bloquees — es su decisión.
 
 ### 3.3 Tipografía
 
-Dos roles, deliberados:
+Una sola familia, la del sistema —`-apple-system, BlinkMacSystemFont`—, en dos roles. En una
+app que debe pasar por nativa, cualquier otra cosa la delata.
 
-- **Interfaz**: la fuente del sistema, `-apple-system, BlinkMacSystemFont`. En una app que
-  debe pasar por nativa, cualquier otra cosa la delata.
-- **Datos**: `ui-monospace, "SF Mono", monospace` con `font-variant-numeric: tabular-nums`,
-  para fechas, horas, contadores y encabezados de día. Esto es lo que le da personalidad de
-  herramienta y no de app genérica de listas: las fechas quedan alineadas en columna y la
-  lista no baila cuando cambian los números.
+- **Interfaz**: la letra tal cual.
+- **Datos**: la misma letra con `font-variant-numeric: tabular-nums`, para fechas, horas y
+  contadores. Las cifras tabulares son lo que importa: las fechas quedan alineadas en columna y
+  la lista no baila cuando cambia un número. El token sigue llamándose `--font-data` y todo lo
+  que en este documento dice «la fuente de datos» es esto.
+
+Hasta la 0.9 los datos iban en `ui-monospace`, y los encabezados de grupo en versalitas mono.
+Eso le daba a la lista un aire de terminal que ninguna app del sistema tiene: Recordatorios,
+Calendario y el Finder escriben sus fechas con la misma letra que sus títulos y nombran sus
+grupos en minúsculas y negrita. El carácter de herramienta lo siguen dando las columnas que no
+se mueven, que es lo que las cifras tabulares conservan; el mono solo añadía el disfraz.
 
 Escala, ceñida a propósito:
 
 ```
+título de lista      22px / peso 700        → color de la lista (§3.4)
+título en el detalle 15px / 1.3 / peso 600 / tracking -0.01em
 título de fila       13px / 1.35 / peso 400
 notas y metadatos    11px / 1.4  / peso 400  → --ink-secondary
-fecha y hora         11px mono   / peso 500  / tracking 0.02em
-encabezado de grupo  10px mono   / peso 600  / mayúsculas / tracking 0.08em → --ink-tertiary
-nombre de proyecto   12px / peso 500
+fecha y hora         11px datos  / peso 500  / tracking 0.02em
+encabezado de grupo  11px / peso 600 / sentence case → --ink-secondary
+nombre de proyecto   13px / peso 500
 ```
+
+Los encabezados de grupo —Agenda y Tareas en Hoy, «Más adelante», los resultados de una
+búsqueda, el disco de las sesiones, los grupos de Ajustes y del menú de comandos— van como los
+grupos de una barra lateral del sistema: en la letra de la interfaz, en negrita y sin
+versalitas. Un tono por debajo del título de lista, que es quien dice dónde se está.
 
 ### 3.4 Layout
 
-Panel de **440 × 580**, no redimensionable, esquinas de 12px.
+Panel de **440 × 580**, no redimensionable, esquinas de 12px. Sin columnas: lo que se ve tiene
+el ancho entero.
 
 ```
 ┌──────────────────────────────────────────────┐
-│ ⌕ Buscar                                 ⚙︎  │  48px
-├──────┬───────────────────────────────────────┤
-│      │  HOY                                  │
-│ ●    │  ○  Revisar PR de auth        mié 12  │
-│ ●    │     ○ dejar comentarios               │
-│ ●    │  ○  Llamar al banco        !  14:30   │
-│ ●    │                                       │
-│ ●    │  PRÓXIMAS                             │
-│      │  ○  Renovar dominio           vie 14  │
-│ ⊕    │                                       │
-├──────┼───────────────────────────────────────┤
-│      │  + Nueva tarea                        │  44px
-└──────┴───────────────────────────────────────┘
-   ↑ riel de proyectos, colapsado a 44px
+│  ( ⌕ Buscar                         )    ⚙︎  │  48px
+├──────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐    │
+│  │ (☀)          4  │  │ (▦)          7  │    │
+│  │ Hoy  2 vencidas │  │ Próximas        │    │
+│  └─────────────────┘  └─────────────────┘    │
+│  ┌─────────────────┐  ┌─────────────────┐    │
+│  │ (≡)         23  │  │ (✓)             │    │
+│  │ Todas           │  │ Completadas     │    │
+│  └─────────────────┘  └─────────────────┘    │
+│                                              │
+│  Mis proyectos                               │
+│  ┌──────────────────────────────────────┐    │
+│  │ (I)  Infra                       3 › │    │
+│  │ (R)  Riel                       12 › │    │
+│  │ (+)  Nuevo proyecto                  │    │
+│  └──────────────────────────────────────┘    │
+│  ┌──────────────────────────────────────┐    │
+│  │ (>_) Sesiones de Claude            › │    │
+│  └──────────────────────────────────────┘    │
+├──────────────────────────────────────────────┤
+│  (+) Nueva tarea                             │  44px
+└──────────────────────────────────────────────┘
 ```
 
-**El riel es el elemento firma de la app.** Colapsado (por defecto) es una columna de
-discos de color: los proyectos son reconocibles solo por su color, sin texto. Expandido a
-148px muestra los nombres junto a los discos, más las vistas Hoy / Próximas / Todas /
-Completadas arriba. El estado de expansión persiste. En el riel colapsado, las cuatro
-vistas del sistema se representan con iconos en `--ink-tertiary`, separadas de los
-proyectos por una hairline.
+**La pantalla de listas es lo que se ve al abrir el panel**, y sustituye al riel de proyectos
+que tuvo hasta la 0.9. El riel era una columna de 44px que reconocía los proyectos solo por su
+color, y cobraba ese carácter en el ancho de todo lo demás: expandido, a la lista le quedaban
+260px y los títulos se cortaban a media frase. La queja que abrió el rediseño de la 1.0 era
+exactamente esa —las tareas no se podían leer enteras— y no tenía arreglo mientras una columna
+fija se comiera un tercio del panel. Ahora las listas tienen la pantalla entera para ellas, y
+entrar en una le da la pantalla entera a sus tareas. Es la forma de Recordatorios y de Notas, y
+la de casi cualquier cosa que el sistema enseñe en un sitio estrecho: se elige primero, se lee
+después.
+
+- **Arriba, los cuatro mosaicos del sistema**, en una rejilla de dos por dos sobre
+  `--card-bg`: el glifo en un disco de 26px del color de la lista (§3.1), el conteo grande
+  enfrente y el nombre debajo. Se lee primero cuánto y después de qué, que es el orden en que se
+  pregunta. Hoy dice además cuántas de esas ya vencieron, en `--danger` y pegado al nombre: es
+  la única cifra del mosaico que pide hacer algo, y escondida dentro del total no se
+  distinguiría de un día normal. Completadas no lleva cifra: es un archivo que solo crece, y un
+  número que sube cada vez que se cumple algo se leería como algo pendiente.
+- **Debajo, «Mis proyectos»**, un grupo de renglones sobre la misma veladura, con la hairline
+  entre ellos arrancando donde arranca el nombre, como en cualquier grupo del sistema. Cada
+  proyecto lleva **su inicial sobre su color**, en un disco de 22px: un disco sin letra se
+  distinguía de sus vecinos pero no decía cuál era. La inicial va por grafema, así que un
+  proyecto que empiece por un emoji enseña el emoji entero. Al otro extremo, los pendientes en
+  la fuente de datos y en `--ink-tertiary`, y un `›` que dice que se entra. Un proyecto sin
+  pendientes no enseña un cero: lo que se lee de una columna de números es cuál pesa, y un cero
+  repetido siete veces es ruido con forma de dato. El último renglón es «Nuevo proyecto».
+- **Aparte, en su propio grupo, «Sesiones de Claude»** (§17.6). No es una lista de tareas —ni
+  se completa nada ahí ni entra nada desde la captura— y el grupo separado dice justo eso.
+
+Un clic en un proyecto entra; un doble clic lo edita. Al pasar el puntero aparece un `⋯` en el
+hueco de la cuenta —que se desvanece al llegar él, la misma gramática que el `⋯` de una fila de
+tarea (§3.5), así que no se mueve nada— y abre un menú con Editar proyecto, Subir y Bajar. El
+clic derecho abre el mismo menú desde el puntero. Editar se hacía antes solo con clic derecho o
+doble clic sobre un disco, que son gestos que nadie encuentra si no se los cuentan. **El renglón
+entero es también la manija**: se arrastra para reordenar, y el umbral de 3px de `useReorder`
+deja convivir el arrastre con el clic que entra. Subir y Bajar acompañan al arrastre en vez de
+sustituirlo: son lo que hace que se sepa que se puede, y de paso lo dejan al alcance del teclado.
+↑↓ recorre los proyectos; los mosaicos no entran, porque son cuatro, están a la vista y ⌘1..4
+llega a ellos sin pasar por aquí.
+
+**Dentro de una lista, el encabezado dice dónde se está**, y por eso es lo más grande del panel:
+un `‹` que vuelve a la pantalla de listas, el nombre a 22px y en peso 700 en el color de la
+lista, y lo pendiente al otro extremo en el mismo color y al mismo tamaño, porque es la otra
+mitad de la respuesta. El título arranca en la misma columna que el de las tareas: la flecha
+ocupa exactamente lo que en una fila ocupan su relleno y su casilla. Con el riel, eso lo decía un
+disco de 22px marcado entre otros siete, y el nombre de la lista era un rótulo de 10px en
+versalitas que se leía como un adorno.
+
+Debajo del nombre va el renglón de lo que es de la lista y no de una tarea: el día escrito entero
+en Hoy, la carpeta de un proyecto (§13), y al otro extremo las acciones en texto —«Pasar a hoy»
+(§21), «Abrir en {editor}» (§13), «Editar»— en el acento y sin caja, como el «Borrar» de un grupo
+del Centro de notificaciones. En texto y no en glifos sueltos, porque son acciones que se leen
+antes de pulsarlas. Completadas no lleva cifra, por lo mismo que su mosaico. Mientras la lista se
+lee, el encabezado ya está, con el nombre y sin la cifra: que llegara tarde haría saltar la
+pantalla entera al terminar de leer en vez de solo la lista.
+
+El pie es el campo de captura, y dice antes de escribir a dónde va a caer lo que se escriba:
+«Nueva tarea para hoy» en Hoy, «Nueva tarea en Infra» dentro de un proyecto, «Nueva tarea» a
+secas en la pantalla de listas —donde no hay vista de la que heredar, por lo mismo que un
+`riel://` (§14): lo que el texto no diga, no lo pone nadie—. Lo que una tarea hereda de la vista
+(§6) no se veía en ninguna parte hasta después de escribirla. Delante, un disco del acento con
+la cruz calada, como el «Nuevo recordatorio» del sistema: es la única mancha de color del pie, y
+dice dónde se agrega sin tener que leerlo. La búsqueda de arriba es una píldora de 28px sobre
+la pista de un segmentado, con el anillo de acento al enfocarla, como un `NSSearchField`; sin
+hairline debajo de la barra, porque la píldora ya separa y una regla más partía el vidrio en dos
+franjas.
 
 Los iconos son de Hugeicons (`@hugeicons/core-free-icons`, MIT) y se importan siempre desde
 `src/ui/icons.tsx`, nunca del paquete: el juego es una decisión de diseño, y cambiarlo tiene
 que ser un archivo. Ahí también se fija el grosor del trazo, que se mide en píxeles ya
 dibujados y no en unidades de la rejilla de 24, para que un icono de 11px y uno de 15px
-pesen lo mismo.
-
-Al hacer hover sobre un disco colapsado, aparece un tooltip nativo con el nombre y el
-conteo de pendientes.
-
-Expandido, ese conteo deja de vivir solo en el tooltip y sale a la derecha del nombre, en la
-fuente de datos y en `--ink-tertiary`. Es el dato que se quiere de un proyecto justo antes de
-entrar en él, y colapsado no cabía en ningún sitio; expandido sobran cuarenta píxeles ahí. Un
-proyecto sin pendientes no enseña un cero: lo que se lee de una columna de números es cuál pesa,
-y un cero repetido siete veces es ruido con forma de dato. Comparte el hueco del `⋯` y se
-desvanece cuando entra, exactamente como la fecha de una fila de tarea (§3.5), así que al pasar
-el puntero no se mueve nada.
+pesen lo mismo. El glifo de cada lista del sistema es el mismo en su mosaico, en Ajustes y en
+la captura: enseñar otro obligaría a aprender dos vocabularios para una sola lista de cuatro.
 
 ### 3.5 La fila de tarea
 
 ```
-○  Revisar el PR de autenticación        ●  mié 12
-   └ checkbox    título                proyecto  fecha
+○  !! Revisar el PR de autenticación, que lleva          ⋯
+      dos días esperando
+      Falta el middleware y los tests de la sesión
+      mié 12  ↻  ● Infra
+   ○ dejar comentarios
 ```
 
-- Checkbox: círculo de 15px, borde `--ink-tertiary` de 1.5px. Al hover, el borde toma el
+**El título se enseña entero**, en tantos renglones como haga falta, y debajo van las notas y un
+renglón con los datos. Hasta la 0.9 los datos iban a la derecha del título y le disputaban el
+ancho, y lo que perdía era el título: una tarea cortada a media frase obliga a abrirla para
+saber cuál era, y quien escribe títulos largos los escribe en todas. Debajo, el título tiene la
+fila entera y los datos se leen en el orden en que se preguntan. Es la fila de Recordatorios.
+
+- Checkbox: círculo de 17px, borde `--ink-tertiary` de 1.5px. Al hover, el borde toma el
   color del proyecto de esa tarea.
-- Prioridad: **alta** muestra un `!` en el color del proyecto antes de la fecha. **Media**
-  muestra el `!` en `--ink-tertiary`. **Baja no muestra nada.** Esto es intencional — es lo
-  que evita que la lista se vuelva un semáforo.
-- Fecha: en mono. Vencida → `--danger`. Hoy → `--ink-primary`. Futura → `--ink-secondary`.
-  Formato corto en español: `mié 12`, `14:30` si es hoy con hora, `12 ago` si es de otro mes.
-  **Completada → `--ink-tertiary`, aunque la fecha haya pasado.** El rojo dice «esto hay que
-  hacerlo ya», y sobre algo que ya se hizo es una alarma que no lleva a ninguna parte: en
-  Completadas dejaba la vista entera en rojo, que es donde menos falta hace.
-- Punto de proyecto: 6px, solo en vistas mixtas. Dentro de un proyecto es redundante, ocúltalo.
-- Subtareas: indentadas 22px, título a 12px, sin punto de proyecto ni fecha propia.
-- Hover: fondo `--layer-hover`, radio 6px, y aparecen dos affordances a la derecha —
-  un `⋯` para el menú contextual y una manija de arrastre. Antes del hover no hay nada:
-  la fila en reposo es solo texto.
-- Las dos affordances no llevan hueco propio: ocupan el de la fecha, que se desvanece al
-  entrar ellas. El hueco de la derecha mide lo que el más ancho de los dos, así que no se
-  mueve nada al cruzarse y el título no paga 34px permanentes por algo que casi nunca está
-  en pantalla. Encimarlas sin más no vale: en una tarea sin fecha taparían el título.
+- Título: 13px. Una palabra sin espacios —una URL pegada— se parte antes de salirse del panel.
+- Prioridad: **dentro del título y delante**, escrita como se escribe en la captura: **alta** es
+  `!!` en el color del proyecto, **media** es `!` en `--ink-tertiary`, un punto más de peso que
+  el título para que se lea como marca y no como puntuación. **Baja no muestra nada.** Esto es
+  intencional — es lo que evita que la lista se vuelva un semáforo. Va delante y no al lado de
+  la fecha porque es lo primero que hay que saber de la tarea, antes que cuándo: con el título
+  en dos renglones, al final quedaba a media fila y no se leía con ninguno de los dos.
+- Notas: debajo del título, en `--ink-secondary`, hasta dos renglones. Lo bastante para saber
+  de qué van sin que una nota larga se coma la lista; enteras están en el detalle.
+- El renglón de datos, a 11px: la fecha, el `↻` si vuelve (§12) y el proyecto —su punto de 6px
+  **y su nombre**—. En una vista mixta un disco de 6px dice que hay un proyecto pero no cuál.
+  Dentro de un proyecto el proyecto sobra, ocúltalo. Sin ninguno de los tres el renglón no
+  existe.
+- Fecha: en la fuente de datos. Vencida → `--danger`. Hoy → `--ink-primary`. Futura →
+  `--ink-secondary`. Formato corto en español: `mié 12`, `14:30` si es hoy con hora, `12 ago`
+  si es de otro mes. **Completada → `--ink-tertiary`, aunque la fecha haya pasado.** El rojo
+  dice «esto hay que hacerlo ya», y sobre algo que ya se hizo es una alarma que no lleva a
+  ninguna parte: en Completadas dejaba la vista entera en rojo, que es donde menos falta hace.
+- Entre dos tareas, una hairline que arranca donde arranca el título. Con los títulos enteros es
+  lo que dice dónde acaba una y empieza la siguiente: sin ella, dos tareas de tres renglones
+  seguidas se leen como un párrafo. Junto a la fila iluminada la línea sobra.
+- Subtareas: colgando bajo el título de su madre y no bajo su casilla —la sangría dice de quién
+  son—, título a 12px, casilla de 15px, sin proyecto ni fecha propia. Del mismo tamaño las dos
+  casillas competirían por ser la tarea.
+- Hover: fondo `--layer-hover`, radio 6px, y aparece un `⋯` a la derecha para el menú de la
+  fila. Antes del hover no hay nada: la fila en reposo es solo texto.
+- **No hay manija de arrastre: se arrastra desde el texto.** `useReorder` distingue el arrastre
+  del clic por los 3px que separan uno de otro, y un clic sin arrastre abre el detalle. Así el
+  único hueco propio a la derecha es el del `⋯`, que mide lo que mide el botón, y el título
+  nunca pasa por debajo de él.
+
+**«Compacto», en las preferencias (§8), es la vuelta a una línea** para quien prefiera ver más
+filas que más texto: título y notas a un renglón con elipsis, y los datos se quedan, que son
+cortos. Entero es lo de fábrica, y la preferencia se guarda con una clave nueva a propósito: la
+de antes guardaba «una línea» para casi todo el mundo —era lo de omisión, y elegirla una vez la
+dejaba escrita— y heredarla dejaría la queja exactamente donde estaba.
 
 ### 3.6 Completar una tarea
 
 Este es el gesto que más se repite en la app, así que es donde vale gastar el detalle:
 
 1. La casilla se llena con el color del proyecto y dibuja la palomita en 180ms.
-2. El tachado del título se traza de izquierda a derecha en 220ms — `clip-path`, no un
-   `text-decoration` que aparece de golpe.
+2. El tachado del título se traza de izquierda a derecha en 220ms, no un `text-decoration`
+   que aparece de golpe. Es un degradado de 1px cuyo ancho se anima, con
+   `box-decoration-break: clone` para que se repita en cada trozo de renglón: con el título
+   entero (§3.5) una tarea ocupa tres líneas, y un `clip-path` sobre la caja tacharía las tres
+   a la vez de lado a lado en vez de seguir al texto.
 3. La fila baja a 45% de opacidad.
 4. A los 3 segundos colapsa su altura en 200ms y sale de la lista.
 5. Durante esos 3 segundos, un clic en la casilla lo revierte todo. El deshacer tiene que
@@ -311,7 +440,9 @@ Lo que se apaga, y por qué:
 - **El menú contextual del navegador.** Aparece con el gesto más común de macOS y nombra cosas
   que aquí no existen. Se apaga en todas partes menos sobre un campo, donde WKWebView da el menú
   de texto del sistema —cortar, copiar, pegar, ortografía— y ese sí se espera. El menú del `⋯`
-  de una fila es lo que sustituye al de la lista (§3.5).
+  de una fila es lo que sustituye al de la lista (§3.5). Sobre un proyecto de la pantalla de
+  listas el clic derecho sí abre algo: el menú de su `⋯`, desde el puntero (§3.4), que es lo que
+  se espera de un renglón de una barra lateral del sistema.
 - **La selección de texto fuera de los campos.** `user-select: none` en `body`, con la excepción
   de `input` y `textarea` — sin ella no se puede seleccionar con el ratón lo que uno acaba de
   escribir en la búsqueda. El cursor va con ello: la viga solo donde se escribe.
@@ -324,7 +455,7 @@ Lo que se apaga, y por qué:
 
 Una lista de tareas no tiene nada que graficar —una tarea está hecha o no lo está— pero el
 apartado de las sesiones (§17) sí: son cuatro cifras por fila que solo sirven comparadas, y una
-columna de números en mono se compara leyéndolos de uno en uno. Ahí, y solo ahí, una magnitud se
+columna de números se compara leyéndolos de uno en uno. Ahí, y solo ahí, una magnitud se
 dibuja además de escribirse.
 
 La regla, entera, para que esto no crezca hacia un panel de gráficas:
@@ -442,9 +573,16 @@ Espacio      completar / descompletar la tarea enfocada
 ⌘F           enfocar la búsqueda
 ⌘N           enfocar el campo de nueva tarea
 ⌘1..4        Hoy / Próximas / Todas / Completadas
+⌘5           las sesiones de Claude (§17)
+⌘[  ·  ⌘0    volver a la pantalla de listas
 Esc          limpiar búsqueda, luego cerrar
 ⌘Z           deshacer la última acción destructiva
 ```
+
+Volver a la pantalla de listas (§3.4) es ⌘[, que es la flecha de atrás en todo macOS, y ⌘0, que
+es el «ir al principio» de los números. **Escape no vuelve**: es la tecla de cerrar el panel, y
+si antes pasara por la pantalla de listas cerrar desde una lista costaría dos pulsaciones. En la
+pantalla de listas, ↑↓ recorre los proyectos y ⌘N enfoca el pie, que ahí también está.
 
 Y en cualquier campo de captura, el del pie y el de la ventana de §18:
 
@@ -584,9 +722,21 @@ elegir en `--ink-secondary`. Un rótulo que no se pulsa no puede pesar lo mismo 
 El elegido de un segmentado lleva fondo y nunca un anillo de color, y el interruptor encendido
 lleva el acento **del sistema** y no el del proyecto: el popover y la hoja se dibujan los dos
 dentro del panel, así que dentro de un proyecto heredarían su color, y ninguna de las
-preferencias es de un proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el proyecto no sobreescribe. La vista al abrir se elige con los iconos del riel, que es donde ya se aprendieron, y el
-icono de la barra con los glifos mismos a 18px, que es el tamaño al que macOS los dibuja: la
-previsualización no es una versión del glifo, es el glifo.
+preferencias es de un proyecto (§3.1). Para eso está `--accent-app`, que es el acento que el
+proyecto no sobreescribe. Por lo mismo, el botón primario de una hoja que no es de ningún
+proyecto —«Listo» en las preferencias, importar, desinstalar— cae al acento del sistema con el
+blanco que macOS pone encima; solo el editor de proyecto se pinta con el color que se está
+eligiendo.
+
+La vista al abrir se elige con los glifos de los mosaicos (§3.4), que es donde ya se
+aprendieron, y son cinco: la pantalla de listas, que es lo de fábrica, y las cuatro del sistema.
+Lo de fábrica es la pantalla de listas y no Hoy porque es la que contesta «qué hay» de un
+vistazo, con los conteos de todas; quien solo mira Hoy se ahorra un clic eligiéndola aquí. El
+icono de la barra se elige con los glifos mismos a 18px, que es el tamaño al que macOS los
+dibuja: la previsualización no es una versión del glifo, es el glifo.
+
+El texto de las tareas es «Completo» de fábrica —el título entero y las notas asomando— y
+«Compacto» para quien prefiera ver más filas que más texto (§3.5).
 
 Las opciones de cada preferencia van sobre una pista, como un segmentado del sistema, y el
 elegido se levanta de ella en vez de hundirse. Un fondo suelto al 9% basta para distinguir dos
@@ -604,8 +754,9 @@ hueco de la palomita— y eso incluye las notas y los rótulos de grupo. Cada gr
 una parada del tabulador y por dentro se recorre con las flechas, como un control segmentado del
 sistema: con cada opción tabulable, cruzar Ajustes costaba dieciocho tabuladores.
 
-Los grupos se separan con su rótulo —versalitas mono, el mismo tratamiento que los encabezados
-de la lista (§3.3)— y no con hairlines. Una regla dice que hay un corte pero no de qué, y tres
+Los grupos se separan con su rótulo —en sentence case, 11px y peso 600 en `--ink-secondary`,
+como los encabezados de sección de un menú de macOS y como los de la lista (§3.3)— y no con
+hairlines. Una regla dice que hay un corte pero no de qué, y tres
 reglas en un popover de doscientos píxeles lo convierten en una reja; un rótulo separa igual y
 además nombra. El bloque de preferencias es el único sin rótulo, porque es para lo que existe el
 popover. **La versión es el rótulo de su grupo**, no una línea al final: lo que cuelga de ella
@@ -816,8 +967,9 @@ Reglas:
   mes corto solo lo recorta, no lo reescribe.
 - Deshacer una tarea completada durante sus 3 segundos (§3.6) borra también la que nació y le
   devuelve la regla a la de antes.
-- En la fila, un `↻` de 11px en `--ink-tertiary` junto a la prioridad. Antes de completarla es
-  lo único que separa «esto se acabó» de «esto vuelve el mes que viene».
+- En la fila, un `↻` de 11px en `--ink-tertiary` en el renglón de datos, pegado a la fecha de la
+  que cuenta (§3.5). Antes de completarla es lo único que separa «esto se acabó» de «esto vuelve
+  el mes que viene».
 - En el detalle va pegada a la fecha, y la captura la entiende: `cada mes`, `cada 3 días`,
   `cada martes`, `cada 2 semanas`.
 
@@ -846,10 +998,11 @@ Reglas:
   se mueve o vive en un disco que no está enchufado, y romper el vínculo por eso obligaría a
   volver a elegirla cada vez. Se comprueba al abrir, que es cuando importa y cuando hay a quién
   decírselo: «La carpeta ya no está ahí. Vuelve a elegirla en el proyecto.»
-- **El botón va en el encabezado de la vista del proyecto**, al otro extremo del nombre, y solo
-  con las dos condiciones puestas: hay carpeta y hay editor instalado. Con la lista vacía el
-  encabezado aparece solo si trae el botón — un proyecto recién creado es justo cuando hace
-  falta abrir su carpeta.
+- **El botón va en el encabezado de la vista del proyecto** (§3.4), en el renglón de debajo del
+  nombre: la carpeta abreviada a la izquierda y «Abrir en Cursor» en texto al otro extremo, junto
+  a «Editar». Solo con las dos condiciones puestas: hay carpeta y hay editor instalado. El
+  encabezado sale siempre, también con la lista vacía — un proyecto recién creado es justo
+  cuando hace falta abrir su carpeta.
 - **Y en el menú del `⋯` de la fila**, pegado a «Ver detalle», con las mismas condiciones
   resueltas por la tarea y no por la vista. El encabezado solo sirve estando dentro del
   proyecto, y el trabajo se decide desde Hoy: entrar al proyecto para poder abrir su carpeta es
@@ -863,7 +1016,7 @@ Reglas:
   cerrada, y eso es lo que valida lo que llega del webview antes de acabar en un `open -b`. No
   se usa `tauri-plugin-shell`: ejecutar programas desde JavaScript es justo lo que una app que
   no sale a la red no tiene por qué poder hacer.
-- **Cuál se usa es una preferencia de la máquina**, en `localStorage` con el riel y la vista de
+- **Cuál se usa es una preferencia de la máquina**, en `localStorage` con la vista de
   arranque. Sale en Ajustes solo con dos o más instalados: con uno, un segmentado de una opción
   no es una elección, es un rótulo. Es la única fila del popover que puede no estar, así que va
   la última de las preferencias y las de siempre no cambian de sitio según la máquina.
@@ -976,7 +1129,7 @@ Reglas:
   punto de proyecto y sin entrar en el recorrido de ↑↓. Un evento no se completa ni se reordena
   desde aquí, y darle los gestos de una tarea sería prometer cinco cosas que ninguna funciona.
   Lo único que hace es estar.
-- **La hora a la izquierda, en mono, y solo la de entrada.** Es la columna que ordena un día, y
+- **La hora a la izquierda, en la fuente de datos, y solo la de entrada.** Es la columna que ordena un día, y
   es donde la fila de tarea pone su casilla. El rango entero está en el tooltip, que es donde no
   le cuesta ancho a nadie. Un evento de día entero —o uno que empezó en un día anterior— no tiene
   hora que enseñar hoy: la columna se queda vacía y el título arranca donde arrancan los demás.
@@ -988,9 +1141,12 @@ Reglas:
   va un peso por debajo del título de una tarea: el evento es el contexto y la tarea es el
   trabajo, y si los dos pesaran igual Hoy tendría dos primeros planos y ninguno mandaría.
 - **Solo en Hoy.** En Próximas serían los eventos de otro día y en un proyecto no vienen a
-  cuento. Sin eventos, el bloque no existe: ni rótulo ni hueco. Y con la lista de tareas vacía
-  el rótulo HOY sí sale, aunque normalmente no salga, o «Nada para hoy» colgaría de AGENDA y se
-  leería como que no hay más eventos.
+  cuento. Va entre el encabezado de la lista y las tareas, cada bloque con su rótulo —«Agenda» y
+  «Tareas»—: son dos cosas distintas, lo que ya está comprometido y lo que hay que hacer, y
+  meterlas bajo el mismo nombre haría que cubriera dos gramáticas de fila a la vez. Sin eventos,
+  el bloque no existe: ni rótulo ni hueco, y tampoco el de «Tareas», que solo hace falta para
+  separar. Con la lista de tareas vacía también sale, o «Nada para hoy» colgaría de «Agenda» y
+  se leería como que no hay más eventos.
 - **Se relee al abrir el panel y al cambiar de día, no con un temporizador.** Por lo mismo que
   los avisos (§7) y el chequeo de actualizaciones (§11): con el panel cerrado la webview está
   estrangulada, y un `setInterval` de un minuto no dispara cuando toca sino todo junto al volver.
@@ -1263,7 +1419,9 @@ qué se puede cerrar, y lo que se puede cerrar va arriba. La que se está usando
 casilla, sin manija de arrastre, sin punto de proyecto. Una sesión no se completa ni se reordena.
 
 ```
- 3 sesiones · 1.5 GB de memoria                  ↻
+ ‹ Listas
+ Sesiones de Claude                                   3
+ 1.5 GB de memoria                       Volver a leer
 
  12:28   reno-04                        hace 4 h 23 min
          ~/Desktop/Trabajo/RENO · opus-5
@@ -1278,21 +1436,21 @@ casilla, sin manija de arrastre, sin punto de proyecto. Una sesión no se comple
          50.1M tok                     $122.37 estimado
 ```
 
-- La hora de arranque a la izquierda y en mono, que es la columna donde la agenda pone la suya y la
-  fila de tarea su casilla.
+- La hora de arranque a la izquierda y en la fuente de datos, que es la columna donde la agenda
+  pone la suya y la fila de tarea su casilla.
 - El nombre con el peso del título de una fila, y la carpeta debajo en `--ink-secondary`,
   abreviada con el `~` del usuario igual que la del proyecto en §13. A su lado, el modelo.
-- **Los cuatro números van en dos renglones y no en uno**, y eso es una medida y no un gusto: con
-  el riel expandido al cuerpo de la fila le quedan 218 px, que son treinta caracteres de la fuente
-  de datos, y las cuatro cifras con sus rótulos pasan de cuarenta. En un renglón, lo último se
-  perdía por la derecha — y lo último era el costo. Arriba lo que la sesión ocupa ahora —memoria y
-  contexto—, abajo lo que lleva gastado. La unidad de los tokens va cortada a tres letras, `tok`
+- **Los cuatro números van en dos renglones y no en uno.** Nació como una medida —con el riel de
+  antes expandido, al cuerpo de la fila le quedaban 218 px y las cuatro cifras con sus rótulos no
+  cabían— y se quedó cuando el riel se fue, porque lo que separa es otra cosa: arriba lo que la
+  sesión ocupa ahora —memoria y contexto—, que es lo que se puede cerrar, y abajo lo que lleva
+  gastado, que ya no. La unidad de los tokens va cortada a tres letras, `tok`
   como `ctx`: escrita entera se comía el ancho que necesita el rótulo del costo, y ese no puede
   faltar. Las cifras caen contra el mismo borde en todas las filas, que es justo para lo que
   existe la fuente de datos (§3.3): comparar dos sesiones es leer una columna.
 - **Lo que ocupa ahora lleva además su barra** (§3.11), una por renglón, a la izquierda de su
   cifra. Es lo que contesta de un vistazo la pregunta del apartado —cuál de las abiertas pesa—
-  sin leer cuatro números en mono de una en una.
+  sin leer cuatro números de uno en uno.
 - **Y la vara de esas barras es la mayor de las sesiones abiertas, no un tope.** El contexto no
   tiene denominador que se pueda saber: la transcripción guarda el `usage` y el modelo, y de ahí
   no sale cuál es la ventana —`claude-opus-5` es el mismo nombre con 200k que con 1M— así que
@@ -1302,7 +1460,13 @@ casilla, sin manija de arrastre, sin punto de proyecto. Una sesión no se comple
   sola sesión no hay barras**: la vara sería ella misma, las dos saldrían llenas, y «lleno» se
   lee como un tope alcanzado que aquí no existe — la fila cae entonces a los dos renglones de
   cifras sueltas. Y por eso la cifra de al lado siempre es la absoluta.
-- El encabezado dice **«1.5 GB de memoria»** y no «1.5 GB» a secas. Debajo, el bloque del disco
+- **El encabezado es el de cualquier lista** (§3.4): el chevron de vuelta, «Sesiones de Claude»
+  en grande, cuántas hay a la derecha y debajo lo que ocupan entre todas. Mientras se lee la
+  primera vez dice «Leyendo…» y no un cero: cero es una respuesta, y darla antes de saberla es
+  mentir durante medio segundo. «Volver a leer» va en el mismo renglón, como «Pasar a hoy» en Hoy
+  (§21): es texto y no un `↻` suelto, porque un glifo de flecha circular ya quiere decir «se
+  repite» en esta app (§12).
+- Ese renglón dice **«1.5 GB de memoria»** y no «1.5 GB» a secas. Debajo, el bloque del disco
   (§17.5) enseña otro número en gigas que no es ese, y dos cifras iguales sin rótulo en la misma
   pantalla se leen como la misma cifra repetida.
 - **La que se está usando sube a `--ink-primary` —el nombre y también sus cifras—; las quietas van
@@ -1334,7 +1498,7 @@ Un bloque al final del apartado, y no una fila por carpeta: `~/.claude` entero, 
 que explican el tamaño —las transcripciones y el historial de archivos— y el resto junto.
 
 ```
- DISCO                                           ⌸
+ Disco                                           ⌸
  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒░░   1.7 GB
  ▓ Transcripciones                        1.5 GB
  ▒ Historial de archivos                  151 MB
@@ -1358,16 +1522,17 @@ los datos de Riel: enseñar el número y abrir la puerta es todo lo que hace fal
 
 Y el número tarda, porque recorrer `~/.claude` son varios miles de archivos. Se calcula aparte, con
 el apartado ya en pantalla, y mientras tanto el bloque dice «Contando…» en vez de saltar de vacío a
-un número. El rótulo DISCO sale desde el primer momento y el enlace al Finder no, que llega con la
+un número. El rótulo «Disco» sale desde el primer momento y el enlace al Finder no, que llega con la
 cifra: un botón que se puede pulsar antes de que haya nada que mirar promete un sitio al que
 todavía no lleva.
 
 ### 17.6 Dónde vive y cuándo se lee
 
-- **Una quinta entrada en el riel**, abajo del todo —debajo de los proyectos y de su `⊕`— y bajo su
-  propia hairline, separada de ellos igual que ellos están separados de las cuatro vistas del
-  sistema (§3.4). No es una vista de tareas y no es un proyecto: las dos hairlines dicen justo eso.
-  `⌘5`, detrás de `⌘1..4`.
+- **Un renglón propio en la pantalla de listas**, abajo del todo —debajo de «Mis proyectos» y de
+  «Nuevo proyecto»— y en su propio grupo, separado de ellos igual que ellos lo están de los cuatro
+  mosaicos (§3.4). No es una vista de tareas y no es un proyecto: estar aparte dice justo eso. Se
+  entra como a cualquier lista —el renglón lleva su chevron, y el encabezado el de vuelta— y
+  `⌘5`, detrás de `⌘1..4`, lleva directo.
 - **Se lee cuando el apartado está a la vista, y no al abrir el panel.** Contar `~/.claude` cuesta
   más que el presupuesto entero del criterio 1, y no hay ninguna razón para pagarlo al abrir Hoy.
   Es lo contrario de la agenda (§15), que tiene que estar puesta en el instante en que se dibuja
@@ -1439,8 +1604,9 @@ Reglas:
 620 × lo que mida su contenido, centrada a lo ancho de la pantalla donde está el puntero y
 anclada al 30% de lo que sobra a lo alto.
 
-- **620 y no los 440 del panel.** Aquí no hay riel: hay un renglón que se lee de una pasada y
-  una lista sin columna de proyectos al lado, y las dos cosas quieren ancho. Es también lo que
+- **620 y no los 440 del panel.** Aquí no hay pantalla de listas a la que volver: hay un renglón
+  que se lee de una pasada y una lista que se ve entera de un vistazo, y las dos cosas quieren
+  ancho. Es también lo que
   hace que los chips del parser quepan en una sola fila.
 - **El 30% y no la mitad.** Es lo que hacen Spotlight y cualquier alerta del sistema, y por lo
   mismo: una superficie centrada de verdad se lee como baja, porque el ojo pone el centro
@@ -1456,13 +1622,13 @@ anclada al 30% de lo que sobra a lo alto.
   de él, una lista de dos tareas y una de ocho abrirían el campo en filas distintas de la
   pantalla; así el borde de arriba cae siempre en el mismo sitio y lo que crece, crece hacia
   abajo.
-- **Con el vidrio nuevo lleva una veladura**, un 20% de blanco en claro y un 26% de casi negro
-  en oscuro, de borde a borde y con el arco de la ventana. `NSGlassEffectView` es más claro que
-  el `Popover` heredado —deja pasar mucho más de lo que hay detrás— y en el panel eso no se nota
-  porque cuelga sobre la barra, pero en medio de la pantalla tiene debajo la ventana que se
-  estaba usando, con su texto, y una lista encima de otro texto no se lee. Sigue siendo una
-  capa con alfa sobre el material (§3.2) y no un fondo opaco; con «Reducir transparencia» la
-  tapa el sólido de §3.9 como a todo lo demás.
+- **Con el vidrio nuevo lleva `--veil`**, la misma veladura de lectura que el panel (§3.2), de
+  borde a borde y con el arco de la ventana. Aquí fue donde nació: en medio de la pantalla la
+  captura tiene debajo la ventana que se estaba usando, con su texto, y una lista encima de otro
+  texto no se lee. Llevaba la suya, más clara que la del panel; desde la 1.0 es una sola para
+  las dos ventanas, porque el panel tenía el mismo problema con un fondo de pantalla con
+  textura. Sigue siendo una capa con alfa sobre el material y no un fondo opaco; con «Reducir
+  transparencia» la tapa el sólido de §3.9 como a todo lo demás.
 - **Es el mismo `RielPanel` que el panel de la barra**, con su vidrio y su excepción de foco:
   se le pide lo mismo —aparecer sobre lo que haya delante, incluida una app en pantalla
   completa, y llevarse el teclado. Lo único que cambia es dónde se coloca y con qué arco: 26
@@ -1566,8 +1732,11 @@ Reglas:
   El conteo va al lado del nombre en la fuente de datos, y una pestaña vacía no enseña un cero.
   Al cerrarse la ventana vuelve a Hoy: es lo que se mira casi siempre, y una ventana que abre
   donde quedó hace tres días abre en un azar.
-- **Es una fila de tarea, en pequeño**: casilla, título, punto de proyecto, `↻`, prioridad y
-  fecha, con los mismos colores y la misma gramática que en el panel (§3.5). Sin manija ni `⋯`:
+- **Es una fila de tarea, en pequeño**: casilla, la prioridad delante del título, y a la derecha
+  el punto de proyecto, el `↻` y la fecha, con los mismos colores y la misma gramática que en el
+  panel (§3.5). El título en un renglón y no partido como allí: ocho filas de alto fijo son lo
+  que deja saber cuánto mide la ventana antes de pintarla, y lo que no quepa está entero un ⌘O
+  más allá. Sin manija ni `⋯`:
   desde aquí no se reordena ni se edita, y una fila que promete gestos que no tiene engaña.
 - **Completar es completar**, con todo lo de §3.6: la casilla se llena, el título se tacha, la
   fila espera sus 3 segundos —en los que otro clic lo deshace todo, regla recurrente incluida
@@ -1615,7 +1784,7 @@ Reglas:
   ⌥Espacio está libre en macOS —⌘Espacio es Spotlight— y quitarlo es un clic.
 - **Pide al menos un modificador.** Un atajo global sin modificador se queda con esa tecla en
   todas las apps de la máquina, incluida la que se esté usando para escribir.
-- **La preferencia vive en `localStorage`**, con el riel y la vista de arranque (§13): es del
+- **La preferencia vive en `localStorage`**, con la vista de arranque y el editor (§13): es del
   equipo y no de la lista, y perderla no borra ninguna tarea. Rust no la puede leer, así que se
   la pasa el webview al arrancar y cada vez que cambia. Con la app recién instalada no hay nada
   registrado hasta que la página del panel corre, que es lo mismo que ya pasa con el glifo de
@@ -1669,7 +1838,7 @@ nada con ella, y sube el ruido de fondo hasta que la lista deja de contestar lo 
 pregunta.
 
 **No se filtra: se pliega.** Lo que pasa del horizonte se junta al final bajo un encabezado que
-lo cuenta —`MÁS ADELANTE · 7`— y un clic lo abre. Esconder tareas de la vista que se llama
+lo cuenta —«Más adelante 7»— y un clic lo abre. Esconder tareas de la vista que se llama
 «Todas» sería mentirle al nombre; una lista de tareas solo sirve mientras se pueda creer que
 está entera.
 
@@ -1682,7 +1851,7 @@ Reglas:
 - **Lo que no tiene fecha nunca se pliega.** No está «más adelante», está sin decidir — y es
   justo lo que se viene a ver a Todas.
 - **Fin de mes de fábrica**, con 30 días, 90 días y todo detrás. La preferencia vive en Ajustes
-  y en `localStorage` con el riel y la vista de arranque (§8): es de la máquina, no de la lista,
+  y en `localStorage` con la vista de arranque (§8): es de la máquina, no de la lista,
   y perderla no borra nada. El mes y no los treinta días aunque midan casi lo mismo: la
   frontera del mes ya se tiene en la cabeza y se queda quieta, mientras que «30 días» el 25 de
   septiembre alcanza al 25 de octubre y vuelve a colar la vuelta siguiente de lo mensual, que es
@@ -1695,8 +1864,8 @@ Reglas:
   separar, la lista se enseña entera y el encabezado no sale.
 - **El encabezado va dentro de la misma lista**, no entre dos listas: una fila se sigue pudiendo
   arrastrar de un lado al otro del corte, y dos `ul` separadas lo harían imposible. Del mismo
-  peso y la misma mono que HOY o PRÓXIMAS (§3.3), porque nombra un grupo igual que ellos; lo
-  único que lo separa es que se pulsa, y eso lo dice el triángulo que gira. El conteo va pegado
+  peso y el mismo cuerpo que «Agenda» o «Tareas» en Hoy (§3.3), porque nombra un grupo igual
+  que ellos; lo único que lo separa es que se pulsa, y eso lo dice el triángulo que gira. El conteo va pegado
   al nombre y no contra el borde derecho: no es una columna que se compare con nada, es cuánto
   hay ahí dentro, y sin él un grupo plegado no dice si esconde una tarea o cuarenta.
 - **Lo plegado no está en el recorrido de ↑↓**, porque no está pintado. Nada que no se vea puede
@@ -1704,7 +1873,7 @@ Reglas:
 - **La búsqueda no lleva horizonte.** `⌘F` mira todo (§5) — es la salida de emergencia de «sé
   que la escribí y no sé dónde la puse», y esconderle a quien busca lo que cae en diciembre es
   justo lo contrario de eso.
-- **Los conteos del riel tampoco.** Lo que dice un proyecto al lado de su nombre es cuántas
+- **Los conteos de la pantalla de listas tampoco.** Lo que dice un proyecto al lado de su nombre es cuántas
   pendientes tiene, no cuántas caben en este mes: un conteo que no cuadra con lo que se ve al
   entrar es peor que uno grande.
 
@@ -1782,8 +1951,8 @@ Dos atajos, y ninguno es una gramática nueva:
   mirar un calendario, que está en el detalle. El lunes es el siguiente que no sea mañana —un
   domingo, «Lunes» y «Mañana» serían el mismo botón dos veces— y el día exacto va en el tooltip.
 - **«Pasar a hoy» en el encabezado de Hoy**, solo cuando hay vencidas de días anteriores. Un botón
-  de texto en la fuente de la interfaz, al otro extremo del rótulo, como el «Borrar» de un grupo
-  del Centro de notificaciones. Las de hoy con la hora ya pasada no cuentan: también están en
+  de texto en el acento, en el renglón de debajo del título (§3.4) y al otro extremo del día que
+  ese renglón nombra, como el «Borrar» de un grupo del Centro de notificaciones. Las de hoy con la hora ya pasada no cuentan: también están en
   rojo, pero pasarlas a hoy no les cambiaría nada. Buscando no sale, porque lo que se ve es la
   consulta y no Hoy.
 

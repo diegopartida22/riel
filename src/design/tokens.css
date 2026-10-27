@@ -92,15 +92,35 @@
   --track-on: rgb(255 255 255 / 85%);
   --track-lift: 0 1px 2px rgb(0 0 0 / 10%);
 
-  /* Tipografía. Dos roles: la del sistema para la interfaz, mono para los datos — fechas,
-     horas, contadores, encabezados de grupo — para que las columnas no bailen. */
-  --font-ui: -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-data: ui-monospace, "SF Mono", monospace;
+  /* Lo que se agrupa sobre el vidrio: los mosaicos y la lista de proyectos de la pantalla de
+     listas. Una veladura más clara que el vidrio en claro y un velo blanco en oscuro, como los
+     grupos de Ajustes del Sistema — nunca un panel opaco (spec 3.2). */
+  --card-bg: rgb(255 255 255 / 52%);
+  --card-hover: rgb(255 255 255 / 72%);
 
+  /* La veladura que se tiende sobre el vidrio entero, para leer. El vidrio de Tahoe deja pasar
+     mucho más que el `Popover` de antes, y con un escritorio con algo de textura detrás la lista
+     costaba de leer — es la queja que abrió el rediseño. Más materia donde hay que leer
+     renglones, que es lo que hace Spotlight; con transparencia reducida manda el sólido. */
+  --veil: rgb(246 246 248 / 34%);
+
+  /* Tipografía. Una sola familia, la del sistema, en dos roles: el de la interfaz y el de los
+     datos — fechas, horas, contadores — que es la misma letra con cifras tabulares, para que
+     las columnas no bailen cuando cambia un número. Antes los datos iban en mono, y eso le daba
+     a la lista un aire de terminal que ninguna app del sistema tiene: Recordatorios, Calendario
+     y el Finder escriben sus fechas con la misma letra que sus títulos. */
+  --font-ui: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-data: -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* El título de una lista: lo que dice dónde se está, al tamaño al que macOS escribe el de una
+     ventana con barra de herramientas grande. Es lo único de la pantalla que se lee desde lejos. */
+  --text-display: 22px;
+  /* El título de la tarea abierta en el detalle, y los números de los mosaicos. */
+  --text-headline: 15px;
   --text-title: 13px;
   --text-subtitle: 12px;
   --text-meta: 11px;
-  --text-group: 10px;
+  --text-group: 11px;
 
   /* El campo de la captura rápida (spec 18), y nada más. Está en la escala y no suelto en su
      hoja porque es un tamaño de la app, aunque solo lo use una ventana: la escala de la 3.3 se
@@ -120,7 +140,10 @@
   --menu-radius: 8px;
 
   --row-radius: 6px;
-  --checkbox-size: 15px;
+  /* Las tarjetas de la pantalla de listas y los grupos de renglones: el arco de un grupo de
+     Ajustes del Sistema, que es la forma que se está tomando prestada. */
+  --card-radius: 10px;
+  --checkbox-size: 17px;
   --dot-size: 6px;
   --subtask-indent: 22px;
 
@@ -175,6 +198,10 @@
     --track-bg: rgb(0 0 0 / 20%);
     --track-on: rgb(255 255 255 / 16%);
     --track-lift: none;
+
+    --card-bg: rgb(255 255 255 / 7%);
+    --card-hover: rgb(255 255 255 / 11%);
+    --veil: rgb(20 20 22 / 42%);
   }
 }
 

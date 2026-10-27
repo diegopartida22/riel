@@ -1,22 +1,10 @@
-/* El armazón del panel: la barra de búsqueda arriba, el riel y la lista en medio, el pie de
-   captura abajo. */
+/* El armazón del panel: la barra de búsqueda arriba, la pantalla que toque en medio y el pie
+   de captura abajo. Sin columnas: lo que se ve tiene el ancho entero (spec 3.4). */
 
 .panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* El ancho del riel lo declara el panel y no el riel, porque la celda del pie tiene que
-     seguirlo para que la línea vertical no se quiebre al expandir (spec 3.4). */
-  --rail-width: 44px;
-  /* Y por lo mismo la duración: la columna, su celda del pie, el relleno de cada fila y el
-     apagado de los nombres tienen que llegar juntos, o el riel se abre en varios tiempos.
-     180ms es lo que tarda la casilla en llenarse al completar (spec 3.6) — el riel no tiene
-     por qué moverse a una velocidad que no exista en ningún otro sitio de la app. */
-  --rail-swing: 180ms;
-}
-
-.panel.is-rail-expanded {
-  --rail-width: 148px;
 }
 
 /* Dentro de un proyecto el acento del panel entero es el suyo: casillas, anillos de foco y
@@ -29,21 +17,44 @@
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+  flex-direction: column;
 }
 
 /* ── Barra superior ──────────────────────────────────────────────────────────────────── */
 
-/* 48px, de borde a borde por encima del riel (spec 3.4). Es también la franja por la que se
-   arrastraría la ventana en una app con barra de título — aquí no se mueve, pero sigue siendo
-   la zona que el ojo lee como «marco», así que no lleva nada más que la búsqueda y el `⚙︎`. */
+/* 48px, de borde a borde (spec 3.4). Es también la franja por la que se arrastraría la ventana
+   en una app con barra de título — aquí no se mueve, pero sigue siendo la zona que el ojo lee
+   como «marco», así que no lleva nada más que la búsqueda y el `⚙︎`. Sin hairline debajo: la
+   píldora ya separa, y una regla más partía el vidrio en dos franjas. */
 .topbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   height: 48px;
-  padding: 0 10px 0 14px;
-  border-bottom: 1px solid var(--hairline);
+  padding: 0 10px 0 12px;
+}
+
+/* El buscador del sistema: 28px de alto, el arco de un campo redondeado y una veladura del
+   mismo tono que la pista de un segmentado. Con foco toma el anillo de acento, como cualquier
+   `NSSearchField`. */
+.topbar__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 4px 0 8px;
+  border-radius: 8px;
+  background: var(--track-bg);
+  cursor: text;
+}
+
+.topbar__search:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
 }
 
 .topbar__glass {
@@ -51,8 +62,6 @@
   color: var(--ink-tertiary);
 }
 
-/* Sin caja, igual que el campo de captura: encuadrar algo que ocupa todo el ancho de un panel
-   de vidrio lo apaga, y la lupa ya dice dónde se escribe. */
 .topbar__field {
   flex: 1 1 auto;
   min-width: 0;
@@ -71,12 +80,11 @@
   color: var(--ink-tertiary);
 }
 
+/* El anillo lo lleva la píldora entera, no el texto de dentro. */
 .topbar__field:focus {
   outline: none;
 }
 
-/* La lupa sube de tinta mientras se escribe. Es la misma señal de foco que usa el `+` del pie:
-   sin anillo, pero con algo que cambia. */
 .topbar:focus-within .topbar__glass {
   color: var(--ink-secondary);
 }
@@ -138,6 +146,21 @@
   position: relative;
 }
 
+/* La equis del campo es la del sistema: un disco gris con la cruz calada, más pequeño que el
+   engranaje porque vive dentro de la píldora. */
+.topbar__clear {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink-tertiary);
+  color: var(--on-accent);
+}
+
+.topbar__clear:hover {
+  background: var(--ink-secondary);
+  color: var(--on-accent);
+}
+
 .topbar__clear:focus-visible,
 .topbar__gear:focus-visible {
   outline: 2px solid var(--focus);
@@ -194,14 +217,18 @@
   padding: 0 12px;
 }
 
-/* Ancho fijo para que los chips de abajo puedan alinearse con el texto del campo sin depender
-   de lo que mida un `+` en la fuente del sistema. */
+/* Un disco del acento con la cruz calada, como el «Nuevo recordatorio» del sistema. Ancho fijo
+   para que los chips de abajo se alineen con el texto del campo. */
 .composer__plus {
   flex: 0 0 auto;
-  width: 8px;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--ink-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-project, #fff);
 }
 
 /* Sin caja: en reposo el pie es una línea de texto y nada más. El campo se delata solo cuando
@@ -230,8 +257,10 @@
   outline: none;
 }
 
-.composer:focus-within .composer__plus {
-  color: var(--ink-secondary);
+/* Lo que se apaga es el texto de invitación y no el disco: con el cursor dentro, lo que hay
+   que ver es lo que se escribe. */
+.composer:focus-within .composer__field::placeholder {
+  color: var(--ink-tertiary);
 }
 
 /* ── Estado vacío ────────────────────────────────────────────────────────────────────── */

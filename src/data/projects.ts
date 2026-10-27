@@ -34,7 +34,7 @@ export async function getProject(id: string): Promise<Project | null> {
 }
 
 /**
- * El proyecto nuevo va al final del riel. La posición se calcula dentro del propio INSERT
+ * El proyecto nuevo va al final de la lista de proyectos. La posición se calcula dentro del propio INSERT
  * para no leer el máximo y escribirlo en dos viajes.
  */
 export async function createProject(

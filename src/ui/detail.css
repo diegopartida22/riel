@@ -21,7 +21,7 @@
   border-radius: var(--row-radius);
   background: none;
   font-family: inherit;
-  font-size: var(--text-meta);
+  font-size: var(--text-subtitle);
   color: var(--ink-secondary);
   cursor: default;
 }
@@ -53,11 +53,13 @@
   overflow: hidden;
 }
 
+/* El título es lo que se vino a leer, así que va al tamaño de un encabezado y no al de una fila:
+   en la lista compite con las demás, aquí es lo único que hay. */
 .detail__title {
-  /* El alto de línea de la fila, para que la casilla quede centrada en el primer renglón. */
-  font-size: var(--text-title);
-  line-height: 1.35;
-  font-weight: 400;
+  font-size: var(--text-headline);
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .detail__title.is-completed {
@@ -101,13 +103,13 @@
   margin-top: 8px;
 }
 
+/* El nombre de un campo, con el mismo trato que el encabezado de un grupo en la lista: la letra
+   del sistema, en sentence case, un tono por debajo del contenido. Las versalitas en mono
+   decían «dato» de algo que es un rótulo. */
 .detail__label {
-  font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 .detail__subtasks {
@@ -206,15 +208,18 @@
   }
 }
 
-/* ── Chips de proyecto y prioridad ───────────────────────────────────────────────────── */
+/* ── Opciones de proyecto, prioridad y repetición ─────────────────────────────────────── */
 
-.chips {
+/* `pick` y no `chip`: los chips son los tokens del parser de captura (capture.css), que se
+   quitan con un clic. Con el mismo nombre las dos reglas se pisaban según el orden de carga, y
+   las opciones del detalle heredaban la sangría de 38px del campo de captura. */
+.picks {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.chip {
+.pick {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -228,24 +233,24 @@
   cursor: default;
 }
 
-.chip:hover {
+.pick:hover {
   background: var(--layer-hover);
 }
 
 /* El elegido se marca con el color en contexto: el del proyecto si el chip es un proyecto, y
    el grafito neutro si es una prioridad, que no tiene color propio. */
-.chip.is-selected {
+.pick.is-selected {
   border-color: transparent;
   background: var(--project);
   color: var(--on-project);
 }
 
-.chip.is-selected:hover {
+.pick.is-selected:hover {
   background: var(--project);
   opacity: 0.88;
 }
 
-.chip__dot {
+.pick__dot {
   width: var(--dot-size);
   height: var(--dot-size);
   border-radius: 50%;
@@ -254,7 +259,7 @@
 
 /* Ya seleccionado, el disco va sobre el propio color y desaparecería; se pinta con la tinta
    que contrasta, la misma que usa la palomita. */
-.chip.is-selected .chip__dot {
+.pick.is-selected .pick__dot {
   background: var(--on-project);
 }
 
@@ -267,7 +272,7 @@
   gap: 6px;
 }
 
-/* La fecha larga en mono, como todo dato de la sección 3.3. En reposo es solo texto —igual que
+/* La fecha larga en la fuente de datos, como todo dato de la sección 3.3. En reposo es solo texto —igual que
    la fila de tarea— y el fondo aparece al hover, que es lo que dice que se puede tocar. */
 .due-editor__trigger {
   margin-left: -6px;
@@ -411,12 +416,9 @@
 }
 
 .due-editor__label {
-  font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 /* El único campo con caja del detalle. La lleva porque es el único sitio donde hay que escribir
@@ -528,12 +530,9 @@
 }
 
 .repeat-editor__label {
-  font-family: var(--font-data);
   font-size: var(--text-group);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-tertiary);
+  color: var(--ink-secondary);
 }
 
 .repeat-editor__unit {

@@ -24,7 +24,7 @@ export function Switch({
   onPick,
 }: {
   label: string;
-  /** Un dato corto junto al nombre — el conteo de una lista. En mono, como todos (§3.3). */
+  /** Un dato corto junto al nombre — el conteo de una lista. En la fuente de datos, como todos (§3.3). */
   hint?: string;
   value: boolean | null;
   /** Aparte de `value === null`: el estado se conoce, pero esta copia no puede cambiarlo. */

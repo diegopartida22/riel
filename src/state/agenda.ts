@@ -30,7 +30,7 @@ export interface CalendarEvent {
 /** Con qué avisa Rust de que el panel se acaba de abrir. Es cuando se vuelve a preguntar. */
 const PANEL_OPENED = "riel://panel-abierto";
 
-/** No es un dato, es una preferencia de esta máquina: va con el riel y la vista de arranque. */
+/** No es un dato, es una preferencia de esta máquina: va con la vista de arranque. */
 const KEY = "riel:agenda";
 
 /** Una sola lista vacía para todos los casos en que no hay nada: así React no repinta de más. */

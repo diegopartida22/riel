@@ -1,0 +1,322 @@
+/* La pantalla de listas (spec 3.4): los cuatro mosaicos del sistema y, debajo, los proyectos en
+   un grupo. La forma es la de Recordatorios y la de los grupos de Ajustes del Sistema — tarjetas
+   con una veladura más clara que el vidrio, nunca un panel opaco (spec 3.2). */
+
+.inicio {
+  padding: 12px 12px 16px;
+}
+
+/* ── Mosaicos ────────────────────────────────────────────────────────────────────────── */
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* El glifo arriba a la izquierda y el conteo enfrente, el nombre abajo: se lee primero cuánto y
+   después de qué, que es el orden en el que se pregunta. */
+.tile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  row-gap: 6px;
+  min-height: 70px;
+  box-sizing: border-box;
+  padding: 9px 11px 9px 9px;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  font-family: inherit;
+  text-align: left;
+  color: var(--ink-primary);
+  cursor: default;
+}
+
+.tile:hover {
+  background: var(--card-hover);
+}
+
+:root .tile:active {
+  background: var(--layer-pressed);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Hoy va con el acento del sistema: es la lista que se mira casi siempre, y la que tiene que
+   verse primero es la del color que la persona eligió para su Mac (spec 3.1). */
+.tile--app {
+  --project: var(--accent-app);
+  --on-project: #fff;
+}
+
+.tile__icon {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--project);
+  color: var(--on-project);
+}
+
+.tile__count {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-display);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.tile__label {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.tile__overdue {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--danger);
+}
+
+/* ── Proyectos ───────────────────────────────────────────────────────────────────────── */
+
+.lists__title {
+  margin: 18px 4px 6px;
+  font-size: var(--text-headline);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.lists {
+  border-radius: var(--card-radius);
+  background: var(--card-bg);
+  /* Sin `overflow: hidden`: recortaría el anillo de foco de la primera y la última fila, y la
+     que va en vuelo al arrastrar tiene que poder salirse del grupo. */
+}
+
+.lists--apart {
+  margin-top: 12px;
+}
+
+.lists__group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lists__slot {
+  position: relative;
+}
+
+/* La hairline entre filas arranca donde arranca el nombre y no en el borde, como en cualquier
+   grupo del sistema: separa los renglones sin partir la tarjeta en cajas. */
+.lists__slot + .lists__slot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 40px;
+  right: 0;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.lists__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 6px 12px 6px 9px;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-title);
+  text-align: left;
+  color: var(--ink-primary);
+  cursor: default;
+  touch-action: none;
+}
+
+.lists__row:hover {
+  background: var(--layer-hover);
+}
+
+:root .lists__row:active {
+  background: var(--layer-pressed);
+}
+
+.lists__row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* La inicial sobre el color del proyecto. Más grande que el punto de una fila porque aquí es lo
+   que nombra la lista, no una marca al margen. */
+.lists__badge {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--project);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-project);
+}
+
+.lists__badge--new {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--accent-app);
+  color: var(--accent-app);
+}
+
+.lists__badge--claude {
+  background: var(--ink-secondary);
+  color: var(--on-accent);
+}
+
+.lists__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.lists__row--new .lists__name {
+  color: var(--accent-app);
+}
+
+.lists__count {
+  flex: 0 0 auto;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-title);
+  color: var(--ink-secondary);
+  transition: opacity 120ms ease-out;
+}
+
+.lists__chevron {
+  flex: 0 0 auto;
+  color: var(--ink-tertiary);
+}
+
+/* El `⋯` vive encima del conteo y el conteo se aparta al llegar él, la misma gramática que la
+   fecha y las herramientas de una fila de tarea (spec 3.5): al pasar el puntero no se mueve
+   nada. Hermano del botón y no hijo suyo, porque un botón dentro de otro no es HTML válido. */
+.lists__tool {
+  position: absolute;
+  top: 50%;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-secondary);
+  opacity: 0;
+  cursor: default;
+  transition: opacity 120ms ease-out;
+}
+
+.lists__slot:hover .lists__tool,
+.lists__tool:focus-visible,
+.lists__tool.is-open {
+  opacity: 1;
+}
+
+.lists__slot:hover .lists__count,
+.lists__slot:focus-within .lists__count {
+  opacity: 0;
+}
+
+.lists__tool:hover,
+.lists__tool.is-open {
+  background: var(--layer-selected);
+  color: var(--ink-primary);
+}
+
+.lists__tool:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+/* ── Reordenar ───────────────────────────────────────────────────────────────────────── */
+
+.lists__group.is-sorting .lists__slot {
+  transition: transform 140ms ease-out;
+}
+
+.lists__group.is-sorting {
+  user-select: none;
+}
+
+.lists__slot.is-flying {
+  z-index: 2;
+  transition: none;
+}
+
+.lists__slot.is-flying .lists__row {
+  background: var(--card-hover);
+  box-shadow: var(--shadow-lift);
+}
+
+/* La hairline no viaja con la fila: dibujada sobre la que se levanta, cruzaría la sombra. */
+.lists__group.is-sorting .lists__slot::before {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lists__group.is-sorting .lists__slot {
+    transition: none;
+  }
+}
+
+/* ── Transparencia reducida ──────────────────────────────────────────────────────────── */
+
+/* Las tarjetas son veladuras, y una veladura sobre el sólido de §3.9 sigue leyéndose igual: no
+   hay nada que cambiar. Lo que sí cae es el blanco del modo claro, que sobre el gris fijo se
+   parecería demasiado al fondo — sube un punto para que el grupo no se disuelva. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --card-bg: rgb(255 255 255 / 70%);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) and (prefers-color-scheme: dark) {
+  :root {
+    --card-bg: rgb(255 255 255 / 8%);
+  }
+}

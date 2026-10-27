@@ -112,6 +112,20 @@ export function useReorder(
         handle.removeEventListener("pointercancel", onCancel);
         setFlight(null);
 
+        // El clic que llega al soltar no es de nadie. Desde que la fila entera es la manija
+        // —sin la `⠿` de antes—, ese clic caía sobre el texto y abría el detalle de la tarea
+        // recién arrastrada, o entraba en el proyecto que se acababa de mover. Se lo traga una
+        // escucha de un solo uso en captura, y se retira en la vuelta siguiente por si el
+        // navegador decide no mandarlo.
+        if (current) {
+          const swallow = (click: MouseEvent) => {
+            click.stopPropagation();
+            click.preventDefault();
+          };
+          window.addEventListener("click", swallow, { capture: true, once: true });
+          setTimeout(() => window.removeEventListener("click", swallow, true), 0);
+        }
+
         if (!drop || !current || current.to === from) return;
         const next = group.filter((other) => other !== id);
         const at = current.to;

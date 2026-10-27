@@ -3,14 +3,18 @@
 Tareas en la barra de menú de macOS. Un clic en el icono abre un panel de vidrio para
 capturar, organizar y completar. Sin Dock, sin cuenta, sin red.
 
-> **Estado: v0.9.0.** Solo para Apple Silicon. Lo que hay funciona; lo que
+> **Estado: v1.0.0.** Solo para Apple Silicon. Lo que hay funciona; lo que
 > falta está anotado abajo sin adornos.
 
 ## Qué hace
 
-- Tareas con notas, fecha, hora, prioridad, proyecto y un nivel de subtareas.
-- Proyectos con color, en un riel lateral que se colapsa a una columna de discos.
-- Vistas Hoy, Próximas, Todas, Completadas y una por proyecto.
+- Tareas con notas, fecha, hora, prioridad, proyecto y un nivel de subtareas, enseñadas
+  enteras: el título parte en los renglones que haga falta y las notas asoman debajo.
+- Una pantalla de listas al abrir, como la de Recordatorios: Hoy, Próximas, Todas y
+  Completadas en mosaicos con su cuenta, y debajo tus proyectos, cada uno con su color y su
+  inicial. Se reordenan arrastrando y se editan desde su `⋯`.
+- Mover de día sin abrir nada —Hoy, Mañana, Lunes o Sin fecha desde el `⋯` de la fila— y
+  traer de golpe lo vencido a hoy.
 - Captura en lenguaje natural: `Renovar dominio mañana 10:00 @infra !!` crea la tarea con la
   fecha, la hora, el proyecto y la prioridad ya puestas, y el título limpio. Una `/` abre el
   menú de comandos, que enseña esa gramática mientras la escribe por ti.
@@ -53,7 +57,7 @@ vibrancy heredado.
 
 ## Instalar
 
-Baja `Riel_0.9.0_aarch64.dmg` de la
+Baja `Riel_1.0.0_aarch64.dmg` de la
 [última release](https://github.com/diegopartida22/riel/releases/latest). Es solo para Apple
 Silicon: en una Mac Intel no abre.
 
@@ -133,6 +137,13 @@ comportamiento del panel y los criterios de aceptación. Una regla gobierna el r
 no tiene color de acento propio.** Usa el que elegiste en Ajustes del Sistema, y dentro de un
 proyecto manda el color del proyecto. Ningún hex de acento va escrito en el código: lo lee
 Rust de `NSColor.controlAccentColor` y lo publica al CSS.
+
+La 1.0 rehízo el panel entero. El riel de discos de color se fue —se comía un tercio del
+ancho y por eso los títulos se cortaban a media frase— y en su lugar está la pantalla de
+listas, con un encabezado grande en cada lista para saber siempre dónde estás. La fila enseña
+la tarea completa en vez de recortarla, la tipografía es una sola familia, la del sistema, y
+el vidrio lleva una veladura de lectura para que la lista se lea sobre cualquier fondo de
+pantalla.
 
 ## Apoyar
 

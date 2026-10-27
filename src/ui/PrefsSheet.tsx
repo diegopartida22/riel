@@ -6,14 +6,16 @@ import type { Editor } from "../state/editors";
 import { HORIZONTES, type Horizonte } from "../state/horizonte";
 import { ROW_TEXTS, type RowText } from "../state/rowText";
 import { TRAY_GLYPHS, type TrayGlyph } from "../state/trayGlyph";
-import { SYSTEM_VIEWS, type SystemKind } from "../state/views";
-import { SYSTEM_ICONS } from "./Rail";
+import type { StartKind } from "../state/preferencias";
+import { SYSTEM_VIEWS } from "../state/views";
+import { Lists } from "./icons";
+import { SYSTEM_ICONS } from "./listas";
 
 export interface PrefsSheetProps {
   retention: Retention;
   onRetention: (retention: Retention) => void;
-  startView: SystemKind;
-  onStartView: (kind: SystemKind) => void;
+  startView: StartKind;
+  onStartView: (kind: StartKind) => void;
   rowText: RowText;
   onRowText: (value: RowText) => void;
   /** Hasta dónde llega la lista antes de plegar lo de más adelante (spec 19). */
@@ -56,7 +58,7 @@ interface Choice<T> {
  * cinta.
  *
  * El precio es que las etiquetas tienen que ser cortas, y dos de las seis no caben en texto.
- * Ahí van dibujos —los iconos del riel, los glifos de la barra— y con ellos la leyenda de
+ * Ahí van dibujos —los iconos de las listas, los glifos de la barra— y con ellos la leyenda de
  * `caption`: un dibujo de 15px se distingue de sus vecinos pero no se lee, y sin pasar el ratón
  * por cada uno no había forma de saber cuál está puesto.
  *
@@ -375,15 +377,19 @@ export function PrefsSheet({
             que sí lo son — que alineadas contra el mismo borde derecho se leen como una tabla. */}
         <Atajo accel={atajo.accel} error={atajo.error} onPick={atajo.set} />
 
-        {/* El panel se abre y se cierra decenas de veces al día, y no siempre es Hoy lo que se
-            quiere ver al abrirlo. Solo las cuatro del sistema: un proyecto fijado tendría que
-            decidir a dónde caer cuando se borre, y eso sería un ajuste que cambia solo. */}
-        <Choices
+        {/* El panel se abre y se cierra decenas de veces al día, y no siempre es la pantalla de
+            listas lo que se quiere ver al abrirlo: quien solo mira Hoy se ahorra un clic cada
+            vez. Solo esa y las cuatro del sistema: un proyecto fijado tendría que decidir a
+            dónde caer cuando se borre, y eso sería un ajuste que cambia solo. */}
+        <Choices<StartKind>
           label="Vista al abrir"
-          options={SYSTEM_VIEWS.map(({ kind, label }) => {
-            const Icon = SYSTEM_ICONS[kind];
-            return { value: kind, label, content: <Icon size={15} aria-hidden /> };
-          })}
+          options={[
+            { value: "inicio", label: "Listas", content: <Lists size={15} aria-hidden /> },
+            ...SYSTEM_VIEWS.map(({ kind, label }) => {
+              const Icon = SYSTEM_ICONS[kind];
+              return { value: kind as StartKind, label, content: <Icon size={15} aria-hidden /> };
+            }),
+          ]}
           value={startView}
           onPick={onStartView}
           caption

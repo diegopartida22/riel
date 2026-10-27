@@ -13,17 +13,14 @@
 
 import Calendar03Icon from "@hugeicons/core-free-icons/Calendar03Icon";
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon";
-import CodeIcon from "@hugeicons/core-free-icons/CodeIcon";
 import CommandLineIcon from "@hugeicons/core-free-icons/CommandLineIcon";
 import CheckmarkCircle02Icon from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import ArrowLeft01Icon from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import ArrowRight01Icon from "@hugeicons/core-free-icons/ArrowRight01Icon";
-import DragDropVerticalIcon from "@hugeicons/core-free-icons/DragDropVerticalIcon";
+import DashboardSquare01Icon from "@hugeicons/core-free-icons/DashboardSquare01Icon";
 import Folder01Icon from "@hugeicons/core-free-icons/Folder01Icon";
 import LeftToRightListBulletIcon from "@hugeicons/core-free-icons/LeftToRightListBulletIcon";
 import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon";
-import PanelLeftCloseIcon from "@hugeicons/core-free-icons/PanelLeftCloseIcon";
-import PanelLeftOpenIcon from "@hugeicons/core-free-icons/PanelLeftOpenIcon";
 import PlusSignIcon from "@hugeicons/core-free-icons/PlusSignIcon";
 import Refresh01Icon from "@hugeicons/core-free-icons/Refresh01Icon";
 import Search01Icon from "@hugeicons/core-free-icons/Search01Icon";
@@ -64,13 +61,15 @@ function glyph(icon: IconSvgElement): Icon {
   };
 }
 
-/* Las cuatro vistas del sistema en el riel. */
+/* Las cuatro vistas del sistema, en sus mosaicos de la pantalla de listas. */
 export const Sun = glyph(Sun03Icon);
 export const CalendarDays = glyph(Calendar03Icon);
 export const List = glyph(LeftToRightListBulletIcon);
 /* Lucide traía un doble palomita para Completadas; en Hugeicons no hay, y la palomita dentro
    del círculo dice lo mismo: es la casilla de la fila, ya marcada. */
 export const CheckCircle = glyph(CheckmarkCircle02Icon);
+/* La pantalla de listas misma, para elegirla como vista al abrir: los cuatro mosaicos. */
+export const Lists = glyph(DashboardSquare01Icon);
 
 export const Search = glyph(Search01Icon);
 export const Settings = glyph(Settings02Icon);
@@ -78,7 +77,6 @@ export const Plus = glyph(PlusSignIcon);
 export const Check = glyph(Tick02Icon);
 export const X = glyph(Cancel01Icon);
 export const Ellipsis = glyph(MoreHorizontalIcon);
-export const GripVertical = glyph(DragDropVerticalIcon);
 /* La marca de una tarea que vuelve. La flecha en círculo y no el bucle de dos rayas del
    reproductor: a 11px en una fila, dos rayas paralelas se funden en una mancha. */
 export const Repeat = glyph(Refresh01Icon);
@@ -91,10 +89,9 @@ export const Refresh = glyph(Refresh01Icon);
     y el prompt lo dice sin fingir una marca ni prometer un cerebro. */
 export const Terminal = glyph(CommandLineIcon);
 
-/** El modo desarrollo (spec 13): la carpeta que se vincula y el editor con el que se abre. */
+/** La carpeta de un proyecto (spec 13), y la del disco de las sesiones (spec 17.5). */
 export const Folder = glyph(Folder01Icon);
-export const Code = glyph(CodeIcon);
+
+/** Atrás en el encabezado de una lista; adelante en cada renglón de la pantalla de listas. */
 export const ChevronLeft = glyph(ArrowLeft01Icon);
 export const ChevronRight = glyph(ArrowRight01Icon);
-export const PanelLeftClose = glyph(PanelLeftCloseIcon);
-export const PanelLeftOpen = glyph(PanelLeftOpenIcon);

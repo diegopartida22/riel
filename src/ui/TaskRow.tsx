@@ -1,9 +1,8 @@
-
 import { shortRepeat, type Project, type Task } from "../data";
 import { tint } from "../design/palette";
 import { Checkbox } from "./Checkbox";
 import { DueChip } from "./DueChip";
-import { Ellipsis, GripVertical, Repeat } from "./icons";
+import { Ellipsis, Repeat } from "./icons";
 import { PriorityMark } from "./PriorityMark";
 import { ProjectDot } from "./ProjectDot";
 import { TitleEditor } from "./TitleEditor";
@@ -27,7 +26,7 @@ export interface TaskRowProps {
   offset?: number;
   /** Verdadero para la fila que va en vuelo: se levanta sobre las demás y no transiciona. */
   flying?: boolean;
-  /** Sin esto la manija no se dibuja: no hay orden que tocar en Completadas. */
+  /** Se engancha al texto, que es la manija. Sin esto no se arrastra: en Completadas no hay orden. */
   onGrab?: (event: React.PointerEvent<HTMLElement>) => void;
   /**
    * El arrastre de las subtareas. Lo lleva la fila y no la lista porque las subtareas se
@@ -39,6 +38,8 @@ export interface TaskRowProps {
   onOpen?: () => void;
   /** Recibe el rectángulo del `⋯` para anclar el menú. */
   onMenu?: (anchor: DOMRect) => void;
+  /** Si el menú de esta fila está abierto: el `⋯` se queda a la vista mientras tanto. */
+  menuOpen?: boolean;
   /** El id que lleva el `tabIndex` de 0 de toda la lista (tabulación itinerante). */
   focused?: string | null;
   /** El id que se está editando en línea. Puede ser esta tarea o una de sus subtareas. */
@@ -53,16 +54,20 @@ export interface TaskRowProps {
  * La fila de tarea de la sección 3.5:
  *
  * ```
- * ○  Revisar el PR de autenticación        ●  mié 12
+ * ○  !! Revisar el PR de autenticación, que lleva          ⋯
+ *       dos días esperando
+ *       dejar comentarios en el middleware
+ *       mié 12  ↻  ● Infra
  * ```
  *
- * En reposo es solo texto. Las dos herramientas de la derecha — el `⋯` y la manija de
- * arrastre — aparecen al hover, y lo hacen en el sitio de la fecha: comparten hueco con ella
- * en vez de llevar uno propio que estaría vacío casi todo el tiempo comiéndose el título.
+ * El título se enseña entero, con la prioridad delante como la escribe la captura, y debajo
+ * las notas y un renglón con los datos: la fecha, si vuelve y de qué proyecto es. Antes los
+ * datos iban a la derecha del título y le disputaban el ancho, y lo que perdía era el título:
+ * una tarea cortada a media frase obliga a abrirla para saber cuál era.
  *
- * Si el título va a una línea con elipsis o entero en varias lo decide un ajuste, y de ahí
- * para abajo lo lleva el CSS: cambia el tachado, que no puede ser la misma raya, y el aire de
- * la fila, que con dos renglones tiene que separar más de lo que junta.
+ * En reposo es solo texto. El `⋯` aparece al pasar por encima, y no hay manija: se arrastra
+ * desde el texto mismo (`useReorder` distingue el arrastre del clic por los 3px que separan uno
+ * de otro), así que la fila no paga ancho por una afordancia que casi nunca se usa.
  */
 export function TaskRow({
   task,
@@ -79,6 +84,7 @@ export function TaskRow({
   onToggle,
   onOpen,
   onMenu,
+  menuOpen = false,
   focused,
   editing,
   onEditSave,
@@ -105,9 +111,9 @@ export function TaskRow({
       }}
     >
       <div className="task-row__clip">
-        {/* El texto abre el detalle; la casilla y las herramientas no, porque cada una hace ya
-            lo suyo. Un `div` con `onClick` y no un `button`: dentro va el título con su
-            elipsis y su tachado, y un botón le impondría sus propias métricas al texto. */}
+        {/* El texto abre el detalle; la casilla y el `⋯` no, porque cada uno hace ya lo suyo.
+            Un `div` con `onClick` y no un `button`: dentro van el título con su tachado, las
+            notas y los datos, y un botón le impondría sus propias métricas al texto. */}
         <div className="task-row__main">
           <Checkbox
             checked={completed}
@@ -118,12 +124,16 @@ export function TaskRow({
           {/* El foco vive aquí y no en el `li`: es lo que se ve como «la tarea» y lo que el
               anillo tiene que rodear. Sin `role="button"`, que sería mentira desde que la
               tecla ⏎ edita en vez de abrir — un botón activa, y aquí ⏎, Espacio y ↑↓ hacen
-              tres cosas distintas. El teclado lo lleva `useRowKeys` desde el contenedor. */}
+              tres cosas distintas. El teclado lo lleva `useRowKeys` desde el contenedor.
+
+              Es también la manija del arrastre, salvo mientras se edita: ahí el puntero es
+              para poner el cursor en el texto. */}
           <div
             className="task-row__text"
             data-task-id={task.id}
             tabIndex={focused === task.id ? 0 : -1}
             onClick={editing === task.id ? undefined : onOpen}
+            onPointerDown={editing === task.id ? undefined : onGrab}
           >
             {editing === task.id ? (
               <TitleEditor
@@ -132,68 +142,56 @@ export function TaskRow({
                 onCancel={() => onEditCancel?.()}
               />
             ) : (
-              <span className="task-row__title">{task.title}</span>
+              <span className="task-row__title">
+                <PriorityMark priority={task.priority} />
+                {task.title}
+              </span>
             )}
             {task.notes && <span className="task-row__notes">{task.notes}</span>}
-          </div>
 
-          {/* La fecha y las herramientas comparten celda en vez de ir una detrás de otra. Puestas
-              en fila, el hueco de la derecha medía la suma de las dos y las herramientas se
-              llevaban 40px del título aunque solo se vean al pasar por encima — con el riel
-              expandido eso es casi un tercio de la columna. Apiladas, el hueco mide lo que el más
-              ancho de los dos, y como el ancho no depende de cuál se esté viendo, al cruzarse no
-              se mueve nada. */}
-          <div className="task-row__right">
-            <div className="task-row__meta">
-              {showProjectDot && project && (
-                <ProjectDot color={project.color} title={project.name} />
-              )}
-              {/* Una tarea que vuelve no se distingue de una que no en ningún otro sitio, y la
-                  diferencia importa antes de completarla: es lo que separa «esto se acabó» de
-                  «esto vuelve el mes que viene». Del tamaño y el color del `!` de prioridad
-                  media — es un dato de la fila, no una alarma. */}
-              {task.repeat && (
-                <span
-                  className="task-row__repeat"
-                  role="img"
-                  aria-label={`Se repite: ${shortRepeat(task.repeat).toLowerCase()}`}
-                  title={shortRepeat(task.repeat)}
-                >
-                  <Repeat size={11} aria-hidden />
-                </span>
-              )}
-              <PriorityMark priority={task.priority} />
-              {task.dueAt && <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />}
-            </div>
-
-            {/* Cada herramienta se dibuja solo si tiene a quién avisar. Un `⋯` sin menú detrás o
-                una manija donde no se puede reordenar son promesas que la fila no cumple. */}
-            {(onMenu || onGrab) && (
-              <div className="task-row__tools">
-                {onMenu && (
-                  <button
-                    type="button"
-                    className="task-row__tool"
-                    aria-label={`Opciones de ${task.title}`}
-                    aria-haspopup="menu"
-                    data-menu-trigger
-                    onClick={(event) => onMenu(event.currentTarget.getBoundingClientRect())}
-                  >
-                    <Ellipsis size={14} aria-hidden />
-                  </button>
-                )}
-                {onGrab && (
+            {(task.dueAt || task.repeat || (showProjectDot && project)) && (
+              <span className="task-row__meta">
+                {task.dueAt && <DueChip dueAt={task.dueAt} hasTime={task.hasTime} today={today} />}
+                {/* Una tarea que vuelve no se distingue de una que no en ningún otro sitio, y la
+                    diferencia importa antes de completarla: es lo que separa «esto se acabó» de
+                    «esto vuelve el mes que viene». */}
+                {task.repeat && (
                   <span
-                    className="task-row__tool task-row__grip"
-                    aria-hidden="true"
-                    onPointerDown={onGrab}
+                    className="task-row__repeat"
+                    role="img"
+                    aria-label={`Se repite: ${shortRepeat(task.repeat).toLowerCase()}`}
+                    title={shortRepeat(task.repeat)}
                   >
-                    <GripVertical size={14} />
+                    <Repeat size={11} aria-hidden />
                   </span>
                 )}
-              </div>
+                {/* El proyecto con su nombre y no solo su punto: en una vista mixta un disco de
+                    6px dice que hay un proyecto pero no cuál. Dentro de uno sobra (spec 3.5). */}
+                {showProjectDot && project && (
+                  <span className="task-row__project">
+                    <ProjectDot color={project.color} />
+                    {project.name}
+                  </span>
+                )}
+              </span>
             )}
           </div>
+
+          {/* Se dibuja solo si tiene a quién avisar: un `⋯` sin menú detrás es una promesa que
+              la fila no cumple. */}
+          {onMenu && (
+            <button
+              type="button"
+              className="task-row__tool"
+              aria-label={`Opciones de ${task.title}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              data-menu-trigger
+              onClick={(event) => onMenu(event.currentTarget.getBoundingClientRect())}
+            >
+              <Ellipsis size={14} aria-hidden />
+            </button>
+          )}
         </div>
 
         {subtasks.length > 0 && (
@@ -212,8 +210,7 @@ export function TaskRow({
                 leaving={leaving?.has(subtask.id)}
                 offset={sortSubtasks?.offsetOf(subtask.id) ?? 0}
                 flying={sortSubtasks?.dragging === subtask.id}
-                /* Con una sola subtarea no hay nada que ordenar, y una manija que no mueve
-                   nada es de las afordancias muertas que la fila no puede permitirse. */
+                /* Con una sola subtarea no hay nada que ordenar. */
                 onGrab={
                   sortSubtasks && subtasks.length > 1
                     ? (event) => sortSubtasks.grab(event, subtask.id)
@@ -234,8 +231,8 @@ export function TaskRow({
 }
 
 /**
- * La subtarea: sangrada 22px, título a 12px y sin punto de proyecto ni fecha propia. Hereda
- * el `--project` de su padre, así que su casilla se llena del mismo color.
+ * La subtarea: sangrada bajo el título de su madre, a 12px y sin punto de proyecto ni fecha.
+ * Hereda el `--project` de su padre, así que su casilla se llena del mismo color.
  *
  * Completar una subtarea la saca de la lista igual que a una raíz — es una tarea como
  * cualquier otra — así que también necesita su envoltura que colapsa.
@@ -288,8 +285,17 @@ function SubtaskRow({
         {/* Una subtarea es una tarea: entra en el recorrido de ↑↓ y se edita con ⏎ igual que
             su madre. Lo único que ⌘⏎ no hace aquí es abrir otra debajo — las hermanas se
             crean desde el detalle, y una raíz nueva colada entre dos subtareas rompería la
-            lectura de la sangría. */}
-        <div className="task-row__text" data-task-id={task.id} tabIndex={focused === task.id ? 0 : -1}>
+            lectura de la sangría.
+
+            Sin `⋯`: de las cosas del menú de una raíz, una subtarea no tiene detalle propio ni
+            dibuja prioridad, y un menú de un solo elemento no es un menú. Se arrastra desde el
+            texto, como su madre, y se borra donde se crea: en el detalle de su madre. */}
+        <div
+          className="task-row__text"
+          data-task-id={task.id}
+          tabIndex={focused === task.id ? 0 : -1}
+          onPointerDown={editing === task.id ? undefined : onGrab}
+        >
           {editing === task.id ? (
             <TitleEditor
               value={task.title}
@@ -300,18 +306,6 @@ function SubtaskRow({
             <span className="task-row__title">{task.title}</span>
           )}
         </div>
-
-        {/* Solo la manija. De las tres cosas del `⋯` de una raíz —abrir el detalle, cambiar la
-            prioridad, borrar— una subtarea no tiene detalle propio ni dibuja prioridad, así
-            que quedaría un menú de un solo elemento, que no es un menú. Borrarla se hace
-            donde se crea: en el detalle de su madre. */}
-        {onGrab && (
-          <div className="task-row__tools task-row__tools--one">
-            <span className="task-row__tool task-row__grip" aria-hidden="true" onPointerDown={onGrab}>
-              <GripVertical size={14} />
-            </span>
-          </div>
-        )}
       </div>
     </li>
   );

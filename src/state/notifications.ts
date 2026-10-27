@@ -58,7 +58,7 @@ let ticker: number | null = null;
  *
  * Existe porque el plan se revisa mucho más de lo que cambia. Quien dispara la revisión es la
  * lista que se está viendo, y esa lista cambia también al navegar entre vistas y al escribir en
- * la búsqueda — dos cosas que no mueven ninguna hora. Sin la huella, cruzar el riel de Hoy a
+ * la búsqueda — dos cosas que no mueven ninguna hora. Sin la huella, ir de Hoy a
  * Todas borraba y volvía a registrar en el sistema el plan entero de las próximas 24 h.
  *
  * Depender de la lista visible sigue siendo más ancho de lo necesario, y es a propósito: de más

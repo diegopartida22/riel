@@ -7,7 +7,7 @@
  * lista, en vez de un viaje al Finder.
  *
  * Qué editor hay instalado lo contesta Rust, que es el único que puede preguntarlo. Cuál se
- * usa vive en `localStorage` con el riel y la vista de arranque: es una preferencia de esta
+ * usa vive en `localStorage` con la vista de arranque: es una preferencia de esta
  * máquina, no un dato, y en otra el editor puesto ni siquiera tiene por qué estar instalado.
  */
 

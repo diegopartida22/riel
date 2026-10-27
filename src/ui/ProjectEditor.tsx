@@ -6,6 +6,7 @@ import { PALETTE, tint } from "../design/palette";
 import { shortPath } from "../state/editors";
 import { ColorPicker } from "./ColorPicker";
 import { Folder, X } from "./icons";
+import { initialOf } from "./listas";
 
 export interface ProjectEditorProps {
   /** Nulo para uno nuevo. */
@@ -23,6 +24,11 @@ export interface ProjectEditorProps {
  * El alta y la edición de un proyecto. Ocupa el área de contenido en vez de flotar sobre ella:
  * un panel de 440px no tiene sitio para una capa encima de otra, y oscurecer el fondo para
  * separarlas apagaría el vidrio, que es lo único que no se puede tocar.
+ *
+ * Arriba, el disco del proyecto en grande —el mismo que lleva en la pantalla de listas, con su
+ * inicial— y el nombre centrado debajo, escrito en su color. Es una vista previa y no un
+ * adorno: lo que se está decidiendo es cómo se va a reconocer el proyecto entre los demás, y
+ * eso se ve mejor viéndolo que eligiendo un disco de 22px de una fila de nueve.
  *
  * El botón primario se pinta con el color elegido, que es la regla de la sección 3.1 llevada
  * a su caso más literal — aquí el proyecto en contexto es el que se está creando.
@@ -54,8 +60,12 @@ export function ProjectEditor({
   };
 
   return (
-    <form className="editor tinted" style={tint(color)} onSubmit={submit}>
+    <form className="editor editor--project tinted" style={tint(color)} onSubmit={submit}>
       <h2 className="editor__title">{project ? "Editar proyecto" : "Nuevo proyecto"}</h2>
+
+      <span className="editor__badge" aria-hidden>
+        {name.trim() ? initialOf(name) : ""}
+      </span>
 
       <input
         type="text"
@@ -112,6 +122,17 @@ export function ProjectEditor({
       </div>
 
       <div className="editor__actions">
+        {/* Eliminar en el extremo opuesto a Guardar, como en cualquier hoja del sistema: lo
+            destructivo lejos de lo que se pulsa sin pensar. */}
+        {project && !confirming && (
+          <button
+            type="button"
+            className="editor__destroy"
+            onClick={() => setConfirming(true)}
+          >
+            Eliminar proyecto
+          </button>
+        )}
         <button type="button" className="editor__button" onClick={onClose}>
           Cancelar
         </button>
@@ -128,42 +149,33 @@ export function ProjectEditor({
           delante es lo que hace que la confirmación sirva de algo — y el número que hay es el
           de pendientes, así que la frase lo dice: contar también las completadas daría una
           cifra mayor que la que se ve en la lista. */}
-      {project &&
-        (confirming ? (
-          <div className="editor__confirm">
-            <p className="editor__confirm-text">
-              {pendingCount === 0
-                ? `Se elimina «${project.name}». Sus tareas se quedan sin proyecto.`
-                : `Se elimina «${project.name}». Sus ${pendingCount} tarea${
-                    pendingCount === 1 ? "" : "s"
-                  } pendiente${pendingCount === 1 ? "" : "s"} se quedan sin proyecto.`}
-            </p>
-            <div className="editor__actions">
-              <button
-                type="button"
-                className="editor__button"
-                onClick={() => setConfirming(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="editor__button editor__button--danger"
-                onClick={() => void onDelete()}
-              >
-                Eliminar
-              </button>
-            </div>
+      {project && confirming && (
+        <div className="editor__confirm">
+          <p className="editor__confirm-text">
+            {pendingCount === 0
+              ? `Se elimina «${project.name}». Sus tareas se quedan sin proyecto.`
+              : `Se elimina «${project.name}». Sus ${pendingCount} tarea${
+                  pendingCount === 1 ? "" : "s"
+                } pendiente${pendingCount === 1 ? "" : "s"} se quedan sin proyecto.`}
+          </p>
+          <div className="editor__actions">
+            <button
+              type="button"
+              className="editor__button"
+              onClick={() => setConfirming(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="editor__button editor__button--danger"
+              onClick={() => void onDelete()}
+            >
+              Eliminar
+            </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            className="editor__destroy"
-            onClick={() => setConfirming(true)}
-          >
-            Eliminar proyecto
-          </button>
-        ))}
+        </div>
+      )}
     </form>
   );
 }

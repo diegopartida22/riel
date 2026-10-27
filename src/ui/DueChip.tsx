@@ -1,7 +1,7 @@
 import { formatDue } from "./dueDate";
 
 /**
- * La fecha de la fila, en mono y con `tabular-nums` para que las columnas no bailen al pasar
+ * La fecha de la fila, con `tabular-nums` para que las columnas no bailen al pasar
  * de `mié 12` a `vie 14`. El color lo decide el vencimiento (spec 3.5).
  */
 export function DueChip({

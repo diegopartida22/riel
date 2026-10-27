@@ -107,6 +107,19 @@ svg {
   }
 }
 
+/* La veladura de lectura, en las dos ventanas. El vidrio de Tahoe es casi claro: deja leer lo
+   que haya detrás —el escritorio en el panel, la ventana que se estaba usando en la captura— a
+   través de la lista, y la queja que abrió el rediseño fue justo esa, que no se leía. Es lo que
+   hace Spotlight: más materia donde hay renglones. Sigue siendo una capa con alfa y no un panel
+   opaco (spec 3.2), así que el vidrio se sigue viendo como vidrio; el material heredado ya trae
+   la suya y no la necesita. Con transparencia reducida manda el sólido de abajo. */
+@media (prefers-reduced-transparency: no-preference) {
+  :root[data-glass="liquid"] #root {
+    background: var(--veil);
+    border-radius: var(--panel-radius, 20px);
+  }
+}
+
 /* ── Transparencia reducida ──────────────────────────────────────────────────────────── */
 
 /* La casilla de Accesibilidad. El vidrio no lo pinta el webview sino `NSVisualEffectView` por

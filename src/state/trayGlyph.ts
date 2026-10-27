@@ -11,7 +11,7 @@
  * que Rust mete en el binario y las cinco previsualizaciones de `public/tray/` que salen en
  * Ajustes.
  *
- * Va a `localStorage` con el riel y la vista de arranque, no a SQLite con la retención: perder
+ * Va a `localStorage` con la vista de arranque, no a SQLite con la retención: perder
  * esto devuelve el icono de omisión y no borra nada. Como está en el webview, Rust no lo puede
  * leer al arrancar y hay que mandárselo — igual que el peso, que también depende de datos que
  * Rust no lee, así que el icono ya dependía del frontend para verse bien.

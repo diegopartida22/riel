@@ -28,35 +28,40 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <header className="topbar">
-      <Search className="topbar__glass" size={14} aria-hidden />
+      {/* Un campo con su forma, como el buscador de cualquier ventana del sistema: la lupa, el
+          texto y la equis dentro de la misma píldora. Sin caja, el renglón de arriba se leía
+          como una línea más de la lista. Es un `label` para que pulsar la lupa también enfoque. */}
+      <label className="topbar__search">
+        <Search className="topbar__glass" size={13} aria-hidden />
 
-      <input
-        ref={ref}
-        type="search"
-        className="topbar__field"
-        value={query}
-        placeholder="Buscar"
-        aria-label="Buscar tareas"
-        spellCheck={false}
-        autoComplete="off"
-        /* ↓ desde aquí baja a la lista en vez de morirse en el campo. Es lo que hacen Spotlight
-           y el buscador del Finder, y sin ello escribir y elegir con el teclado no se puede. */
-        data-into-list
-        onChange={(event) => onQuery(event.target.value)}
-      />
+        <input
+          ref={ref}
+          type="search"
+          className="topbar__field"
+          value={query}
+          placeholder="Buscar"
+          aria-label="Buscar tareas"
+          spellCheck={false}
+          autoComplete="off"
+          /* ↓ desde aquí baja a la lista en vez de morirse en el campo. Es lo que hacen Spotlight
+             y el buscador del Finder, y sin ello escribir y elegir con el teclado no se puede. */
+          data-into-list
+          onChange={(event) => onQuery(event.target.value)}
+        />
 
-      {/* La equis solo existe cuando hay algo que borrar: en reposo la barra es un icono y un
-          texto, y nada más. Escape hace lo mismo sin tener que apuntarle. */}
-      {query && (
-        <button
-          type="button"
-          className="topbar__clear"
-          aria-label="Limpiar la búsqueda"
-          onClick={() => onQuery("")}
-        >
-          <X size={13} aria-hidden />
-        </button>
-      )}
+        {/* La equis solo existe cuando hay algo que borrar: en reposo la barra es un icono y un
+            texto, y nada más. Escape hace lo mismo sin tener que apuntarle. */}
+        {query && (
+          <button
+            type="button"
+            className="topbar__clear"
+            aria-label="Limpiar la búsqueda"
+            onClick={() => onQuery("")}
+          >
+            <X size={11} aria-hidden />
+          </button>
+        )}
+      </label>
 
       {/* El punto es todo el aviso que se da de una versión nueva. Un banner sobre la lista
           interrumpiría lo que se vino a hacer, y sin nada nadie abriría Ajustes nunca. Va en
